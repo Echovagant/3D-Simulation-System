@@ -1,0 +1,7 @@
+/* 全局样式文件：src/assets/css/global.css */
+html, body {
+  margin: 0; /* 清除浏览器默认边距 */
+  padding: 0;
+  background: transparent; /* 设为透明，覆盖默认白色 */
+  height: 100%; /* 让 html/body 占满屏幕高度 */
+}
