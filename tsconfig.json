@@ -1,0 +1,39 @@
+{
+  "compilerOptions": {
+    "allowJs": true, // 允许引入 JS 文件
+    "checkJs": false, // 暂时不检查 JS 文件的类型（避免初期大量报错）
+    "target": "esnext",
+    "module": "esnext",
+    "strict": true,
+    "jsx": "preserve",
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "useDefineForClassFields": true,
+    "sourceMap": false,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "./src/types"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "*.d.ts",
+    "src/router/index.ts",
+    "src/main.ts",
+    "src/stores/sceneEditorStore.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "src/components/FilterModal.vue",
+    "src/components/ModifyModal.vue",
+    "src/components/TaskDetails.vue"
+  ]
+}

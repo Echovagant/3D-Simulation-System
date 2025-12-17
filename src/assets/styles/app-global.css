@@ -1,0 +1,263 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  list-style: none;
+  text-decoration: none;
+}
+
+.app {
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-family: 'Microsoft YaHei', 'Arial', sans-serif;
+}
+
+/* SVG背景样式（原有功能保留，因改用iframe背景暂不生效） */
+.svg-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* 页面容器 - 侧边栏+主内容布局（适配新侧边栏宽度） */
+.app-container {
+  display: flex;
+  min-height: 100vh;
+  position: relative; /* 确保内容在iframe背景之上 */
+  z-index: 1; /* 高于iframe的z-index:-1，保证内容可交互 */
+}
+
+/* ======================================
+   整合目标导航栏核心样式（替换原有sidebar样式）
+====================================== */
+.shell {
+  position: fixed;
+  width: 84px; /* 默认窄宽度 */
+  height: 100vh;
+  background: #fff; /* 目标导航的白色背景 */
+  z-index: 10; /* 保持原有层级，不冲突 */
+  transition: width 0.5s ease; /* hover展开过渡 */
+  padding-left: 10px;
+  overflow: hidden; /* 确保伪元素不溢出 */
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); /* 轻微阴影增强层次感 */
+}
+
+/* hover展开效果 */
+.shell:hover {
+  width: 300px; /* 展开后宽度 */
+}
+
+/* 导航列表容器 */
+.nav-list {
+  position: relative;
+  height: 100vh;
+  padding-top: 20px;
+}
+
+/* 单个导航项（目标导航的li样式） */
+.nav-item {
+  position: relative;
+  padding: 5px 0;
+}
+
+/* Active状态核心样式（目标导航的特殊阴影） */
+.nav-item.active {
+  background: #e4e9f5; /* 目标导航的active背景色 */
+  border-top-left-radius: 50px;
+  border-bottom-left-radius: 50px;
+}
+
+/* Active上下阴影（目标导航的关键效果） */
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  top: -30px;
+  right: 0;
+  width: 30px;
+  height: 30px;
+  border-bottom-right-radius: 25px;
+  box-shadow: 5px 5px 0 5px #e4e9f5;
+  background: transparent;
+}
+
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: -30px;
+  right: 0;
+  width: 30px;
+  height: 30px;
+  border-top-right-radius: 25px;
+  box-shadow: 5px -5px 0 5px #e4e9f5;
+  background: transparent;
+}
+
+/* Logo项特殊间距（目标导航的logo样式） */
+#nav-logo {
+  margin: 20px 0 60px 0; /* 调整logo与下方导航的间距 */
+}
+
+/* 导航链接（目标导航的a标签样式） */
+.nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  white-space: nowrap; /* 确保文字不换行 */
+  color: #333; /* 默认文字颜色 */
+  transition: color 0.5s ease;
+}
+
+/* 图标容器（目标导航的icon样式） */
+.icon {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 60px; /* 图标区域固定宽度 */
+  height: 70px; /* 图标区域高度 */
+  padding-left: 10px;
+  color: rgb(110, 90, 240); /* 目标导航的图标颜色 */
+  transition: color 0.5s ease;
+}
+
+/* Logo图片样式（圆形裁剪） */
+.imageBox {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid rgb(110, 90, 240); /* 边框增强识别度 */
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* 图片自适应裁剪 */
+}
+
+/* 文字容器（目标导航的text样式） */
+.text {
+  position: relative;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  font-size: 18px; /* 适配3D系统的文字大小 */
+  padding-left: 15px;
+  letter-spacing: 1px; /* 文字间距优化 */
+  transition: color 0.5s ease;
+}
+
+/* Hover效果（目标导航的颜色变化） */
+.nav-item:hover .nav-link .icon,
+.nav-item:hover .nav-link .text {
+  color: #ffa117; /* 目标导航的hover颜色 */
+}
+
+/* Active状态的图标特殊样式（目标导航的圆形背景） */
+.nav-item.active .icon::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  width: 60px;
+  background: #fff;
+  border-radius: 50%;
+  border: 7px solid rgb(110, 90, 240);
+  box-sizing: border-box;
+}
+
+/* ======================================
+   主内容区域样式（适配新侧边栏）
+====================================== */
+.main-container {
+  flex: 1;
+  margin-left: 84px; /* 默认与侧边栏窄宽度一致 */
+  transition: margin-left 0.5s ease; /* 跟随侧边栏宽度过渡 */
+}
+
+/* 侧边栏hover时，主内容区间距同步调整 */
+.shell:hover + .main-container {
+  margin-left: 300px; /* 与侧边栏展开宽度一致 */
+}
+
+/* 公共头部样式（保留原有，调整颜色适配新导航） */
+Header {
+  padding: 15px 30px;
+  background-color: rgba(255, 255, 255, 0.95); /* 改为白色背景，适配新导航 */
+  color: rgb(110, 90, 240); /* 文字颜色与导航图标统一 */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+/* 页面内容容器（原有样式保留） */
+.page-content {
+  min-height: calc(100vh - 70px); /* 减去头部高度 */
+  padding: 30px;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  background-color: transparent;
+  border-radius: 8px; /* 轻微圆角优化视觉 */
+}
+
+/* ======================================
+   响应式适配（保留原有功能，适配新导航）
+====================================== */
+@media (max-width: 992px) {
+  /* 移动端默认隐藏侧边栏 */
+  .shell {
+    transform: translateX(-100%);
+    width: 260px; /* 移动端展开宽度 */
+  }
+
+  /* 移动端激活时显示侧边栏 */
+  .shell.show {
+    transform: translateX(0);
+  }
+
+  /* 主内容区间距重置 */
+  .main-container {
+    margin-left: 0;
+  }
+
+  /* 侧边栏展开时，主内容区无需跟随（移动端） */
+  .shell:hover + .main-container {
+    margin-left: 0;
+  }
+
+  /* 移动端菜单按钮（原有样式保留，调整颜色） */
+  .mobile-menu-btn {
+    position: fixed;
+    left: 15px;
+    top: 15px;
+    z-index: 20;
+    width: 40px;
+    height: 40px;
+    background-color: rgb(110, 90, 240); /* 与导航图标颜色统一 */
+    color: #fff; /* 白色文字更醒目 */
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    font-size: 18px;
+  }
+}
+
+/* 超小屏幕适配（原有样式保留） */
+@media (max-width: 576px) {
+  .page-content {
+    padding: 15px;
+  }
+
+  .nav-link .text {
+    font-size: 16px;
+  }
+}
