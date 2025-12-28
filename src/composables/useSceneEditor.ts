@@ -60,7 +60,7 @@ export interface SceneObject {
   }
 }
 
-export function useSceneEditor(containerRef: Ref<HTMLDivElement | null>) {
+export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) {
   const store = useSceneEditorStore()
   const modelStore = useModelStore()
 
@@ -101,14 +101,6 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null>) {
 
   // 初始化场景
   const initEditor = async (): Promise<boolean> => {
-    if (!containerRef.value) {
-      const err = '容器不存在，无法初始化场景'
-      console.error(err)
-      initError = err
-      onInitError.value(err)
-      return false
-    }
-
     // 重置状态
     cleanupEditor(false)
     isSceneInitialized = false
@@ -125,17 +117,17 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null>) {
       scene = new THREE.Scene()
       scene.background = new THREE.Color(0x222222)
 
-      camera = new THREE.PerspectiveCamera(
-        75,
-        containerRef.value.clientWidth / containerRef.value.clientHeight,
-        0.1,
-        1000,
-      )
+      // 使用默认尺寸，后续会通过Viewport组件更新
+      const defaultWidth = 800
+      const defaultHeight = 600
+      const aspect = defaultWidth / defaultHeight
+
+      camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000)
       camera.position.set(5, 5, 5)
       camera.lookAt(0, 0, 0)
 
       renderer = new THREE.WebGLRenderer({ antialias: true })
-      renderer.setSize(containerRef.value.clientWidth, containerRef.value.clientHeight)
+      renderer.setSize(defaultWidth, defaultHeight)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
       renderer.shadowMap.enabled = true // 启用阴影
       // 不在这里添加renderer到DOM，让Viewport组件负责
@@ -302,10 +294,16 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null>) {
 
   // 物理更新函数 - 供Viewport组件的渲染循环调用
   const updatePhysics = (): void => {
-    if (store.simulationState.isPlaying && !store.simulationState.isPaused && physicsWorld && isSceneInitialized && eventQueue) {
+    if (
+      store.simulationState.isPlaying &&
+      !store.simulationState.isPaused &&
+      physicsWorld &&
+      isSceneInitialized &&
+      eventQueue
+    ) {
       // 应用模拟速度到物理世界
       if (physicsWorld.integrationParameters) {
-        physicsWorld.integrationParameters.dt = 1/60 * store.simulationState.speed
+        physicsWorld.integrationParameters.dt = (1 / 60) * store.simulationState.speed
       }
       physicsWorld.step(eventQueue)
       syncPhysicsToObjects()
@@ -561,10 +559,16 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null>) {
 
   // 窗口大小调整
   const handleResize = (): void => {
-    if (!containerRef.value || !camera || !renderer) return
+    if (!camera || !renderer) return
 
-    const width = containerRef.value.clientWidth
-    const height = containerRef.value.clientHeight
+    // 如果有容器引用，使用容器尺寸；否则使用默认尺寸
+    let width: number = 800
+    let height: number = 600
+
+    if (containerRef && containerRef.value) {
+      width = containerRef.value.clientWidth
+      height = containerRef.value.clientHeight
+    }
 
     camera.aspect = width / height
     camera.updateProjectionMatrix()
@@ -627,7 +631,6 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null>) {
   })
 
   return {
-    scene,
     initEditor,
     reinit,
     cleanupEditor,

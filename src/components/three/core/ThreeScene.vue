@@ -9,23 +9,25 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted, type Ref } from 'vue';
-import { useSceneEditor } from '@/composables/useSceneEditor';
+import { ref, onMounted, onUnmounted, type Ref } from 'vue'
+import { useSceneEditor } from '@/composables/useSceneEditor'
 
-
-const container: Ref<HTMLDivElement | null> = ref<HTMLDivElement | null>(null);
-const isInitializing = ref(true);
+const container: Ref<HTMLDivElement | null> = ref<HTMLDivElement | null>(null)
+const isInitializing = ref(true)
 const emits = defineEmits<{
-  (e: 'expose-methods', methods: {
-    addCube: () => boolean;
-    addSphere: () => boolean;
-    importModel: (modelId: string) => Promise<boolean>;
-    getIsSceneInitialized: () => boolean;
-    updatePhysics: () => void;
-  }): void;
-  (e: 'init-success'): void;
-  (e: 'init-error', err: string): void;
-}>();
+  (
+    e: 'expose-methods',
+    methods: {
+      addCube: () => boolean
+      addSphere: () => boolean
+      importModel: (modelId: string) => Promise<boolean>
+      getIsSceneInitialized: () => boolean
+      updatePhysics: () => void
+    },
+  ): void
+  (e: 'init-success'): void
+  (e: 'init-error', err: string): void
+}>()
 
 // 初始化场景编辑器逻辑
 const {
@@ -38,57 +40,55 @@ const {
   getIsSceneInitialized,
   updatePhysics,
   onInitSuccess,
-  onInitError
-} = useSceneEditor(container);
+  onInitError,
+} = useSceneEditor(null)
 
 // 暴露重新初始化方法
-const exposeReinit = () => reinit();
+const exposeReinit = () => reinit()
 
 // 监听初始化结果
 onInitSuccess.value = () => {
-  isInitializing.value = false;
-  console.log('ThreeScene初始化成功');
-  
+  isInitializing.value = false
+  console.log('ThreeScene初始化成功')
+
   // 现有逻辑：添加示例立方体
   setTimeout(() => {
-    addCube();
-  }, 1000);
-  emits('init-success');
-};
-
+    addCube()
+  }, 1000)
+  emits('init-success')
+}
 
 onInitError.value = (err) => {
-  isInitializing.value = false;
-  emits('init-error', err);
-};
+  isInitializing.value = false
+  emits('init-error', err)
+}
 
 // 组件挂载后初始化
 onMounted(() => {
-  console.log('ThreeScene组件挂载');
-  if (container.value) {
-    initEditor().then(() => {
-      // 向父组件暴露方法
-      emits('expose-methods', {
-        addCube,
-        addSphere,
-        importModel,
-        getIsSceneInitialized,
-        updatePhysics
-      });
-    });
-  }
-});
+  console.log('ThreeScene组件挂载')
+  // 移除container.value的条件判断，确保initEditor()能够被调用
+  initEditor().then(() => {
+    // 向父组件暴露方法
+    emits('expose-methods', {
+      addCube,
+      addSphere,
+      importModel,
+      getIsSceneInitialized,
+      updatePhysics,
+    })
+  })
+})
 
 // 组件卸载时清理
 onUnmounted(() => {
-  console.log('ThreeScene组件卸载');
-  cleanupEditor();
-});
+  console.log('ThreeScene组件卸载')
+  cleanupEditor()
+})
 
 // 暴露给父组件的方法
 defineExpose({
-  reinit: exposeReinit
-});
+  reinit: exposeReinit,
+})
 </script>
 
 <style scoped>
@@ -122,6 +122,8 @@ defineExpose({
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>
