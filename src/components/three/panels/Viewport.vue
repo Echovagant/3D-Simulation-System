@@ -62,7 +62,7 @@ const sceneEditorStore = inject<SceneEditorStore>('sceneEditorStore')
 let resizeObserver: ResizeObserver | null = null
 let initRetryCount = 0
 const MAX_INIT_RETRIES = 10
-const isUnmounted = false
+const isUnmounted = ref(false)
 
 // 调试：记录props接收状态
 if (import.meta.env.DEV) {
@@ -89,7 +89,7 @@ if (import.meta.env.DEV) {
  */
 const initRenderer = () => {
   // 如果组件已卸载，不进行初始化
-  if (isUnmounted) return
+  if (isUnmounted.value) return
 
   // 检查props有效性
   if (!props.scene || !props.camera || !props.renderer) {
@@ -132,7 +132,7 @@ const initRenderer = () => {
     }
     if (initRetryCount < MAX_INIT_RETRIES) {
       setTimeout(() => {
-        if (!isUnmounted) {
+        if (!isUnmounted.value) {
           initRenderer()
         }
       }, 200)
@@ -190,7 +190,7 @@ const initRenderer = () => {
  */
 const renderLoop = () => {
   // 如果组件已卸载，停止渲染
-  if (isUnmounted) return
+  if (isUnmounted.value) return
 
   if (!props.scene || !props.camera || !props.renderer || !isRendering.value) {
     // 如果props为空或渲染已停止，跳过渲染
@@ -389,7 +389,7 @@ onUnmounted(() => {
   }
 
   // 标记组件已卸载
-  isUnmounted = true
+  isUnmounted.value = true
 
   // 清理渲染循环
   stopRendering()
@@ -420,14 +420,17 @@ watch(
     // 只有当所有三个值都存在时，才重新初始化渲染器
     if (newValues[0] && newValues[1] && newValues[2]) {
       // 确保canvas已添加到DOM中
-      if (containerRef.value && !containerRef.value.contains(newValues[2].domElement)) {
-        containerRef.value.appendChild(newValues[2].domElement)
+      const renderer = newValues[2]
+      if (containerRef.value && renderer instanceof THREE.WebGLRenderer && !containerRef.value.contains(renderer.domElement)) {
+        containerRef.value.appendChild(renderer.domElement)
       }
 
       // 重新初始化渲染器尺寸
       const container = containerRef.value
       if (container) {
-        newValues[2].setSize(container.clientWidth, container.clientHeight)
+        if (renderer instanceof THREE.WebGLRenderer) {
+          renderer.setSize(container.clientWidth, container.clientHeight)
+        }
       }
     }
   },

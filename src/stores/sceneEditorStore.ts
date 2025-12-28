@@ -18,15 +18,15 @@ export type SimulationState = {
   frameCount: number
 }
 
-export type WarningDetails = Record<string, unknown>
+export type WarningDetails = Record<string, unknown>;
 
 export type RenderState = {
   isRendering: boolean
   needsUpdate: boolean
   fps: number
   lastFrameTime: number
-  performanceWarnings: Array<{ message: string; timestamp: number; details?: WarningDetails }>
-  physicsErrors: Array<{ message: string; error: Error; timestamp: number }>
+  performanceWarnings: Array<{message: string, timestamp: number, details?: WarningDetails}>
+  physicsErrors: Array<{message: string, error: Error, timestamp: number}>
 }
 
 export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
@@ -49,7 +49,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     isPaused: false,
     speed: 1.0,
     currentTime: 0,
-    frameCount: 0,
+    frameCount: 0
   })
 
   // 分离状态：渲染状态
@@ -58,12 +58,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     needsUpdate: true,
     fps: 60,
     lastFrameTime: 0,
-    performanceWarnings: [] as Array<{
-      message: string
-      timestamp: number
-      details?: WarningDetails
-    }>,
-    physicsErrors: [] as Array<{ message: string; error: Error; timestamp: number }>,
+    performanceWarnings: [] as Array<{message: string, timestamp: number, details?: WarningDetails}>,
+    physicsErrors: [] as Array<{message: string, error: Error, timestamp: number}>
   })
 
   // 物理配置
@@ -80,7 +76,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
 
   // Getter方法
   const getCurrentScene = () => currentScene.value
-
+  
   const setCurrentScene = (newScene: THREE.Scene) => {
     currentScene.value = newScene
   }
@@ -110,12 +106,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       const { velocity, acceleration } = object.physics
 
       // 检查必要属性是否存在
-      if (
-        !velocity ||
-        !acceleration ||
-        typeof velocity.x !== 'number' ||
-        typeof acceleration.x !== 'number'
-      ) {
+      if (!velocity || !acceleration || typeof velocity.x !== 'number' || typeof acceleration.x !== 'number') {
         console.warn('物理属性不完整，跳过对象物理更新:', object.name)
         return
       }
@@ -137,7 +128,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       const positionDelta = new THREE.Vector3(
         velocity.x * adjustedDeltaTime,
         velocity.y * adjustedDeltaTime,
-        velocity.z * adjustedDeltaTime,
+        velocity.z * adjustedDeltaTime
       )
 
       // 更新位置
@@ -166,7 +157,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     renderState.performanceWarnings.push({
       message,
       timestamp: Date.now(),
-      details,
+      details
     })
     // 限制警告数量，避免内存占用过多
     if (renderState.performanceWarnings.length > 100) {
@@ -179,7 +170,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     renderState.physicsErrors.push({
       message,
       error,
-      timestamp: Date.now(),
+      timestamp: Date.now()
     })
     // 限制错误数量，避免内存占用过多
     if (renderState.physicsErrors.length > 50) {
@@ -529,16 +520,13 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   // 监听模拟状态变化
-  watch(
-    () => simulationState.isPlaying,
-    (newValue) => {
-      if (newValue && !animationId.value) {
-        startSimulation()
-      } else if (!newValue && animationId.value) {
-        stopSimulation()
-      }
-    },
-  )
+  watch(() => simulationState.isPlaying, (newValue) => {
+    if (newValue && !animationId.value) {
+      startSimulation()
+    } else if (!newValue && animationId.value) {
+      stopSimulation()
+    }
+  })
 
   // 新增：暂停/恢复模拟功能
   const togglePause = () => {
@@ -558,7 +546,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     currentScene,
     physicsConfig,
     selectedObject,
-
+    
     // 分离的状态对象
     simulationState,
     renderState,
@@ -580,7 +568,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     updateObject,
     updateRendererSize,
     getScreenshot,
-
+    
     // 模拟控制方法
     togglePlayState: () => {
       simulationState.isPlaying = !simulationState.isPlaying
@@ -591,9 +579,9 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     startSimulation,
     stopSimulation,
     cleanup,
-
+    
     // 错误和警告处理
     addPerformanceWarning,
-    addPhysicsError,
+    addPhysicsError
   }
 })
