@@ -1,23 +1,6 @@
 <template>
   <div class="app">
-    <!-- 替换为iframe背景（保留原有particles-background代码以备恢复） -->
-    <!-- <particles-background /> -->
-    <iframe
-      src="/sakura.html"
-      style="
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100vh;
-        z-index: -1;
-        border: none;
-      "
-      frameborder="0"
-      scrolling="no"
-    ></iframe>
-
-    <!-- 页面容器：侧边导航 + 主内容 -->
+    <TechGridUniverse />
     <div class="app-container">
       <!-- 侧边导航 -->
       <aside class="shell" v-show="showNavigate()" :class="{ show: sidebarShow }">
@@ -120,6 +103,7 @@
 
 <script lang="ts" setup name="App">
 import Header from './components/layout/Header.vue'
+import TechGridUniverse from './components/common/Background/TechGridUniverse.vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import '@/assets/styles/app-global.css'
@@ -158,11 +142,11 @@ const handleOutsideClick = (event: MouseEvent) => {
     // 使用更健壮的方式获取元素
     const sidebar = document.querySelector('.shell.show') || document.querySelector('.shell')
     const menuBtn = document.querySelector('.mobile-menu-btn')
-    
+
     // 检查元素是否存在
     if (sidebar && menuBtn) {
       const target = event.target as HTMLElement
-      
+
       // 检查点击目标是否不是侧边栏及其子元素，也不是菜单按钮
       if (!sidebar.contains(target) && !menuBtn.contains(target)) {
         // 防止点击事件被其他元素阻止
@@ -188,7 +172,7 @@ watch(
       '/docs': 'docs',
     }
     activeNavKey.value = keyMap[newPath] || 'overview' // 默认值避免空值
-    
+
     // 路由跳转后关闭侧边栏
     if (sidebarShow.value) {
       sidebarShow.value = false
