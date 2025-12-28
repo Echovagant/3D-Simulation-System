@@ -196,30 +196,26 @@ export function usePhysics(): PhysicsInstance {
       world.value.gravity = params.gravity;
     }
     
-    // 更新摩擦力和恢复系数需要重新创建所有刚体
+    // 优化：直接更新现有刚体的摩擦力和恢复系数，而不是重置整个物理世界
     if (params.friction !== undefined || params.restitution !== undefined) {
       const scene = (world.value as RAPIER.World & { scene?: Object3D }).scene;
       if (scene) {
-        // 保存当前所有物体的物理参数
-        const physicsObjects: Object3D[] = [];
         scene.traverse((object: Object3D) => {
-          if (object.userData.physics) {
-            physicsObjects.push(object);
+          if (object.userData.physics?.collider) {
+            const collider = object.userData.physics.collider;
+            
+            // 直接更新碰撞器的摩擦力
+            if (params.friction !== undefined) {
+              collider.setFriction(params.friction);
+              object.userData.physics.friction = params.friction;
+            }
+            
+            // 直接更新碰撞器的恢复系数
+            if (params.restitution !== undefined) {
+              collider.setRestitution(params.restitution);
+              object.userData.physics.restitution = params.restitution;
+            }
           }
-        });
-        
-        // 重置物理世界
-        resetPhysics();
-        
-        // 重新添加所有物体，应用新的摩擦力和恢复系数
-        physicsObjects.forEach(object => {
-          if (params.friction !== undefined) {
-            object.userData.physics.friction = params.friction;
-          }
-          if (params.restitution !== undefined) {
-            object.userData.physics.restitution = params.restitution;
-          }
-          addRigidBody(object);
         });
       }
     }

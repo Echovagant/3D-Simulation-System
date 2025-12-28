@@ -3,6 +3,11 @@
     <!-- 顶部应用标题栏 -->
     <Header />
 
+    <!-- 消息提示 -->
+    <div v-if="message" class="message-toast">
+      {{ message }}
+    </div>
+
     <div class="simulation-container">
       <!-- 主视图区域 - 占据最大空间 -->
       <div class="main-content">
@@ -12,14 +17,14 @@
             <button
               class="toolbar-btn"
               @click="togglePlayPause"
-              :title="simulation.isPlaying.value ? '暂停仿真' : '开始仿真'"
+              :title="isPlaying ? '暂停仿真' : '开始仿真'"
             >
-              <i class="fas" :class="simulation.isPlaying.value ? 'fa-pause' : 'fa-play'"></i>
+              <i class="fas" :class="isPlaying ? 'fa-pause' : 'fa-play'"></i>
             </button>
-            <button class="toolbar-btn" @click="simulation.stepSimulation" title="单步仿真">
+            <button class="toolbar-btn" @click="stepSimulation" title="单步仿真">
               <i class="fas fa-step-forward"></i>
             </button>
-            <button class="toolbar-btn" @click="simulation.resetSimulation" title="重置仿真">
+            <button class="toolbar-btn" @click="resetSimulation" title="重置仿真">
               <i class="fas fa-redo"></i>
             </button>
           </div>
@@ -43,37 +48,48 @@
             <button class="toolbar-btn" @click="loadSceneFromEditor" title="从场景编辑器加载场景">
               <i class="fas fa-folder-open"></i>
             </button>
-            div
             <button class="toolbar-btn" @click="saveExperiment" title="保存实验配置">
               <i class="fas fa-save"></i>
             </button>
+            <div class="preset-selector">
+              <select
+                v-model="selectedPreset"
+                @change="loadPreset(selectedPreset)"
+                title="选择预设场景"
+              >
+                <option value="">选择预设...</option>
+                <option v-for="preset in presets" :key="preset.id" :value="preset.id">
+                  {{ preset.name }}
+                </option>
+              </select>
+            </div>
           </div>
         </div>
 
         <!-- 3D视口：核心内容区域 -->
-        <Viewport
-          :scene="simulation.simulationScene.value"
-          :camera="activeCamera"
-          :renderer="renderer"
-          :update-physics="updatePhysics"
-          @viewport-click="handleViewportClick"
-        />
+        <div ref="viewportRef" class="viewport-container">
+          <div class="viewport-info">物体数量: {{ objectCount }} | FPS: {{ fps }}</div>
+        </div>
 
         <!-- 仿真状态信息面板 -->
         <div class="simulation-status-panel">
           <div class="status-item">
             <span class="label">仿真状态:</span>
-            <span class="value" :class="{ running: simulation.isPlaying.value }">
-              {{ simulation.isPlaying.value ? '运行中' : '已暂停' }}
+            <span class="value" :class="{ running: isPlaying }">
+              {{ isPlaying ? '运行中' : '已暂停' }}
             </span>
           </div>
           <div class="status-item">
             <span class="label">仿真时间:</span>
-            <span class="value">{{ simulationTime }}s</span>
+            <span class="value">{{ simulationTime.toFixed(2) }}s</span>
           </div>
           <div class="status-item">
             <span class="label">物体数量:</span>
             <span class="value">{{ objectCount }}</span>
+          </div>
+          <div class="status-item">
+            <span class="label">FPS:</span>
+            <span class="value" :class="{ low: fps < 30 }">{{ fps }}</span>
           </div>
         </div>
       </div>
@@ -123,6 +139,13 @@
             <label>采样间隔:</label>
             <input type="number" v-model="samplingInterval" min="0.01" step="0.01" />s
           </div>
+          <div class="parameter-item" v-if="recordedData.length > 0">
+            <label>已记录:</label>
+            <span>{{ recordedData.length }} 帧</span>
+          </div>
+          <div class="parameter-item" v-if="recordedData.length > 0">
+            <button class="export-btn" @click="exportData">导出数据</button>
+          </div>
         </div>
 
         <!-- 选中物体信息 -->
@@ -155,33 +178,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { Vector3, Object3D } from 'three'
+import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
+import * as THREE from 'three'
+import { Vector3, Object3D, Scene } from 'three'
 import Header from '@/components/layout/Header.vue'
-import Viewport from '@/components/three/panels/Viewport.vue'
-
-// 引入组合式API
-import { useThree } from '@/composables/useThree'
-import { useSimulation } from '@/composables/useSimulation'
 import { usePhysics } from '@/composables/usePhysics'
-import { useCamera } from '@/composables/useCamera'
 
 // 引入状态管理
 import { useSimulationStore } from '@/stores/simulationStore'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
+import { useRoute } from 'vue-router'
 
-// 初始化状态
-const simulationStore = useSimulationStore()
-const sceneEditorStore = useSceneEditorStore()
-const { renderer } = useThree()
+// 接收路由参数
+const props = defineProps<{
+  presetId?: string
+}>()
 
-// 获取仿真对象
-const simulation = useSimulation()
-const { activeCamera } = useCamera()
-const { initPhysics, updatePhysicsParameters } = usePhysics()
+const route = useRoute()
 
-// 状态变量
-const selectedObject = ref<Object3D | null>(null)
+// Three.js 核心对象
+let scene: THREE.Scene
+let camera: THREE.PerspectiveCamera
+let renderer: THREE.WebGLRenderer
+let animationId: number | null = null
+
+// DOM 引用
+const viewportRef = ref<HTMLDivElement | null>(null)
+
+// 状态
+const isPlaying = ref(false)
 const simulationSpeed = ref(1.0)
 const simulationTime = ref(0)
 const gravity = ref(-9.8)
@@ -189,80 +214,362 @@ const friction = ref(0.1)
 const restitution = ref(0.5)
 const recordData = ref(false)
 const samplingInterval = ref(0.1)
+const message = ref('')
+const messageTimeout = ref<number | null>(null)
+const selectedObject = ref<Object3D | null>(null)
+const fps = ref(0)
+const lastFrameTime = ref(0)
+const frameCount = ref(0)
+
+// 数据记录
+const recordedData = ref<
+  Array<{
+    time: number
+    objects: Array<{ name: string; position: { x: number; y: number; z: number } }>
+  }>
+>([])
+const lastSampleTime = ref(0)
+const selectedPreset = ref('')
+
+// 物理世界
+const { world, initPhysics, stepPhysics, updatePhysicsParameters } = usePhysics()
 
 // 计算属性
 const objectCount = computed(() => {
-  return (
-    simulation.simulationScene.value?.children.filter(
-      (child: Object3D) => child.userData?.isPhysicsObject,
-    ).length || 0
-  )
-})
-
-// 生命周期
-onMounted(() => {
-  // 从场景编辑器加载场景
-  loadSceneFromEditor()
-
-  // 初始化物理引擎
-  if (simulation.simulationScene.value) {
-    initPhysics(simulation.simulationScene.value)
-  }
-
-  // 开始仿真
-  simulation.startSimulation()
-
-  // 启动仿真时间计时器
-  setInterval(() => {
-    if (simulation.isPlaying.value) {
-      simulationTime.value += simulation.stepSize.value * simulationSpeed.value
+  let count = 0
+  scene?.traverse((child) => {
+    if (child.userData?.isPhysicsObject) {
+      count++
     }
-  }, 100)
+  })
+  return count
 })
 
-// 方法：从场景编辑器加载场景
-const loadSceneFromEditor = () => {
-  const sceneData = sceneEditorStore.getCurrentScene()
-  simulationStore.loadScene(sceneData)
-  simulationTime.value = 0
-  showMessage('场景已加载')
+// 预设场景定义
+const presets = [
+  {
+    id: 'free-fall',
+    name: '自由落体',
+    objects: [
+      {
+        type: 'box',
+        name: '立方体',
+        position: { x: 0, y: 5, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: { type: 'dynamic', mass: 1, friction: 0.3, restitution: 0.5 },
+      },
+      {
+        type: 'sphere',
+        name: '球体',
+        position: { x: 2, y: 5, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: { type: 'dynamic', mass: 1, friction: 0.3, restitution: 0.7 },
+      },
+    ],
+  },
+  {
+    id: 'collision',
+    name: '碰撞测试',
+    objects: [
+      {
+        type: 'box',
+        name: '立方体1',
+        position: { x: -2, y: 1, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: { type: 'dynamic', mass: 1, friction: 0.3, restitution: 0.5 },
+      },
+      {
+        type: 'box',
+        name: '立方体2',
+        position: { x: 2, y: 1, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: { type: 'dynamic', mass: 1, friction: 0.3, restitution: 0.5 },
+      },
+    ],
+  },
+  {
+    id: 'pendulum',
+    name: '钟摆',
+    objects: [
+      {
+        type: 'box',
+        name: '摆球',
+        position: { x: 0, y: 3, z: 0 },
+        scale: { x: 0.5, y: 0.5, z: 0.5 },
+        physics: { type: 'dynamic', mass: 1, friction: 0.1, restitution: 0.3 },
+      },
+    ],
+  },
+]
+
+// 初始化 Three.js
+const initThree = () => {
+  if (!viewportRef.value) return
+
+  // 创建场景
+  scene = new Scene()
+  scene.background = new THREE.Color(0x1a1a1a)
+
+  // 创建相机
+  camera = new THREE.PerspectiveCamera(
+    75,
+    viewportRef.value.clientWidth / viewportRef.value.clientHeight,
+    0.1,
+    1000,
+  )
+  camera.position.set(5, 5, 10)
+  camera.lookAt(0, 0, 0)
+
+  // 创建渲染器
+  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer.setSize(viewportRef.value.clientWidth, viewportRef.value.clientHeight)
+  renderer.setPixelRatio(window.devicePixelRatio)
+  viewportRef.value.appendChild(renderer.domElement)
+
+  // 添加光源
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
+  scene.add(ambientLight)
+
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
+  directionalLight.position.set(10, 20, 10)
+  scene.add(directionalLight)
+
+  const pointLight = new THREE.PointLight(0xffffff, 0.5)
+  pointLight.position.set(-10, 10, -10)
+  scene.add(pointLight)
+
+  // 添加网格辅助线
+  const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222)
+  scene.add(gridHelper)
+
+  // 添加坐标轴辅助线
+  const axesHelper = new THREE.AxesHelper(5)
+  scene.add(axesHelper)
 }
 
-// 方法：切换仿真播放/暂停
+// 渲染循环
+const render = () => {
+  if (!renderer || !scene || !camera) return
+
+  // 计算 FPS
+  const now = performance.now()
+  if (lastFrameTime.value > 0) {
+    frameCount.value++
+    if (frameCount.value >= 30) {
+      fps.value = Math.round(1000 / (now - lastFrameTime.value))
+      frameCount.value = 0
+    }
+  }
+  lastFrameTime.value = now
+
+  // 物理更新
+  if (isPlaying.value && world.value) {
+    stepPhysics(0.016 * simulationSpeed.value)
+    simulationTime.value += 0.016 * simulationSpeed.value
+
+    // 数据记录
+    if (recordData.value) {
+      const currentTime = simulationTime.value
+      if (currentTime - lastSampleTime.value >= samplingInterval.value) {
+        const frameData = {
+          time: currentTime,
+          objects: [] as Array<{ name: string; position: { x: number; y: number; z: number } }>,
+        }
+
+        scene.traverse((child) => {
+          if (child.userData?.isPhysicsObject) {
+            frameData.objects.push({
+              name: child.name || '未命名',
+              position: { x: child.position.x, y: child.position.y, z: child.position.z },
+            })
+          }
+        })
+
+        recordedData.value.push(frameData)
+        lastSampleTime.value = currentTime
+      }
+    }
+  }
+
+  // 渲染场景
+  renderer.render(scene, camera)
+
+  // 继续循环
+  animationId = requestAnimationFrame(render)
+}
+
+// 创建物理物体
+const createPhysicsObject = (objData: {
+  type: string
+  name: string
+  position: { x: number; y: number; z: number }
+  scale: { x: number; y: number; z: number }
+  physics: { type: string; mass: number; friction: number; restitution: number }
+  color?: number
+}) => {
+  let geometry: THREE.BufferGeometry
+  let material: THREE.Material
+
+  switch (objData.type) {
+    case 'box':
+      geometry = new THREE.BoxGeometry(1, 1, 1)
+      material = new THREE.MeshStandardMaterial({ color: objData.color || 0x3498db })
+      break
+    case 'sphere':
+      geometry = new THREE.SphereGeometry(0.5, 32, 32)
+      material = new THREE.MeshStandardMaterial({ color: objData.color || 0xe74c3c })
+      break
+    default:
+      geometry = new THREE.BoxGeometry(1, 1, 1)
+      material = new THREE.MeshStandardMaterial({ color: 0x95a5a6 })
+  }
+
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.name = objData.name
+  mesh.position.set(objData.position.x, objData.position.y, objData.position.z)
+  mesh.scale.set(objData.scale.x, objData.scale.y, objData.scale.z)
+  mesh.userData = {
+    isPhysicsObject: true,
+    physics: {
+      ...objData.physics,
+      shape: objData.type,
+    },
+  }
+
+  scene.add(mesh)
+  return mesh
+}
+
+// 方法
 const togglePlayPause = () => {
-  if (simulation.isPlaying.value) {
-    simulation.pauseSimulation()
+  isPlaying.value = !isPlaying.value
+}
+
+const stepSimulation = () => {
+  if (world.value) {
+    stepPhysics(0.016)
+    simulationTime.value += 0.016
+  }
+}
+
+const resetSimulation = () => {
+  isPlaying.value = false
+  simulationTime.value = 0
+
+  // 移除所有物理物体
+  const objectsToRemove: Object3D[] = []
+  scene.traverse((child) => {
+    if (child.userData?.isPhysicsObject) {
+      objectsToRemove.push(child)
+    }
+  })
+  objectsToRemove.forEach((obj) => scene.remove(obj))
+
+  // 重新初始化物理世界
+  initPhysics(scene)
+
+  // 重新加载当前场景
+  if (selectedPreset.value) {
+    loadPreset(selectedPreset.value)
   } else {
-    simulation.startSimulation()
+    loadSceneFromEditor()
   }
 }
 
-// 方法：设置仿真速度
 const setSimulationSpeed = () => {
-  simulationStore.setSpeed(simulationSpeed.value)
-  simulation.simulationSpeed.value = simulationSpeed.value
-}
-
-// 方法：更新物理参数
-const updatePhysics = () => {
-  if (simulation.isPlaying.value) {
-    simulation.stepSimulation()
-  }
+  displayMessage(`仿真速度已设置为 ${simulationSpeed.value}x`)
 }
 
 const updateGravity = () => {
   updatePhysicsParameters({ gravity: new Vector3(0, gravity.value, 0) })
+  displayMessage(`重力已设置为 ${gravity.value}`)
 }
 
 const updateFriction = () => {
   updatePhysicsParameters({ friction: friction.value })
+  displayMessage(`摩擦力已设置为 ${friction.value}`)
 }
 
 const updateRestitution = () => {
   updatePhysicsParameters({ restitution: restitution.value })
+  displayMessage(`弹性系数已设置为 ${restitution.value}`)
 }
 
-// 方法：保存实验配置
+const loadPreset = (presetId: string) => {
+  const preset = presets.find((p) => p.id === presetId)
+  if (!preset) {
+    displayMessage(`未找到预设场景: ${presetId}`)
+    return
+  }
+
+  // 移除现有物体
+  const objectsToRemove: Object3D[] = []
+  scene.traverse((child) => {
+    if (child.userData?.isPhysicsObject) {
+      objectsToRemove.push(child)
+    }
+  })
+  objectsToRemove.forEach((obj) => scene.remove(obj))
+
+  // 创建新物体
+  preset.objects.forEach((objData) => {
+    createPhysicsObject(objData)
+  })
+
+  // 初始化物理
+  initPhysics(scene)
+
+  simulationTime.value = 0
+  selectedPreset.value = presetId
+  displayMessage(`已加载预设: ${preset.name}`)
+}
+
+const loadSceneFromEditor = () => {
+  try {
+    // 移除现有物体
+    const objectsToRemove: Object3D[] = []
+    scene.traverse((child) => {
+      if (child.userData?.isPhysicsObject) {
+        objectsToRemove.push(child)
+      }
+    })
+    objectsToRemove.forEach((obj) => scene.remove(obj))
+
+    // 创建默认演示场景
+    const demoObjects = [
+      {
+        type: 'box' as const,
+        name: '演示立方体',
+        position: { x: 0, y: 3, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: { type: 'dynamic' as const, mass: 1, friction: 0.3, restitution: 0.5 },
+        color: 0x3498db,
+      },
+      {
+        type: 'sphere' as const,
+        name: '演示球体',
+        position: { x: 2, y: 3, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: { type: 'dynamic' as const, mass: 1, friction: 0.3, restitution: 0.7 },
+        color: 0xe74c3c,
+      },
+    ]
+
+    demoObjects.forEach((objData) => {
+      createPhysicsObject(objData)
+    })
+
+    // 初始化物理
+    initPhysics(scene)
+
+    simulationTime.value = 0
+    displayMessage('已加载演示场景')
+  } catch (error) {
+    console.error('加载场景失败:', error)
+    displayMessage('加载场景失败')
+  }
+}
+
 const saveExperiment = () => {
   const experimentConfig = {
     gravity: gravity.value,
@@ -272,21 +579,91 @@ const saveExperiment = () => {
     recordData: recordData.value,
     samplingInterval: samplingInterval.value,
   }
-
   localStorage.setItem('experimentConfig', JSON.stringify(experimentConfig))
-  showMessage('实验配置已保存')
+  displayMessage('实验配置已保存')
 }
 
-// 方法：处理视图点击（选择物体）
-const handleViewportClick = (object: Object3D | null) => {
-  selectedObject.value = object
+const exportData = () => {
+  try {
+    const dataStr = JSON.stringify(recordedData.value, null, 2)
+    const blob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `simulation-data-${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    displayMessage('数据已导出')
+  } catch (error) {
+    console.error('导出数据失败:', error)
+    displayMessage('导出数据失败')
+  }
 }
 
-// 方法：显示消息
-const showMessage = (message: string) => {
-  // 可以在这里实现消息提示功能
-  console.log(message)
+const displayMessage = (msg: string) => {
+  message.value = msg
+  if (messageTimeout.value) {
+    clearTimeout(messageTimeout.value)
+  }
+  messageTimeout.value = window.setTimeout(() => {
+    message.value = ''
+  }, 3000)
 }
+
+// 生命周期
+onMounted(() => {
+  // 初始化 Three.js
+  initThree()
+
+  // 初始化物理
+  initPhysics(scene)
+
+  // 加载默认场景
+  loadSceneFromEditor()
+
+  // 启动渲染循环
+  render()
+
+  // 监听路由参数变化
+  watch(
+    () => props.presetId || route.params.presetId,
+    (newPresetId) => {
+      if (newPresetId) {
+        loadPreset(newPresetId as string)
+      }
+    },
+    { immediate: true },
+  )
+
+  // 如果有预设ID，加载预设场景
+  if (props.presetId || route.params.presetId) {
+    loadPreset((props.presetId || route.params.presetId) as string)
+  }
+})
+
+onUnmounted(() => {
+  // 停止渲染循环
+  if (animationId) {
+    cancelAnimationFrame(animationId)
+  }
+
+  // 清理渲染器
+  if (renderer) {
+    renderer.dispose()
+  }
+})
+
+// 处理窗口大小变化
+const handleResize = () => {
+  if (!viewportRef.value || !camera || !renderer) return
+  const width = viewportRef.value.clientWidth
+  const height = viewportRef.value.clientHeight
+  camera.aspect = width / height
+  camera.updateProjectionMatrix()
+  renderer.setSize(width, height)
+}
+
+window.addEventListener('resize', handleResize)
 </script>
 
 <style scoped>
@@ -295,9 +672,34 @@ const showMessage = (message: string) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
-/* 主要容器布局 */
+.message-toast {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #2c3e50;
+  color: white;
+  padding: 12px 24px;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
 .simulation-container {
   display: flex;
   flex: 1;
@@ -306,16 +708,14 @@ const showMessage = (message: string) => {
   background-color: #e0e0e0;
 }
 
-/* 主视图区域 - 占据最大空间 */
 .main-content {
   flex: 1;
   display: flex;
   flex-direction: column;
   position: relative;
-  min-width: 0; /* 防止内容溢出 */
+  min-width: 0;
 }
 
-/* 仿真工具栏样式 */
 .simulation-toolbar {
   display: flex;
   align-items: center;
@@ -362,15 +762,51 @@ const showMessage = (message: string) => {
   width: 80px;
 }
 
-/* Viewport 样式优化 */
-::v-deep .viewport-container {
+.preset-selector {
+  display: flex;
+  align-items: center;
+}
+
+.preset-selector select {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background-color: #34495e;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.preset-selector select:hover {
+  background-color: #3d5a7c;
+}
+
+.preset-selector select option {
+  background-color: #2c3e50;
+  color: white;
+}
+
+.viewport-container {
   flex: 1;
   background-color: #1a1a1a;
   position: relative;
   min-height: 0;
+  overflow: hidden;
 }
 
-/* 仿真状态面板 */
+.viewport-info {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 100;
+}
+
 .simulation-status-panel {
   display: flex;
   padding: 10px;
@@ -399,7 +835,10 @@ const showMessage = (message: string) => {
   color: #27ae60;
 }
 
-/* 实验参数面板 */
+.status-item .value.low {
+  color: #e74c3c;
+}
+
 .experiment-panel {
   width: 320px;
   flex-shrink: 0;
@@ -450,7 +889,21 @@ const showMessage = (message: string) => {
   margin-right: 5px;
 }
 
-/* 选中物体信息 */
+.export-btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.export-btn:hover {
+  background-color: #2980b9;
+}
+
 .selected-object-info {
   margin-top: 20px;
   padding-top: 15px;
@@ -479,7 +932,6 @@ const showMessage = (message: string) => {
   font-weight: 500;
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
   .simulation-container {
     flex-direction: column;
