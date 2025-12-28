@@ -23,15 +23,15 @@
       />
 
       <!-- Viewport组件也在整个生命周期存在，负责渲染场景 -->
-    <div class="viewport-wrapper" ref="containerRef">
-      <Viewport
-        :scene="sceneEditor.getScene()"
-        :camera="sceneEditor.getCamera()"
-        :renderer="sceneEditor.getRenderer()"
-        :update-physics="sceneMethods.updatePhysics"
-        @viewport-click="handleViewportClick"
-      />
-    </div>
+      <div class="viewport-wrapper" ref="containerRef">
+        <Viewport
+          :scene="sceneStore.getScene()"
+          :camera="sceneStore.getCamera()"
+          :renderer="sceneStore.getRenderer()"
+          :update-physics="sceneMethods.updatePhysics"
+          @viewport-click="handleViewportClick"
+        />
+      </div>
       <PropertyPanel class="property-panel" />
     </div>
   </div>

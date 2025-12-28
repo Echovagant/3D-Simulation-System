@@ -95,7 +95,7 @@ const importModelInProgress = ref(false);
 
 // 计算属性
 const isSceneInitialized = computed(() => getIsSceneInitialized());
-const isPlaying = computed(() => store.isPlaying);
+const isPlaying = computed(() => store.simulationState.isPlaying);
 const hasSelectedObject = computed(() => !!store.selectedObjectUuid);
 
 // 显示临时消息
