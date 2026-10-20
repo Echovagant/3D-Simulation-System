@@ -6,10 +6,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick, type Ref, inject } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, type Ref } from 'vue'
 import * as THREE from 'three'
 import type { Scene, Camera, WebGLRenderer, Object3D } from 'three'
-import type { SceneEditorStore } from '@/types'
+import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 
 // 定义相机更新事件的数据类型
 interface CameraUpdateData {
@@ -33,7 +33,13 @@ const props = defineProps<{
   scene: Scene | null
   camera: Camera | null
   renderer: WebGLRenderer | null
-  updatePhysics: () => void
+  /**
+   * 每帧调用一次的物理推进函数。
+   *
+   * 参数是 `requestAnimationFrame` 给的时间戳（毫秒）：物理要按**固定步长**推进，
+   * 就必须知道「这一帧过了多少真实时间」，否则步进次数会被显示刷新率绑架。
+   */
+  updatePhysics: (timestamp?: number) => void
 }>()
 
 // 声明事件类型
@@ -57,32 +63,14 @@ const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 let animationFrameId: number | null = null
 
-// 注入store
-const sceneEditorStore = inject<SceneEditorStore>('sceneEditorStore')
+// Pinia store 是全局单例，直接取用（与 Toolbar.vue 的写法一致）
+const sceneEditorStore = useSceneEditorStore()
 let resizeObserver: ResizeObserver | null = null
 let initRetryCount = 0
 const MAX_INIT_RETRIES = 10
 const isUnmounted = ref(false)
 
-// 调试：记录props接收状态
-if (import.meta.env.DEV) {
-  console.log('[Viewport] 组件创建，接收到的props:')
-  console.log('[Viewport] scene:', props.scene)
-  console.log('[Viewport] camera:', props.camera)
-  console.log('[Viewport] renderer:', props.renderer)
-  console.log('[Viewport] updatePhysics:', props.updatePhysics)
-}
-
-// 添加定时器持续检查props状态
-if (import.meta.env.DEV) {
-  setInterval(() => {
-    console.log('[Viewport] 定时检查props状态:')
-    console.log('[Viewport] scene存在吗?', !!props.scene)
-    console.log('[Viewport] camera存在吗?', !!props.camera)
-    console.log('[Viewport] renderer存在吗?', !!props.renderer)
-    console.log('[Viewport] 渲染循环正在运行吗?', isRendering.value)
-  }, 3000)
-}
+// 调试日志已移除
 
 /**
  * 初始化渲染器：将Three.js的canvas插入到容器中
@@ -93,22 +81,12 @@ const initRenderer = () => {
 
   // 检查props有效性
   if (!props.scene || !props.camera || !props.renderer) {
-    if (import.meta.env.DEV) {
-      console.log('[Viewport] props无效，等待场景初始化完成:', {
-        scene: !!props.scene,
-        camera: !!props.camera,
-        renderer: !!props.renderer,
-      })
-    }
     return
   }
 
   // 确保容器存在且尺寸有效
   const container = containerRef.value
   if (!container) {
-    if (import.meta.env.DEV) {
-      console.log('[Viewport] 容器不存在')
-    }
     return
   }
 
@@ -118,18 +96,6 @@ const initRenderer = () => {
   // 如果容器尺寸无效（小于10像素），等待一下再尝试
   if (containerWidth < 10 || containerHeight < 10) {
     initRetryCount++
-    if (import.meta.env.DEV) {
-      console.log(
-        '[Viewport] 容器尺寸无效，延迟重试',
-        initRetryCount,
-        '/',
-        MAX_INIT_RETRIES,
-        ':',
-        containerWidth,
-        'x',
-        containerHeight,
-      )
-    }
     if (initRetryCount < MAX_INIT_RETRIES) {
       setTimeout(() => {
         if (!isUnmounted.value) {
@@ -137,9 +103,6 @@ const initRenderer = () => {
         }
       }, 200)
     } else {
-      if (import.meta.env.DEV) {
-        console.error('[Viewport] 重试次数过多，使用备用尺寸')
-      }
       // 使用备用尺寸
       props.renderer.setSize(800, 600)
       if (!container.contains(props.renderer.domElement)) {
@@ -153,42 +116,25 @@ const initRenderer = () => {
   // 重置重试计数
   initRetryCount = 0
 
-  if (import.meta.env.DEV) {
-    console.log('[Viewport] 初始化渲染器，容器尺寸:', containerWidth, 'x', containerHeight)
-  }
-
   // 设置渲染器尺寸
   props.renderer.setSize(containerWidth, containerHeight)
 
   // 如果canvas不在容器中，则添加
   if (!container.contains(props.renderer.domElement)) {
-    if (import.meta.env.DEV) {
-      console.log('[Viewport] 添加canvas到容器')
-    }
     container.appendChild(props.renderer.domElement)
-  }
-
-  // 检查场景中的对象数量
-  if (import.meta.env.DEV) {
-    console.log('[Viewport] 场景中的对象数量:', props.scene.children.length)
   }
 
   // 更新本地引用
   localRenderer.value = props.renderer
-  if (import.meta.env.DEV) {
-    console.log(
-      '[Viewport] 渲染器初始化完成，canvas尺寸:',
-      props.renderer.domElement.width,
-      'x',
-      props.renderer.domElement.height,
-    )
-  }
 }
 
 /**
  * 渲染循环：持续渲染场景
+ *
+ * `timestamp` 是 requestAnimationFrame 回调的第一个参数（毫秒时间戳），
+ * 原样传给物理推进函数——固定步长累加器需要它来算真实时间。
  */
-const renderLoop = () => {
+const renderLoop = (timestamp?: number) => {
   // 如果组件已卸载，停止渲染
   if (isUnmounted.value) return
 
@@ -199,37 +145,28 @@ const renderLoop = () => {
   }
 
   // 更新store中的渲染状态
-  if (sceneEditorStore) {
-    sceneEditorStore.renderState.isRendering = true
-  }
+  sceneEditorStore.renderState.isRendering = true
 
   // 调用物理更新函数
   if (props.updatePhysics) {
     try {
-      props.updatePhysics()
+      props.updatePhysics(timestamp)
     } catch (error) {
-      if (import.meta.env.DEV) {
-        console.error('[Viewport] 物理更新出错:', error)
-      }
       // 在store中记录错误
-      if (sceneEditorStore) {
-        sceneEditorStore.addPhysicsError('Viewport物理更新失败', error as Error)
-      }
+      sceneEditorStore.addPhysicsError('Viewport物理更新失败', error as Error)
     }
   }
 
-  // 只在开发环境下输出性能日志
+  // 渲染场景
   if (import.meta.env.DEV) {
+    // 开发环境下测量单帧渲染耗时，超过 16ms（60fps 帧预算）时记入 store 并广播
     const startTime = performance.now()
     props.renderer.render(props.scene, props.camera)
     const renderTime = performance.now() - startTime
 
-    // 只在渲染时间较长时输出警告
     if (renderTime > 16) {
-      // 60fps的帧时间约为16ms
-      console.warn(`[Viewport] 渲染耗时: ${renderTime.toFixed(2)}ms`)
       const warning: PerformanceWarning = {
-        message: `渲染耗时超过阈值`,
+        message: `渲染耗时超过阈值: ${renderTime.toFixed(2)}ms`,
         timestamp: Date.now(),
         details: {
           renderTime: renderTime,
@@ -238,18 +175,13 @@ const renderLoop = () => {
       }
 
       // 在store中记录性能警告
-      if (sceneEditorStore) {
-        sceneEditorStore.addPerformanceWarning(
-          `渲染耗时超过阈值: ${renderTime.toFixed(2)}ms`,
-          warning.details,
-        )
-      }
+      sceneEditorStore.addPerformanceWarning(warning.message, warning.details)
 
       // 发出性能警告事件
       emit('performance-warning', warning)
     }
   } else {
-    // 生产环境直接渲染，无日志
+    // 生产环境直接渲染
     props.renderer.render(props.scene, props.camera)
   }
 
@@ -262,9 +194,6 @@ const renderLoop = () => {
 const startRendering = () => {
   if (isRendering.value) return
   isRendering.value = true
-  if (import.meta.env.DEV) {
-    console.log('[Viewport] 启动渲染循环')
-  }
   renderLoop()
 }
 
@@ -273,17 +202,12 @@ const startRendering = () => {
  */
 const stopRendering = () => {
   isRendering.value = false
-  if (import.meta.env.DEV) {
-    console.log('[Viewport] 停止渲染循环')
-  }
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)
   }
 
   // 更新store中的渲染状态
-  if (sceneEditorStore) {
-    sceneEditorStore.renderState.isRendering = false
-  }
+  sceneEditorStore.renderState.isRendering = false
 }
 
 /**
@@ -293,17 +217,26 @@ const handleClick = (event: MouseEvent) => {
   if (!props.scene || !props.camera || !props.renderer) return
 
   // 计算鼠标在标准化设备坐标中的位置（-1到1）
+  // 必须用容器的边界矩形换算，clientWidth/clientHeight 会忽略容器在视口中的偏移
   if (!containerRef.value) return
-  const { clientWidth, clientHeight } = containerRef.value
-  mouse.x = (event.clientX / clientWidth) * 2 - 1
-  mouse.y = -(event.clientY / clientHeight) * 2 + 1
+  const rect = containerRef.value.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) return
 
-  // 射线检测
+  mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1
+
+  // 射线检测：只检测 store 管理的对象，避免命中地面/辅助线后选中一个不存在的对象
   raycaster.setFromCamera(mouse, props.camera)
-  const intersects = props.scene ? raycaster.intersectObjects(props.scene.children, true) : []
+
+  const pickable = sceneEditorStore.objects
+    .filter((item) => item.visible !== false && item.threeObject)
+    .map((item) => item.threeObject as THREE.Object3D)
+
+  const intersects = pickable.length > 0 ? raycaster.intersectObjects(pickable, true) : []
 
   // 触发点击事件
-  emit('viewport-click', intersects.length > 0 ? intersects[0].object : null)
+  const clickedObject = intersects.length > 0 ? intersects[0].object : null
+  emit('viewport-click', clickedObject)
 }
 
 /**
@@ -336,33 +269,13 @@ const handleResize = () => {
 
 // 生命周期
 onMounted(() => {
-  if (import.meta.env.DEV) {
-    console.log('[Viewport] 组件挂载')
-  }
-
   const container = containerRef.value
   if (!container) {
-    if (import.meta.env.DEV) {
-      console.log('[Viewport] 容器不存在，无法初始化')
-    }
     return
-  }
-
-  if (import.meta.env.DEV) {
-    console.log('[Viewport] 容器尺寸:', container.clientWidth, 'x', container.clientHeight)
   }
 
   // 使用nextTick确保DOM完全渲染后再初始化
   nextTick(() => {
-    if (import.meta.env.DEV) {
-      console.log(
-        '[Viewport] DOM渲染后的容器尺寸:',
-        container.clientWidth,
-        'x',
-        container.clientHeight,
-      )
-    }
-
     // 初始化渲染器
     initRenderer()
 
@@ -374,9 +287,6 @@ onMounted(() => {
 
     // 监听尺寸变化（使用ResizeObserver替代useThree.size，避免依赖）
     resizeObserver = new ResizeObserver((entries) => {
-      if (import.meta.env.DEV && entries.length > 0) {
-        console.log('[Viewport] 容器尺寸变化:', entries[0]?.contentRect)
-      }
       if (entries.length > 0) handleResize()
     })
     resizeObserver.observe(container)
@@ -384,10 +294,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (import.meta.env.DEV) {
-    console.log('[Viewport] 组件卸载')
-  }
-
   // 标记组件已卸载
   isUnmounted.value = true
 
@@ -410,18 +316,15 @@ onUnmounted(() => {
 watch(
   () => [props.scene, props.camera, props.renderer],
   (newValues, oldValues) => {
-    if (import.meta.env.DEV) {
-      console.log('[Viewport] props变化，重新初始化渲染器')
-      console.log('[Viewport] 新scene:', !!newValues[0])
-      console.log('[Viewport] 新camera:', !!newValues[1])
-      console.log('[Viewport] 新renderer:', !!newValues[2])
-    }
-
     // 只有当所有三个值都存在时，才重新初始化渲染器
     if (newValues[0] && newValues[1] && newValues[2]) {
       // 确保canvas已添加到DOM中
       const renderer = newValues[2]
-      if (containerRef.value && renderer instanceof THREE.WebGLRenderer && !containerRef.value.contains(renderer.domElement)) {
+      if (
+        containerRef.value &&
+        renderer instanceof THREE.WebGLRenderer &&
+        !containerRef.value.contains(renderer.domElement)
+      ) {
         containerRef.value.appendChild(renderer.domElement)
       }
 
@@ -437,21 +340,19 @@ watch(
 )
 
 // 监听store中的渲染状态变化
-if (sceneEditorStore) {
-  watch(
-    () => sceneEditorStore.renderState.isRendering,
-    (newState) => {
-      if (newState !== isRendering.value) {
-        if (newState) {
-          startRendering()
-        } else {
-          stopRendering()
-        }
+watch(
+  () => sceneEditorStore.renderState.isRendering,
+  (newState) => {
+    if (newState !== isRendering.value) {
+      if (newState) {
+        startRendering()
+      } else {
+        stopRendering()
       }
-    },
-    { immediate: true },
-  )
-}
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>

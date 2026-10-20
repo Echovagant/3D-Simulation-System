@@ -68,7 +68,8 @@ const sceneMethods = ref<{
   addSphere: () => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
-  updatePhysics: () => void
+  // 物理推进函数接收 rAF 的时间戳：固定步长累加器靠它算真实时间
+  updatePhysics: (timestamp?: number) => void
 }>({
   addCube: () => false,
   addSphere: () => false,
@@ -89,7 +90,7 @@ const exposeMethods = (methods: {
   addSphere: () => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
-  updatePhysics: () => void
+  updatePhysics: (timestamp?: number) => void
 }) => {
   sceneMethods.value = methods
 }
@@ -109,11 +110,9 @@ const handleSceneInitSuccess = () => {
   setTimeout(() => {
     if (sceneMethods.value.addCube()) {
       if (import.meta.env.DEV) {
-        console.log('[SceneEditor] 成功添加测试立方体')
       }
     } else {
       if (import.meta.env.DEV) {
-        console.log('[SceneEditor] 添加测试立方体失败')
       }
     }
   }, 1000)
@@ -122,12 +121,6 @@ const handleSceneInitSuccess = () => {
   sceneStore.togglePlayState()
 
   if (import.meta.env.DEV) {
-    console.log('[SceneEditor] 场景初始化成功')
-    console.log('[SceneEditor] 当前场景:', sceneStore.getScene())
-    console.log('[SceneEditor] 当前相机:', sceneStore.getCamera())
-    console.log('[SceneEditor] 当前渲染器:', sceneStore.getRenderer())
-    console.log('[SceneEditor] 物理模拟状态:', sceneStore.simulationState.isPlaying)
-    console.log('[SceneEditor] 场景对象数量:', sceneStore.getScene()?.children.length)
   }
 }
 
@@ -138,12 +131,43 @@ const retryInit = () => {
   threeScene.value?.reinit()
 }
 
-// 处理视口点击事件
+// 处理视口点击事件：把命中的对象映射到 store 管理的对象，并维护选中高亮
 const handleViewportClick = (object: THREE.Object3D | null) => {
-  if (object) {
-    sceneStore.setSelectedObject(object.uuid)
-  } else {
+  // 先复位所有物体的高亮
+  sceneStore.objects.forEach((item) => {
+    const mesh = item.threeObject
+    if (mesh && mesh instanceof THREE.Mesh) {
+      const material = mesh.material as THREE.MeshStandardMaterial
+      if (material.emissive) material.emissive.set(0x000000)
+    }
+  })
+
+  if (!object) {
     sceneStore.setSelectedObject(null)
+    return
+  }
+
+  // 查找根对象，处理子对象的情况
+  let rootObject = object
+  while (rootObject.parent && rootObject.parent.type !== 'Scene') {
+    rootObject = rootObject.parent
+  }
+
+  // 只有 store 里真实存在的对象才能被选中（命中地面/辅助线时不产生选中）
+  const matched = sceneStore.objects.find((item) => item.uuid === rootObject.uuid)
+  if (!matched) {
+    sceneStore.setSelectedObject(null)
+    return
+  }
+
+  // 设置选中对象
+  sceneStore.setSelectedObject(matched.uuid)
+
+  // 高亮选中对象
+  const mesh = matched.threeObject
+  if (mesh && mesh instanceof THREE.Mesh) {
+    const material = mesh.material as THREE.MeshStandardMaterial
+    if (material.emissive) material.emissive.set(0xffff00)
   }
 }
 
@@ -170,9 +194,7 @@ const handleImportModel = async () => {
           const success = await sceneMethods.value.importModel(modelId)
 
           if (success) {
-            console.log(`模型 ${modelId} 导入成功`)
           } else {
-            console.error(`模型 ${modelId} 导入失败`)
           }
 
           // 清除选中状态
@@ -195,7 +217,6 @@ const handleImportModel = async () => {
       },
     )
   } catch (error) {
-    console.error('模型导入过程出错:', error)
     importModelInProgress.value = false
   }
 }
@@ -204,9 +225,7 @@ const handleImportModel = async () => {
 onMounted(() => {
   const sceneId = router.currentRoute.value.query.sceneId
   if (sceneId && typeof sceneId === 'string') {
-    sceneStore.loadScene(sceneId).catch((err: unknown) => {
-      console.error('加载场景失败:', err)
-    })
+    sceneStore.loadScene(sceneId).catch((err: unknown) => {})
   }
 })
 

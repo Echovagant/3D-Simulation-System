@@ -1,12 +1,16 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
-import { ref, type Ref, onUnmounted } from 'vue'
+import { ref, watch, type Ref, onUnmounted } from 'vue'
 import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadModel } from '../utils/modelLoader'
+import { loadRapier } from './loadRapier'
+import { simulationConfig } from '../config/simulation'
+import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
 import type {
   World,
   RigidBody,
+  Collider,
   EventQueue,
   RigidBodyDesc,
   IntegrationParameters,
@@ -28,9 +32,23 @@ type RapierWorld = World & {
   step: (eventQueue: EventQueue) => void
   bodies: { len: () => number; get: (index: number) => RigidBody | null }
   createRigidBody: (desc: RigidBodyDesc) => RigidBody
-  createCollider: (desc: unknown, body: RigidBody) => unknown
+  createCollider: (desc: unknown, body: RigidBody) => Collider
   removeRigidBody: (body: RigidBody) => void
 }
+
+/**
+ * 碰撞体的「基准尺寸」：缩放为 1 时的尺寸。
+ *
+ * 缩放是绝对值（Three 的 mesh.scale 本身就是绝对缩放），所以碰撞体必须
+ * 以基准尺寸为原点换算——如果在「当前尺寸」上乘，就会变成累乘
+ * （0.5 → 1.5 → 4.5），与画面完全对不上。
+ *
+ * 基准的约定：Rapier 的 cuboid 用半长、ball 用半径；
+ * 立方体 BoxGeometry(1,1,1) → 半长 0.5，球体 SphereGeometry(0.5) → 半径 0.5。
+ */
+type ColliderShapeSpec =
+  | { kind: 'cuboid'; halfExtents: { x: number; y: number; z: number } }
+  | { kind: 'ball'; radius: number }
 
 // 定义完整的接口类型
 interface Item {
@@ -60,6 +78,21 @@ export interface SceneObject {
   }
 }
 
+/**
+ * 共享几何体。
+ *
+ * 以前每次点击都 `new THREE.BoxGeometry(...)` / `new THREE.SphereGeometry(...)`，
+ * 每点一次就多占一份显存与 GPU 资源。Three.js 共享 geometry 是标准做法
+ * （缩放走 `mesh.scale`，不动顶点），因此这里提到模块级复用。
+ *
+ * ⚠️ 材质**不能**共享：点击高亮是通过 `material.emissive.set(0xffff00)` 实现的，
+ * 共享材质会让所有同材质物体一起变黄。材质必须每对象独立。
+ */
+const sharedGeometries: Record<'cube' | 'sphere', THREE.BufferGeometry> = {
+  cube: new THREE.BoxGeometry(1, 1, 1),
+  sphere: new THREE.SphereGeometry(0.5, 32, 32),
+}
+
 export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) {
   const store = useSceneEditorStore()
   const modelStore = useModelStore()
@@ -68,9 +101,30 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   let rapier: typeof import('@dimforge/rapier3d') | null = null // 使用更具体的类型
   let physicsWorld: RapierWorld | null = null
   const rigidBodies = new Map<string, RigidBody>()
+  // 碰撞体的基准尺寸账本：与 rigidBodies 同生共死
+  const colliderShapes = new Map<string, ColliderShapeSpec>()
   let eventQueue: EventQueue | null = null // 添加事件队列
   let isSceneInitialized = false
   let initError: string = ''
+
+  /**
+   * 固定步长累加器：整个场景**唯一**的物理时钟。
+   *
+   * 步长固定为 1/60 秒（`simulationConfig.physics.fixedTimeStep`），
+   * 真实时间先累加进来，再按固定步长切成若干个物理步——
+   * 因此仿真速度与显示刷新率无关：60Hz 屏每秒推进 60 步，30Hz 屏也是 60 步。
+   */
+  const fixedTimeStep = simulationConfig.physics.fixedTimeStep
+  const maxSubSteps = simulationConfig.physics.maxSubSteps
+  const accumulator = createFixedStepAccumulator(
+    fixedTimeStep,
+    maxSubSteps,
+    simulationConfig.physics.maxFrameDelta,
+  )
+  // 上一帧的时间戳（毫秒）。null 表示「还没有参照点」。
+  // ⚠️ 不能用 0 当哨兵：requestAnimationFrame 的第一个时间戳就可能是 0，
+  // 用 0 判空会让「第一帧」被反复当成「第一帧」，物理一步都推不动。
+  let lastFrameTimestamp: number | null = null
 
   // 核心Three.js对象
   let scene: THREE.Scene | null = null
@@ -87,13 +141,10 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   // 异步加载物理引擎
   const loadPhysicsEngine = async (): Promise<boolean> => {
     try {
-      const rapierModule = await import('@dimforge/rapier3d')
-      rapier = rapierModule
-      console.log('Rapier 物理引擎加载成功')
+      rapier = await loadRapier()
       return true
     } catch (error) {
       const errMsg = `Rapier 物理引擎加载失败: ${error instanceof Error ? error.message : String(error)}`
-      console.error('❌', errMsg)
       initError = errMsg
       return false
     }
@@ -155,12 +206,10 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
       // 标记场景初始化完成
       isSceneInitialized = true
-      console.log('场景初始化完成')
       onInitSuccess.value()
       return true
     } catch (error) {
       const errMsg = `场景初始化失败: ${error instanceof Error ? error.message : String(error)}`
-      console.error(errMsg)
       initError = errMsg
       onInitError.value(errMsg)
       return false
@@ -223,7 +272,6 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     const gravity = new rapier.Vector3(0, -9.81, 0)
     physicsWorld = new rapier.World(gravity) as unknown as RapierWorld
     eventQueue = new rapier.EventQueue(true)
-    console.log('物理世界初始化成功')
   }
 
   // 创建地面
@@ -256,60 +304,223 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   const bindEvents = (): void => {
     if (!renderer) return
 
-    renderer.domElement.addEventListener('click', handleObjectClick)
     window.addEventListener('resize', handleResize)
     // 新增：监听移除刚体事件
     window.addEventListener('remove-rigidbody', handleRemoveRigidBody)
+    // 新增：监听属性面板的变换修改事件
+    window.addEventListener('update-transform', handleUpdateTransform)
   }
 
   // 解绑事件
   const unbindEvents = (): void => {
-    if (renderer?.domElement) {
-      renderer.domElement.removeEventListener('click', handleObjectClick)
-    }
     window.removeEventListener('resize', handleResize)
     // 新增：移除刚体事件监听器
     window.removeEventListener('remove-rigidbody', handleRemoveRigidBody)
+    // 新增：移除变换修改事件监听器
+    window.removeEventListener('update-transform', handleUpdateTransform)
+  }
+
+  // 移除指定 uuid 对应的刚体（若存在）。返回是否真的移除了。
+  // 刚体生命周期的账本在这里：谁创建谁登记，谁移除谁销账。
+  const removeRigidBodyByUuid = (uuid: string): boolean => {
+    if (!physicsWorld || !rapier) return false
+    const rigidBody = rigidBodies.get(uuid)
+    if (!rigidBody) return false
+
+    physicsWorld.removeRigidBody(rigidBody)
+    rigidBodies.delete(uuid)
+    colliderShapes.delete(uuid)
+
+    // 同步清掉 mesh 侧的引用，避免留下指向已移除刚体的悬空指针
+    const target = store.objects.find((item) => item.uuid === uuid)
+    const physicsData = target?.threeObject?.userData?.physics
+    if (physicsData) {
+      physicsData.body = null
+      physicsData.collider = null
+    }
+
+    return true
   }
 
   // 处理移除刚体事件
+  // 载荷以 uuid 为准：detail.object 只是向后兼容的附带信息，不作为判据。
   const handleRemoveRigidBody = (event: Event): void => {
     const customEvent = event as CustomEvent
-    const object = customEvent.detail?.object
+    const uuid: string | undefined = customEvent.detail?.uuid
+    if (!uuid) return
 
-    if (object && physicsWorld && rapier) {
-      // 从物理引擎中移除刚体
-      if (object.userData?.physics?.body) {
-        physicsWorld.removeRigidBody(object.userData.physics.body)
-        object.userData.physics.body = null
-        object.userData.physics.collider = null
-      }
-
-      // 从rigidBodies映射表中移除
-      if (object.uuid) {
-        rigidBodies.delete(object.uuid)
-      }
-    }
+    removeRigidBodyByUuid(uuid)
   }
 
-  // 物理更新函数 - 供Viewport组件的渲染循环调用
-  const updatePhysics = (): void => {
+  // 找到刚体上挂着的第一个碰撞体
+  const findColliderOf = (rigidBody: RigidBody): Collider | null => {
+    const count = rigidBody.numColliders()
+    for (let i = 0; i < count; i++) {
+      const collider = rigidBody.collider(i)
+      if (collider) return collider
+    }
+    return null
+  }
+
+  // 缩放 → 碰撞体：碰撞体形状必须跟着变，
+  // 否则「看起来 3 倍宽」的箱子仍然按 1 倍碰撞，视觉与碰撞永久不一致。
+  //
+  // 用 setShape 原地换形状：碰撞体对象本身不变，挂在 mesh 上的引用不会失效。
+  const applyScaleToCollider = (
+    uuid: string,
+    scale: { x: number; y: number; z: number },
+  ): void => {
+    if (!physicsWorld || !rapier) return
+    const rigidBody = rigidBodies.get(uuid)
+    const spec = colliderShapes.get(uuid)
+    if (!rigidBody || !spec) return
+
+    const collider = findColliderOf(rigidBody)
+    if (!collider) return
+
+    // 缩放取绝对值，避免负缩放把碰撞体翻转；0 视为 1（不允许把物体压成零体积）
+    const sx = Math.abs(scale.x) || 1
+    const sy = Math.abs(scale.y) || 1
+    const sz = Math.abs(scale.z) || 1
+
+    if (spec.kind === 'cuboid') {
+      const { halfExtents } = spec
+      collider.setShape(
+        new rapier.Cuboid(halfExtents.x * sx, halfExtents.y * sy, halfExtents.z * sz),
+      )
+      return
+    }
+
+    // Rapier 没有椭球碰撞体：球体的非等比缩放用三轴均值近似半径
+    // （等比缩放时与视觉完全一致）
+    const meanScale = (sx + sy + sz) / 3
+    collider.setShape(new rapier.Ball(spec.radius * meanScale))
+  }
+
+  // 把用户改过的变换写回 Rapier 刚体与碰撞体。
+  //
+  // 每帧的物理同步是「刚体 → mesh」的绝对覆盖：属性面板只改 mesh 的话，
+  // 下一帧就被弹回原位，缩放更是压根到不了碰撞体。
+  // 这里是唯一能把面板的修改写进物理世界的入口。
+  const updateObjectTransform = (
+    uuid: string,
+    transform: {
+      position?: { x: number; y: number; z: number }
+      rotation?: { x: number; y: number; z: number }
+      scale?: { x: number; y: number; z: number }
+    },
+  ): boolean => {
+    if (!physicsWorld || !rapier) return false
+    const rigidBody = rigidBodies.get(uuid)
+    if (!rigidBody) return false
+
+    if (transform.position) {
+      const { x, y, z } = transform.position
+      rigidBody.setTranslation({ x, y, z }, true)
+      // 位置突变时清掉线速度，否则物体会带着旧动量飞走
+      rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
+    }
+
+    if (transform.rotation) {
+      const { x, y, z } = transform.rotation
+      // Three 的旋转是欧拉角，Rapier 的旋转是四元数
+      const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z))
+      rigidBody.setRotation(
+        { x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w },
+        true,
+      )
+      rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
+    }
+
+    if (transform.scale) {
+      applyScaleToCollider(uuid, transform.scale)
+
+      // 碰撞体形状跟着缩放变了，mesh 的缩放必须一起变，
+      // 否则「看起来 3 倍宽」的箱子仍然按 1 倍碰撞，视觉与碰撞永久不一致。
+      // （store.updateObject 也会写 mesh.scale；这里保证「物理已就绪」时两边一定一致。）
+      const mesh = store.objects.find((item) => item.uuid === uuid)?.threeObject
+      if (mesh) {
+        mesh.scale.set(transform.scale.x, transform.scale.y, transform.scale.z)
+      }
+    }
+
+    return true
+  }
+
+  /**
+   * 处理属性面板的变换修改事件。
+   * 这个事件只能由用户输入或「重置模拟」触发：物理同步是单向的（Rapier → mesh），绝不反过来派发。
+   */
+  const handleUpdateTransform = (event: Event): void => {
+    const customEvent = event as CustomEvent
+    const { uuid, transform } = customEvent.detail ?? {}
+    if (!uuid || !transform) return
+
+    if (!updateObjectTransform(uuid, transform)) return
+
+    // 刚体是位置的唯一权威：变换写回后立刻把 mesh 对齐到刚体。
+    // 「重置模拟」这类操作因此不需要等下一帧才看得出效果。
+    syncPhysicsToObjects()
+  }
+
+  /**
+   * 物理更新函数 - 供Viewport组件的渲染循环调用。
+   *
+   * `timestamp` 是 `requestAnimationFrame` 给的时间戳（毫秒）。
+   * 有了它才能算出「这一帧过了多少真实时间」，进而按**固定步长**推进物理——
+   * 步进次数由真实时间决定，与显示刷新率无关。
+   */
+  const updatePhysics = (timestamp?: number): void => {
+    const now = timestamp ?? performance.now()
+
+    // 第一帧没有参照点：只记时间，不推进物理
+    if (lastFrameTimestamp === null) {
+      lastFrameTimestamp = now
+    }
+    const frameDelta = (now - lastFrameTimestamp) / 1000
+    lastFrameTimestamp = now
+
+    const world = physicsWorld
+    const queue = eventQueue
+
     if (
       store.simulationState.isPlaying &&
       !store.simulationState.isPaused &&
-      physicsWorld &&
+      world &&
       isSceneInitialized &&
-      eventQueue
+      queue
     ) {
-      // 应用模拟速度到物理世界
-      if (physicsWorld.integrationParameters) {
-        physicsWorld.integrationParameters.dt = (1 / 60) * store.simulationState.speed
-      }
-      physicsWorld.step(eventQueue)
+      const steps = accumulator.advance(frameDelta, store.simulationState.speed, () => {
+        // 每一步都用同一个固定步长：Rapier 的 dt 不能随帧率变化，
+        // 否则同一个场景在不同机器上会落到不同位置。
+        world.integrationParameters.dt = fixedTimeStep
+        world.step(queue)
+      })
+
+      // 仿真时钟跟着**物理步**走：currentTime 是「模拟了多久」，
+      // 不是「屏幕刷了多少帧」——所以它同样与刷新率无关。
+      store.simulationState.currentTime += steps * fixedTimeStep
+      store.simulationState.frameCount += steps
+
       syncPhysicsToObjects()
+    } else {
+      // 没在跑物理：清掉积压，恢复时不会突然跳一大段
+      accumulator.reset()
     }
+
     controls?.update()
   }
+
+  // 播放/暂停切换时清掉时间基准与积压：
+  // 停很久之后恢复，第一帧算出来的 delta 会是「停机时长」，
+  // 不清理的话一次会补上几百个物理步，物体瞬间弹飞。
+  watch(
+    () => [store.simulationState.isPlaying, store.simulationState.isPaused] as const,
+    () => {
+      accumulator.reset()
+      lastFrameTimestamp = null
+    },
+  )
 
   // 同步物理状态到3D物体
   const syncPhysicsToObjects = (): void => {
@@ -329,47 +540,21 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     })
   }
 
-  // 物体点击选中
-  const handleObjectClick = (event: MouseEvent): void => {
-    if (!scene || !camera || !renderer) return
-
-    const rect = renderer.domElement.getBoundingClientRect()
-    const mouse = new THREE.Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1,
-    )
-
-    const raycaster = new THREE.Raycaster()
-    raycaster.setFromCamera(mouse, camera)
-
-    const intersectableObjects = store.objects
-      .filter((item) => item.visible !== false && item.threeObject)
-      .map((item) => item.threeObject!)
-
-    const intersects = raycaster.intersectObjects(intersectableObjects)
-
-    // 重置所有物体的高亮
-    store.objects.forEach((item) => {
-      if (item.threeObject && item.threeObject instanceof THREE.Mesh) {
-        const material = item.threeObject.material as THREE.MeshStandardMaterial
-        if (material.emissive) {
-          material.emissive.set(0x000000)
-        }
-      }
-    })
-
-    if (intersects.length > 0) {
-      const selected = intersects[0].object
-      if (selected instanceof THREE.Mesh) {
-        store.setSelectedObject(selected.uuid)
-
-        const material = selected.material as THREE.MeshStandardMaterial
-        if (material.emissive) {
-          material.emissive.set(0xffff00)
-        }
-      }
-    } else {
-      store.setSelectedObject(null)
+  // 把刚体挂到 mesh 的 userData.physics 上——与 usePhysics.ts 的约定保持一致，
+  // 这样「mesh → 刚体」的查找方向在场景编辑器与仿真实验室里是同一套。
+  const attachRigidBodyToUserData = (
+    object: THREE.Object3D,
+    rigidBody: RigidBody,
+    collider: Collider,
+    shape: 'box' | 'sphere',
+  ): void => {
+    object.userData.physics = {
+      ...(object.userData.physics ?? {}),
+      body: rigidBody,
+      collider,
+      type: 'dynamic',
+      shape,
+      mass: 1,
     }
   }
 
@@ -381,23 +566,26 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     name?: string,
   ): THREE.Mesh | null => {
     if (!isSceneInitialized || !physicsWorld || !rapier) {
-      console.warn('场景/物理引擎未初始化完成，无法添加物体')
       return null
     }
 
+    // 材质每对象独立（高亮靠 material.emissive，共享会串色）
+    const material = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(Math.random() * 0xffffff),
+      metalness: 0.3,
+      roughness: 0.4,
+    })
+
     // 创建3D物体
-    const mesh = new THREE.Mesh(
-      geometry,
-      new THREE.MeshStandardMaterial({
-        color: new THREE.Color(Math.random() * 0xffffff),
-        metalness: 0.3,
-        roughness: 0.4,
-      }),
-    )
+    const mesh = new THREE.Mesh(geometry, material)
 
     mesh.name = name || `${type}-${Date.now()}`
     mesh.castShadow = true
     mesh.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
+
+    // 刚体一创建出来就登记进账本：否则中途抛错会留下「孤儿刚体」——
+    // 它会永远参与碰撞，却不在任何账本里，再也无法被移除。
+    let rigidBody: RigidBody | null = null
 
     try {
       // 创建动态刚体
@@ -407,7 +595,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         mesh.position.z,
       )
 
-      const rigidBody = physicsWorld.createRigidBody(rigidBodyDesc)
+      rigidBody = physicsWorld.createRigidBody(rigidBodyDesc)
+      rigidBodies.set(mesh.uuid, rigidBody)
 
       // 创建碰撞体
       let colliderDesc: unknown // 使用unknown类型替代any
@@ -417,11 +606,18 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         colliderDesc = rapier.ColliderDesc.ball(size)
       }
 
-      physicsWorld.createCollider(colliderDesc, rigidBody)
-      rigidBodies.set(mesh.uuid, rigidBody)
+      const collider = physicsWorld.createCollider(colliderDesc, rigidBody)
+      // 登记碰撞体基准尺寸：之后的缩放都以它为原点换算
+      colliderShapes.set(
+        mesh.uuid,
+        type === 'cube'
+          ? { kind: 'cuboid', halfExtents: { x: size, y: size, z: size } }
+          : { kind: 'ball', radius: size },
+      )
 
       // 设置userData以便反向查找
       ;(rigidBody as RapierRigidBody).userData = { object: mesh }
+      attachRigidBodyToUserData(mesh, rigidBody, collider, type === 'cube' ? 'box' : 'sphere')
 
       // 将物体添加到场景中
       if (scene) {
@@ -453,14 +649,23 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
       return mesh
     } catch (error) {
-      console.error(`创建${type}物理刚体失败:`, error)
+      // 失败清理：几何体是共享的（dispose 会影响其它 mesh，不能动），
+      // 但材质、mesh 与刚体都是本次新建的，必须释放，否则纯泄漏。
+      console.error('[useSceneEditor] 创建几何体失败', error)
+      scene?.remove(mesh)
+      material.dispose()
+      if (rigidBody) {
+        physicsWorld?.removeRigidBody(rigidBody)
+        rigidBodies.delete(mesh.uuid)
+        colliderShapes.delete(mesh.uuid)
+      }
       return null
     }
   }
 
   // 添加立方体
   const addCube = (): boolean => {
-    const cube = createGeometry('cube', new THREE.BoxGeometry(1, 1, 1), 0.5, 'Cube')
+    const cube = createGeometry('cube', sharedGeometries.cube, 0.5, 'Cube')
     return cube !== null
   }
 
@@ -468,33 +673,32 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
   // 添加球体
   const addSphere = (): boolean => {
-    const sphere = createGeometry('sphere', new THREE.SphereGeometry(0.5, 32, 32), 0.5, 'Sphere')
+    const sphere = createGeometry('sphere', sharedGeometries.sphere, 0.5, 'Sphere')
     return sphere !== null
   }
 
   // 导入模型（与模型库集成）
   const importModel = async (modelId: string): Promise<boolean> => {
     if (!isSceneInitialized || !physicsWorld || !rapier || !scene) {
-      console.warn('场景未初始化完成，无法导入模型')
       return false
     }
+
+    // 刚体一创建出来就登记进账本（与 createGeometry 同理）：
+    // 否则中途抛错会留下永远无法移除的「孤儿刚体」。
+    let rigidBody: RigidBody | null = null
+    let model: THREE.Object3D | null = null
 
     try {
       // 从模型库获取模型信息
       const modelInfo = modelStore.models.find((m) => m.id === modelId) as Item
       if (!modelInfo) {
-        console.error(`模型库中未找到ID为${modelId}的模型`)
         alert(`模型库中未找到ID为${modelId}的模型`)
         return false
       }
 
-      // 显示加载提示
-      console.log(`开始加载模型: ${modelInfo.name}`)
-
       // 加载模型
-      const model = await loadModel(modelInfo.modelUrl)
+      model = await loadModel(modelInfo.modelUrl)
       if (!model) {
-        console.error(`模型加载失败: ${modelInfo.modelUrl}`)
         alert(`模型加载失败: ${modelInfo.name}`)
         return false
       }
@@ -513,15 +717,21 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         model.position.y,
         model.position.z,
       )
-      const rigidBody = physicsWorld.createRigidBody(rigidBodyDesc)
+      rigidBody = physicsWorld.createRigidBody(rigidBodyDesc)
+      rigidBodies.set(model.uuid, rigidBody)
 
       // 创建碰撞体
       const colliderDesc = rapier.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
-      physicsWorld.createCollider(colliderDesc, rigidBody)
-      rigidBodies.set(model.uuid, rigidBody)
+      const collider = physicsWorld.createCollider(colliderDesc, rigidBody)
+      // 登记碰撞体基准尺寸：模型缩放同样要作用到碰撞体上
+      colliderShapes.set(model.uuid, {
+        kind: 'cuboid',
+        halfExtents: { x: halfExtents.x, y: halfExtents.y, z: halfExtents.z },
+      })
 
       // 设置userData
       ;(rigidBody as RapierRigidBody).userData = { object: model }
+      attachRigidBodyToUserData(model, rigidBody, collider, 'box')
 
       // 添加到场景和store
       scene.add(model)
@@ -548,10 +758,18 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         },
       })
 
-      console.log(`模型 ${modelInfo.name} 导入成功`)
       return true
     } catch (error) {
-      console.error('模型导入失败:', error)
+      // 失败清理：刚体已经进了物理世界，不销账的话它会永远参与碰撞却再也无法被移除；
+      // 模型也要从场景里摘掉，别留下一半的残骸。
+      if (rigidBody) {
+        physicsWorld?.removeRigidBody(rigidBody)
+        rigidBodies.delete(model?.uuid ?? '')
+        colliderShapes.delete(model?.uuid ?? '')
+      }
+      if (model) {
+        scene.remove(model)
+      }
       alert(`模型导入失败: ${error instanceof Error ? error.message : String(error)}`)
       return false
     }
@@ -591,11 +809,16 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
       // 逐个清除所有刚体（Rapier推荐方式）
       rigidBodies.forEach((rigidBody) => {
-        physicsWorld?.removeRigidBody(rigidBody)
+        try {
+          physicsWorld?.removeRigidBody(rigidBody)
+        } catch (error) {
+          // 该刚体可能已被单独移除（removeRigidBodyByUuid），忽略
+        }
       })
 
       // 清空映射表
       rigidBodies.clear()
+      colliderShapes.clear()
 
       // 销毁物理世界
       physicsWorld = null
@@ -639,6 +862,12 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     importModel,
     updatePhysics,
     getIsSceneInitialized: () => isSceneInitialized,
+    // 刚体账本：刚体生命周期的唯一所有者在这里，外部只能读、不能改
+    removeRigidBodyByUuid,
+    getRigidBodyCount: () => rigidBodies.size,
+    hasRigidBody: (uuid: string) => rigidBodies.has(uuid),
+    // 变换写回：把属性面板的修改写进刚体与碰撞体
+    updateObjectTransform,
     onInitSuccess,
     onInitError,
     // 暴露scene、camera、renderer对象给store使用

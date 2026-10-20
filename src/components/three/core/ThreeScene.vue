@@ -49,7 +49,6 @@ const exposeReinit = () => reinit()
 // 监听初始化结果
 onInitSuccess.value = () => {
   isInitializing.value = false
-  console.log('ThreeScene初始化成功')
 
   // 现有逻辑：添加示例立方体
   setTimeout(() => {
@@ -65,7 +64,6 @@ onInitError.value = (err) => {
 
 // 组件挂载后初始化
 onMounted(() => {
-  console.log('ThreeScene组件挂载')
   // 移除container.value的条件判断，确保initEditor()能够被调用
   initEditor().then(() => {
     // 向父组件暴露方法
@@ -81,7 +79,6 @@ onMounted(() => {
 
 // 组件卸载时清理
 onUnmounted(() => {
-  console.log('ThreeScene组件卸载')
   cleanupEditor()
 })
 

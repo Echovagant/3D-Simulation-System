@@ -5,7 +5,8 @@ export const simulationConfig = {
     defaultFriction: 0.5,
     defaultRestitution: 0.2,
     maxSubSteps: 5,
-    fixedTimeStep: 1/60 // 60 FPS
+    fixedTimeStep: 1/60, // 60 FPS
+    maxFrameDelta: 0.25 // 单帧最多采纳 250ms 真实时间，防止后台标签页回来后物理炸开
   },
 
   // 仿真控制配置
