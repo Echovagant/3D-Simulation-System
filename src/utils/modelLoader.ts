@@ -1,6 +1,6 @@
 // src/utils/modelLoader.ts
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader';
 
@@ -15,7 +15,7 @@ const objLoader = new OBJLoader();
  * 检测模型文件类型
  * @param url 模型文件路径
  */
-const getModelType = (url: string): 'gltf' | 'fbx' | 'obj' | 'unknown' => {
+export const getModelType = (url: string): 'gltf' | 'fbx' | 'obj' | 'unknown' => {
   const lowerUrl = url.toLowerCase();
   if (lowerUrl.endsWith('.glb') || lowerUrl.endsWith('.gltf')) return 'gltf';
   if (lowerUrl.endsWith('.fbx')) return 'fbx';
@@ -25,9 +25,21 @@ const getModelType = (url: string): 'gltf' | 'fbx' | 'obj' | 'unknown' => {
 
 
 /**
+ * 解析模型 URL
+ * 站内绝对路径（/assets/...）统一拼上 BASE_URL，以支持子路径部署；
+ * 外部 URL（http/https）与相对路径原样返回
+ * @param url 模型文件路径
+ */
+export const resolveModelUrl = (url: string): string => {
+  const baseUrl = import.meta.env.BASE_URL
+  return url.startsWith('/') ? `${baseUrl}${url.replace(/^\//, '')}` : url
+};
+
+
+/**
  * 处理加载器错误
  */
-const handleLoaderError = (error: unknown, url: string): Error => {
+export const handleLoaderError = (error: unknown, url: string): Error => {
   let errorMessage = '未知错误';
 
   if (error instanceof Error) {
@@ -57,14 +69,8 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
     throw new Error('无效的模型URL');
   }
 
-  // 处理相对路径 - 特别是以../开头的路径
-  let resolvedUrl = url;
-  if (url.startsWith('../')) {
-    // 在Vite环境中，src/assets目录下的文件需要使用import.meta.url来处理
-    // 将../assets/models/转换为正确的URL
-    const baseUrl = import.meta.env.BASE_URL;
-    resolvedUrl = url.replace('../assets/', `${baseUrl}src/assets/`);
-  }
+  // 站内绝对路径（/assets/...）统一拼上 BASE_URL，支持子路径部署
+  const resolvedUrl = resolveModelUrl(url);
 
   try {
     // 确定模型类型并使用相应的加载器
@@ -75,7 +81,7 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
         return new Promise((resolve, reject) => {
           gltfLoader.load(
             resolvedUrl,
-            (gltf) => {
+            (gltf: GLTF) => {
               if (gltf.scene) {
                 resolve(gltf.scene);
               } else {
@@ -83,7 +89,7 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
               }
             },
             undefined,
-            (error) => reject(handleLoaderError(error, resolvedUrl))
+            (error: unknown) => reject(handleLoaderError(error, resolvedUrl))
           );
         });
 
@@ -91,9 +97,9 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
         return new Promise((resolve, reject) => {
           fbxLoader.load(
             resolvedUrl,
-            (object) => resolve(object),
+            (object: THREE.Object3D) => resolve(object),
             undefined,
-            (error) => reject(handleLoaderError(error, resolvedUrl))
+            (error: unknown) => reject(handleLoaderError(error, resolvedUrl))
           );
         });
 
@@ -101,9 +107,9 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
         return new Promise((resolve, reject) => {
           objLoader.load(
             resolvedUrl,
-            (object) => resolve(object),
+            (object: THREE.Object3D) => resolve(object),
             undefined,
-            (error) => reject(handleLoaderError(error, resolvedUrl))
+            (error: unknown) => reject(handleLoaderError(error, resolvedUrl))
           );
         });
 
