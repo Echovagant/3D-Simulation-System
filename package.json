@@ -31,12 +31,10 @@
     "@fortawesome/fontawesome-svg-core": "^6.7.2",
     "@fortawesome/free-solid-svg-icons": "^6.7.2",
     "@fortawesome/vue-fontawesome": "^3.0.8",
-    "@tsparticles/vue3": "^3.0.1",
     "dompurify": "^3.4.17",
     "marked": "^16.3.0",
     "pinia": "^3.0.3",
     "three": "^0.180.0",
-    "tsparticles": "^2.12.0",
     "vue": "^3.5.42",
     "vue-router": "^4.5.1"
   },
