@@ -7,6 +7,8 @@ import DOMPurify from 'dompurify';
  * @returns 格式化后的文件大小字符串
  */
 export const formatFileSize = (bytes: number, decimals: number = 2): string => {
+  // 负数会让 Math.log 返回 NaN，非法数字同理——一律退化成 0 Bytes
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 Bytes';
   if (bytes === 0) return '0 Bytes';
 
   const k = 1024;
@@ -47,12 +49,10 @@ export const formatNumber = (num: number): string => {
  * @returns 净化后的HTML字符串
  */
 export const sanitizeHtml = (html: string): string => {
-  // 配置DOMPurify允许常见的Markdown生成的标签和属性
-  return DOMPurify.sanitize(html, {
-    ADD_TAGS: ['pre', 'code', 'kbd', 'samp', 'var'],
-    ADD_ATTR: ['class', 'id', 'style', 'data-language'],
-    ALLOW_UNKNOWN_PROTOCOLS: true
-  });
+  // DOMPurify 3.x 默认已允许 pre/code/kbd/samp/var 与 class/id/style，data-* 默认放行，
+  // 之前那几个 ADD_* 配置项全是 no-op，写着只会造成"已经在收紧"的错觉。
+  // 同时关掉"允许未知协议"开关：URI 回到白名单校验（相对路径、http/https、data: 图片仍然可用）。
+  return DOMPurify.sanitize(html)
 };
 
 /**

@@ -16,8 +16,8 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { marked } from 'marked'
-import { sanitizeHtml } from '@/utils/formatHelpers'
+import { renderMarkdown } from '@/utils/markdownRenderer'
+import { docFiles, resolveDocPath } from '@/utils/docSections'
 
 const props = defineProps<{
   section: string
@@ -30,18 +30,27 @@ const renderedContent = ref('')
 const loadDocument = async (section: string) => {
   loading.value = true
   error.value = null
+  renderedContent.value = ''
+
+  // 章节必须是白名单内的文档路径，否则一律视为未知章节
+  const key = resolveDocPath(section)
+  if (!key) {
+    error.value = `未知文档章节：${section}`
+    loading.value = false
+    return
+  }
 
   try {
-    // 修复：正确处理markdown导入，使用相对路径别名
-    const response = await import(`@/docs/${section}.md`)
-    const markdownContent: string = response.default
-
-    // 转换Markdown为HTML并进行安全处理
-    const htmlContent = await marked.parse(markdownContent)
-    renderedContent.value = sanitizeHtml(htmlContent)
+    const markdownContent = docFiles[key]
+    if (!markdownContent || markdownContent.trim() === '') {
+      error.value = `该章节尚未编写内容：${section}`
+      loading.value = false
+      return
+    }
+    renderedContent.value = await renderMarkdown(markdownContent)
   } catch (err) {
-    console.error('Failed to load document:', err)
-    error.value = '请求的文档不存在或无法加载'
+    console.error('[DocsContent] 文档渲染失败', err)
+    error.value = `文档渲染失败：${err instanceof Error ? err.message : String(err)}`
   } finally {
     loading.value = false
   }
