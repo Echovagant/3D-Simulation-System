@@ -6,7 +6,12 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
 
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      // three@0.180 不自带类型，类型来自 @types/three。
+      // three 的 package.json 用 exports 映射 "./examples/jsm/*" 到无类型的 .js 文件，
+      // 导致 moduleResolution=bundler 下解析不到 @types/three 里的同名 .d.ts；
+      // 这里把该前缀显式映射到类型包，运行时解析不受影响（paths 只作用于类型检查）。
+      "three/examples/jsm/*": ["./node_modules/@types/three/examples/jsm/*"]
     }
   }
 }

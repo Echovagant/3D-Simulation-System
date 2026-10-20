@@ -28,3 +28,10 @@ coverage
 *.sw?
 
 *.tsbuildinfo
+
+# 类型检查发射的编译产物（vue-tsc 误配置时产生）
+src/**/*.js
+src/**/*.vue.js
+
+# 审计与实施计划（流程文档，不入库；存档在仓库外的 _audit-archive/）
+/plans/
