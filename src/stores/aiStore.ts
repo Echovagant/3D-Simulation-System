@@ -24,6 +24,40 @@ export interface AiEnvironmentSettings {
   obstaclesDensity: number // 0-1之间
 }
 
+/**
+ * 根据代理类型获取默认参数。
+ * 纯函数，放在模块级以便直接单测。
+ */
+export const getDefaultParametersForType = (
+  type: AiAgentType
+): Record<string, number | string | boolean> => {
+  switch (type) {
+    case 'basic':
+      return {
+        speed: 5,
+        reactionTime: 0.5,
+        awarenessRange: 10,
+        avoidObstacles: true
+      }
+    case 'advanced':
+      return {
+        speed: 7,
+        reactionTime: 0.2,
+        awarenessRange: 15,
+        avoidObstacles: true,
+        learningEnabled: true,
+        memoryRetention: 60, // 秒
+        teamwork: false
+      }
+    case 'custom':
+      return {
+        // 自定义代理的默认参数
+      }
+    default:
+      return {}
+  }
+}
+
 export const useAiStore = defineStore('ai', () => {
   // 状态
   const agents = ref<AiAgent[]>([])
@@ -70,35 +104,6 @@ export const useAiStore = defineStore('ai', () => {
     }
 
     return newAgent
-  }
-
-  // 根据代理类型获取默认参数
-  const getDefaultParametersForType = (type: AiAgentType): Record<string, number | string | boolean> => {
-    switch (type) {
-      case 'basic':
-        return {
-          speed: 5,
-          reactionTime: 0.5,
-          awarenessRange: 10,
-          avoidObstacles: true
-        }
-      case 'advanced':
-        return {
-          speed: 7,
-          reactionTime: 0.2,
-          awarenessRange: 15,
-          avoidObstacles: true,
-          learningEnabled: true,
-          memoryRetention: 60, // 秒
-          teamwork: false
-        }
-      case 'custom':
-        return {
-          // 自定义代理的默认参数
-        }
-      default:
-        return {}
-    }
   }
 
   // 移除AI代理

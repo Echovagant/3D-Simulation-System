@@ -82,8 +82,11 @@
       <p
         class="text-white mt-4 max-w-2xl mx-auto text-base md:text-lg px-4 leading-relaxed font-light"
       >
-        在<span class="text-yellow-400 font-medium">沉浸式3D环境</span
-        >中测试和训练AI代理，观察它们如何与环境交互、学习和适应不同场景
+        在<span class="text-yellow-400 font-medium">真实渲染的3D场地</span
+        >里运行规则式智能体：它们读取场景里的真实感知、绕开障碍物并自主移动。
+        <span class="text-gray-400"
+          >本页不含模型推理，也不做训练。碰撞为解析式计算（未接入刚体物理引擎，没有摩擦、反弹与质量）。</span
+        >
       </p>
       <div class="header-divider"></div>
     </div>
@@ -128,6 +131,11 @@
       </div>
 
       <!-- 中间3D视图 -->
+      <!--
+        注意：本仓库没有接 Tailwind，模板里 h-[...] / flex-1 / lg:col-span-* 这些工具类
+        都不生效。视口高度由 scoped CSS 的 .ai-viewport 给出（否则视口高度会被画布内容顶起来，
+        画布尺寸又反过来影响视口高度，形成反馈）。
+      -->
       <div class="lg:col-span-6 panel center-panel animate-fade-in-up">
         <div class="panel-glow"></div>
         <div class="panel-header">
@@ -154,7 +162,7 @@
           </div>
         </div>
 
-        <div ref="viewportRef" class="w-full h-[calc(100%-46px)] relative">
+        <div ref="viewportRef" class="ai-viewport">
           <!-- 加载状态优化 -->
           <div
             v-if="isLoading"
@@ -165,7 +173,7 @@
                 class="w-20 h-20 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mb-5"
               ></div>
               <p class="font-medium text-xl mb-2">加载3D环境...</p>
-              <p class="text-sm text-yellow-500/70">正在初始化物理引擎和AI系统</p>
+              <p class="text-sm text-yellow-500/70">正在初始化3D场景与智能体</p>
               <div class="w-72 h-1.5 bg-gray-800 rounded-full mt-5 overflow-hidden">
                 <div class="h-full bg-yellow-500 rounded-full progress-bar"></div>
               </div>
@@ -212,8 +220,16 @@
               <div class="p-2 bg-gray-900 rounded-md">S</div>
               <div class="p-2 bg-gray-900 rounded-md">E</div>
             </div>
+            <p class="mt-2 text-[11px] text-gray-400 leading-relaxed">
+              W/S 前后 · A/D 左右 · Q/E 升降 · R 复位
+            </p>
           </div>
         </div>
+
+        <!-- 物理现状的页面可见说明：碰撞是解析式的，不是刚体物理 -->
+        <p class="physics-note">
+          碰撞为解析式计算：演武场没有接入刚体物理引擎，智能体与障碍物靠包围盒判定，没有摩擦、反弹与质量。
+        </p>
       </div>
 
       <!-- 右侧面板 -->
@@ -264,13 +280,13 @@
 
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted } from 'vue'
+import * as THREE from 'three'
 import { useThree } from '@/composables/useThree'
 import { useCamera } from '@/composables/useCamera'
 import { useScene } from '@/composables/useScene'
 import { useRenderer } from '@/composables/useRenderer'
 import { useControls } from '@/composables/useControls'
 import { useAI } from '@/composables/useAI'
-import { usePhysics } from '@/composables/usePhysics'
 import AiController from '@/components/three/ai/AiController.vue'
 import AiDebugPanel from '@/components/three/ai/AiDebugPanel.vue'
 import AiEnvironmentPanel from '@/components/three/ai/AiEnvironmentPanel.vue'
@@ -279,50 +295,112 @@ import AiEnvironmentPanel from '@/components/three/ai/AiEnvironmentPanel.vue'
 const viewportRef = ref<HTMLDivElement | null>(null)
 const isLoading = ref(true)
 
-// 组合式函数实例
+// 组合式函数实例（useThree 是模块级单例，这几个实例共享同一套 three 上下文）
 const three = useThree()
 const camera = useCamera()
 const scene = useScene()
 const renderer = useRenderer()
 const controls = useControls()
-const physics = usePhysics()
-const { cleanup: cleanupAI } = useAI()
+const ai = useAI()
 
 let animationId: number | null = null
+const clock = new THREE.Clock()
 
-const initializeScene = async () => {
+/** 相机初始机位（也是 R 键的复位目标） */
+const DEFAULT_CAMERA_POSITION = { x: 14, y: 11, z: 14 }
+/** 键盘移动相机的速度（米/秒） */
+const CAMERA_KEY_SPEED = 14
+
+const pressedKeys = new Set<string>()
+
+const isTypingTarget = (target: EventTarget | null): boolean =>
+  target instanceof HTMLInputElement ||
+  target instanceof HTMLTextAreaElement ||
+  target instanceof HTMLSelectElement
+
+const handleKeyDown = (event: KeyboardEvent) => {
+  if (isTypingTarget(event.target)) return
+  const key = event.key.toLowerCase()
+  if (key === 'r') {
+    camera.setCameraPosition(
+      DEFAULT_CAMERA_POSITION.x,
+      DEFAULT_CAMERA_POSITION.y,
+      DEFAULT_CAMERA_POSITION.z,
+    )
+    return
+  }
+  if ('wasdqe'.includes(key)) pressedKeys.add(key)
+}
+
+const handleKeyUp = (event: KeyboardEvent) => {
+  pressedKeys.delete(event.key.toLowerCase())
+}
+
+/** 键盘平移相机（与右侧按键指示器一致） */
+const updateCameraFromKeys = (delta: number) => {
+  const activeCamera = three.camera.value
+  if (!activeCamera || pressedKeys.size === 0) return
+
+  const forward = new THREE.Vector3()
+  activeCamera.getWorldDirection(forward)
+  forward.y = 0
+  if (forward.lengthSq() < 1e-6) return
+  forward.normalize()
+  const right = new THREE.Vector3(-forward.z, 0, forward.x)
+
+  const move = new THREE.Vector3()
+  if (pressedKeys.has('w')) move.add(forward)
+  if (pressedKeys.has('s')) move.sub(forward)
+  if (pressedKeys.has('d')) move.add(right)
+  if (pressedKeys.has('a')) move.sub(right)
+  if (pressedKeys.has('e')) move.y += 1
+  if (pressedKeys.has('q')) move.y -= 1
+  if (move.lengthSq() === 0) return
+
+  move.normalize().multiplyScalar(CAMERA_KEY_SPEED * delta)
+  activeCamera.position.add(move)
+}
+
+const initializeScene = () => {
   if (!viewportRef.value) return
   isLoading.value = true
 
   try {
     three.initThree()
-    camera.setCameraPosition(10, 10, 10)
+    camera.setCameraPosition(
+      DEFAULT_CAMERA_POSITION.x,
+      DEFAULT_CAMERA_POSITION.y,
+      DEFAULT_CAMERA_POSITION.z,
+    )
     scene.initScene()
     renderer.initRenderer(viewportRef.value)
     controls.initControls()
-    physics.initPhysics(three.scene.value!)
+    // 建出智能体与障碍物（场景对象由 useAI 持有）
+    ai.syncScene()
 
     startAnimationLoop()
-    console.log('AI演武场场景初始化完成')
   } catch (error) {
-    console.error('场景初始化失败:', error)
+    console.error('[AIPlayground] 3D 场景初始化失败', error)
   } finally {
-    // 模拟加载时间
     setTimeout(() => {
       isLoading.value = false
-    }, 2000)
+    }, 600)
   }
 }
 
 const startAnimationLoop = () => {
   const animate = () => {
     animationId = requestAnimationFrame(animate)
+    const delta = Math.min(clock.getDelta(), 0.05)
+
     controls.updateControls()
-    physics.updatePhysics(0.016)
+    updateCameraFromKeys(delta)
+    // 推进智能体运动（状态读取自真实场景对象）
+    ai.updateAgents(delta)
 
     // 渲染场景
-    if (three.renderer.value && three.scene.value && camera.activeCamera.value) {
-      three.renderer.value.render(three.scene.value, camera.activeCamera.value)
+    if (three.renderer.value && three.scene.value && three.camera.value) {
+      three.renderer.value.render(three.scene.value, three.camera.value)
     }
   }
   animate()
@@ -330,7 +408,10 @@ const startAnimationLoop = () => {
 
 const cleanup = () => {
   if (animationId) window.cancelAnimationFrame(animationId)
-  cleanupAI()
+  animationId = null
+  pressedKeys.clear()
+  ai.cleanup()
+  three.disposeThree()
 }
 
 onMounted(() => {
@@ -338,7 +419,11 @@ onMounted(() => {
   // 窗口resize监听
   const handleResize = () => renderer.handleResize()
   window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
   onUnmounted(() => window.removeEventListener('resize', handleResize))
+  onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
+  onUnmounted(() => window.removeEventListener('keyup', handleKeyUp))
 })
 
 onUnmounted(() => cleanup())
@@ -474,6 +559,31 @@ onUnmounted(() => cleanup())
     0 10px 40px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     0 0 30px rgba(255, 215, 0, 0.2);
+}
+
+/* 3D 视口：确定的高度（本仓库没有 Tailwind，工具类不生效） */
+.ai-viewport {
+  position: relative;
+  width: 100%;
+  height: 560px;
+  overflow: hidden;
+}
+
+/* 物理现状说明：告诉用户碰撞是解析式的，不是有摩擦/反弹/质量的刚体物理 */
+.physics-note {
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: #9ca3af;
+  background: rgba(10, 12, 18, 0.6);
+  border-top: 1px solid rgba(255, 215, 0, 0.15);
+}
+
+@media (max-width: 768px) {
+  .ai-viewport {
+    height: 420px;
+  }
 }
 
 /* 控制键样式 */

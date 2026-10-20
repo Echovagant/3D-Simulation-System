@@ -48,6 +48,9 @@
       </div>
     </div>
 
+    <!-- 物理模式：如实说明碰撞是解析式的，没有刚体物理引擎 -->
+    <p class="physics-mode">物理模式：解析式碰撞（未接入刚体物理引擎，没有摩擦、反弹与质量）</p>
+
     <!-- 日志显示 -->
     <div class="flex-1 overflow-hidden flex flex-col">
       <div class="text-xs text-gray-400 mb-1 flex justify-between items-center">
@@ -187,3 +190,14 @@ const formatDifficulty = (difficulty: string) => {
   return difficultyMap[difficulty] || difficulty
 }
 </script>
+
+<style scoped>
+/* 物理模式说明：如实告知碰撞是解析式的，不是有摩擦/反弹/质量的刚体物理 */
+.physics-mode {
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: #9ca3af;
+  opacity: 0.85;
+}
+</style>
