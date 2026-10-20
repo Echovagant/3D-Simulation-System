@@ -1,9 +1,7 @@
 // 导入 THREE.js 类型
-import { Object3D, Scene as THREE_Scene, PerspectiveCamera, OrthographicCamera, WebGLRenderer } from 'three'
+import { Object3D } from 'three'
 
 type Vector3 = { x: number; y: number; z: number }
-// 使用重命名避免与接口名冲突
-type Scene = THREE_Scene
 
 // RAPIER 导入已移除，因为未使用
 import type { AiAgent, AiAgentType, AiEnvironmentSettings } from '@/stores/aiStore'
@@ -50,6 +48,98 @@ export interface SimulationPreset {
   description: string
   thumbnail: string
   scene: SimulationScene
+}
+
+// ─────────────────────────────────────────────────────────────
+// 场景文档（计划 018）
+//
+// 这是本产品**唯一**的场景格式：保存、加载、导出、预设、深链接全部用它。
+// 不要再新增第二套场景格式。
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * 场景文档里的单个物体。
+ *
+ * `type` 必须是**可重建的类型**：目前只有 'cube' / 'sphere' / 'model'
+ * 能被 loadScene 真正还原。新增可重建类型时，loadScene 的分支必须同步更新，
+ * 否则会出现「存得进、读不出」。
+ */
+export interface SceneDocumentObject {
+  uuid: string
+  type: string
+  name: string
+  modelId?: string
+  position: { x: number; y: number; z: number }
+  rotation: { x: number; y: number; z: number }
+  scale: { x: number; y: number; z: number }
+  visible: boolean
+  /** 静态物理描述（没有刚体的物体不写这一项） */
+  physics?: {
+    type: 'static' | 'dynamic' | 'kinematic'
+    shape: 'box' | 'sphere' | 'cylinder' | 'capsule' | 'mesh'
+    mass: number
+  }
+}
+
+/** 场景文档：可持久化、可分享的场景表示 */
+export interface SceneDocument {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+  version: 1
+  gravity?: { x: number; y: number; z: number }
+  objects: SceneDocumentObject[]
+}
+
+/** 场景索引里的一条（localStorage 的 `scene-index`） */
+export interface SceneIndexEntry {
+  id: string
+  name: string
+  createdAt: string
+  objectCount: number
+}
+
+// ─────────────────────────────────────────────────────────────
+// 预设目录（计划 018）
+//
+// 目录里的预设用的是**纯数据**（不是 Object3D），字段直接对应
+// 仿真实验室渲染时需要的东西：形状、位置、缩放、物理参数。
+// ─────────────────────────────────────────────────────────────
+
+export interface PresetPhysicsConfig {
+  type: 'static' | 'dynamic' | 'kinematic'
+  mass: number
+  friction: number
+  restitution: number
+}
+
+export interface PresetSceneObject {
+  id: string
+  /** 几何形状：立方体 / 球体 / 圆柱体 */
+  type: 'box' | 'sphere' | 'cylinder'
+  name: string
+  position: { x: number; y: number; z: number }
+  rotation: { x: number; y: number; z: number }
+  scale: { x: number; y: number; z: number }
+  physics: PresetPhysicsConfig
+  /** 十六进制颜色，缺省时由渲染层给默认色 */
+  color?: number
+}
+
+export interface PresetScene {
+  name: string
+  gravity: { x: number; y: number; z: number }
+  objects: PresetSceneObject[]
+}
+
+/** 预设目录条目 */
+export interface PresetCatalogEntry {
+  id: string
+  name: string
+  description: string
+  thumbnail: string
+  scene: PresetScene
 }
 
 // 原有仿真场景类型（保持不变）
@@ -128,41 +218,8 @@ export interface RenderState {
   physicsErrors: Array<{message: string, error: Error, timestamp: number}>
 }
 
-// SceneEditorStore 类型定义
-export interface SceneEditorStore {
-  scene: Scene
-  camera: PerspectiveCamera | OrthographicCamera
-  renderer: WebGLRenderer
-  animationId: number | null
-  lastPhysicsUpdate: number
-  selectedObjectUuid: string | null
-  objects: SceneObject[]
-  currentScene: Scene
-  simulationState: SimulationState
-  renderState: RenderState
-  physicsConfig: PhysicsConfig
-  selectedObject: SceneObject | null
-  getCurrentScene: () => Scene
-  setCurrentScene: (scene: Scene) => void
-  getScene: () => Scene
-  getCamera: () => PerspectiveCamera | OrthographicCamera
-  getRenderer: () => WebGLRenderer
-  initializePhysics: (object: SceneObject, mass?: number) => void
-  updateObjectPhysics: (object: SceneObject, deltaTime: number) => void
-  addObject: (object: SceneObject) => SceneObject
-  setSelectedObject: (uuid: string | null) => void
-  removeObject: (uuid: string) => void
-  removeSelectedObject: () => void
-  updateObject: (uuid: string, properties: Partial<SceneObject>) => void
-  updateRendererSize: (width: number, height: number) => void
-  getScreenshot: () => string | null
-  cleanup: () => void
-  togglePause: () => void
-  startSimulation: () => void
-  stopSimulation: () => void
-  addPerformanceWarning: (message: string, details?: Record<string, unknown>) => void
-  addPhysicsError: (message: string, error: Error) => void
-}
+// 跨组件共享状态一律用 Pinia 的 useXxxStore()，其类型由 store 自动推导。
+// 不要在此手写 store 的类型接口——手写签名必然与真实 store 漂移。
 
 // 模型库中的模型类型（保持不变）
 export interface LibraryModel {

@@ -1,5 +1,5 @@
 // src/router/modules/sceneRoutes.ts
-import { RouteRecordRaw } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router';
 
 const sceneRoutes: RouteRecordRaw[] = [
   // 场景编辑器相关子路由（如果有）

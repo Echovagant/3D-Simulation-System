@@ -24,6 +24,9 @@
       <button class="primary-btn" @click="showUploadModal = true">
         <i class="fas fa-upload"></i> 上传新模型
       </button>
+      <span class="upload-hint">
+        上传的模型使用浏览器对象 URL，<strong>仅在当前会话有效</strong>：刷新页面后失效。
+      </span>
       <div class="search-filter">
         <input
           type="text"
@@ -69,6 +72,7 @@
         <div class="model-info">
           <h3 class="model-name">{{ model.name }}</h3>
           <p class="model-meta">{{ formatFileSize(model.size) }} · {{ formatDate(model.uploadDate) }}</p>
+          <p v-if="model.sessionOnly" class="session-badge">仅本次会话有效</p>
         </div>
       </div>
     </div>
@@ -247,6 +251,8 @@ interface Model {
   materialCount: number;
   hasAnimation: boolean;
   description?: string; // 可选描述
+  /** 本次会话上传的模型（对象 URL，刷新即失效） */
+  sessionOnly?: boolean;
 }
 
 // 上传参数接口 - 明确file可以为null
@@ -373,7 +379,7 @@ const handleUpload = async () => {
     selectedFileName.value = '';
     showUploadModal.value = false;
   } catch (error) {
-    console.error('上传失败:', error);
+
     alert('模型上传失败，请重试');
   } finally {
     isUploading.value = false;
@@ -386,7 +392,7 @@ const handleAddToScene = (model: Model) => {
 };
 
 const handleDownloadModel = (model: Model) => {
-  console.log(`下载模型: ${model.name}`);
+
   alert(`开始下载模型: ${model.name}`);
 };
 
@@ -473,6 +479,26 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
   margin-bottom: 25px;
   flex-wrap: wrap;
   gap: 15px;
+}
+
+.upload-hint {
+  font-size: 0.8rem;
+  color: #a94442;
+  background-color: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.session-badge {
+  display: inline-block;
+  margin: 6px 0 0 0;
+  font-size: 0.72rem;
+  color: #a94442;
+  background-color: #fdf2f2;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+  padding: 2px 6px;
 }
 
 .search-filter {

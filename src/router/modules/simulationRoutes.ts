@@ -1,4 +1,4 @@
-import { RouteRecordRaw } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router'
 
 const simulationRoutes: RouteRecordRaw[] = [
   {
@@ -8,8 +8,15 @@ const simulationRoutes: RouteRecordRaw[] = [
     meta: {
       title: '仿真实验室',
       requiresAuth: false,
-      icon: '🔬'
-    }
+      icon: '🔬',
+    },
+    // 深链接解析：
+    // - ?preset=<id>  直接打开某个预设
+    // - ?scene=<id>   直接打开某个已保存的场景
+    props: (route) => ({
+      presetId: typeof route.query.preset === 'string' ? route.query.preset : undefined,
+      sceneId: typeof route.query.scene === 'string' ? route.query.scene : undefined,
+    }),
   },
   {
     path: '/simulation-lab/:presetId',
@@ -18,12 +25,13 @@ const simulationRoutes: RouteRecordRaw[] = [
     meta: {
       title: '仿真实验室 - 预设',
       requiresAuth: false,
-      icon: '🔬'
+      icon: '🔬',
     },
     props: (route) => ({
-      presetId: route.params.presetId
-    })
-  }
-];
+      presetId: route.params.presetId,
+      sceneId: typeof route.query.scene === 'string' ? route.query.scene : undefined,
+    }),
+  },
+]
 
-export default simulationRoutes;
+export default simulationRoutes
