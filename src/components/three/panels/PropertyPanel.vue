@@ -9,7 +9,9 @@
           type="text"
           :value="objectName"
           @input="handleNameInput"
-          @change="updateName"
+          @change="commit(updateName)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="对象名称"
         />
       </div>
@@ -20,7 +22,9 @@
           step="0.1"
           :value="positionX"
           @input="handlePositionXInput"
-          @change="updatePosition"
+          @change="commit(updatePosition)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="X坐标"
         />
       </div>
@@ -31,7 +35,9 @@
           step="0.1"
           :value="positionY"
           @input="handlePositionYInput"
-          @change="updatePosition"
+          @change="commit(updatePosition)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="Y坐标"
         />
       </div>
@@ -42,7 +48,9 @@
           step="0.1"
           :value="positionZ"
           @input="handlePositionZInput"
-          @change="updatePosition"
+          @change="commit(updatePosition)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="Z坐标"
         />
       </div>
@@ -55,7 +63,9 @@
           step="1"
           :value="rotationX"
           @input="handleRotationXInput"
-          @change="updateRotation"
+          @change="commit(updateRotation)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="X轴旋转"
         />
       </div>
@@ -66,7 +76,9 @@
           step="1"
           :value="rotationY"
           @input="handleRotationYInput"
-          @change="updateRotation"
+          @change="commit(updateRotation)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="Y轴旋转"
         />
       </div>
@@ -77,7 +89,9 @@
           step="1"
           :value="rotationZ"
           @input="handleRotationZInput"
-          @change="updateRotation"
+          @change="commit(updateRotation)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="Z轴旋转"
         />
       </div>
@@ -90,7 +104,9 @@
           step="0.1"
           :value="scaleX"
           @input="handleScaleXInput"
-          @change="updateScale"
+          @change="commit(updateScale)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="X轴缩放"
           min="0.1"
         />
@@ -102,7 +118,9 @@
           step="0.1"
           :value="scaleY"
           @input="handleScaleYInput"
-          @change="updateScale"
+          @change="commit(updateScale)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="Y轴缩放"
           min="0.1"
         />
@@ -114,7 +132,9 @@
           step="0.1"
           :value="scaleZ"
           @input="handleScaleZInput"
-          @change="updateScale"
+          @change="commit(updateScale)"
+          @focus="startEditing"
+          @blur="stopEditing"
           placeholder="Z轴缩放"
           min="0.1"
         />
@@ -136,13 +156,17 @@
         <p class="hint">点击3D视图中的物体进行编辑</p>
       </div>
     </template>
+
+    <!-- 我的场景：已保存的场景在这里列出、打开、删除 -->
+    <SceneList />
   </div>
 </template>
 
 <script setup>
 import * as THREE from 'three'
 import { computed, watch, ref } from 'vue'
-import { useSceneEditorStore } from '@/stores/sceneEditorStore';
+import { useSceneEditorStore } from '@/stores/sceneEditorStore'
+import SceneList from '@/components/three/panels/SceneList.vue'
 
 // 获取场景编辑器状态
 const store = useSceneEditorStore()
@@ -163,61 +187,100 @@ const scaleY = ref(1)
 const scaleZ = ref(1)
 
 // 输入处理函数
+
+/**
+ * 用户是否正在编辑表单。
+ *
+ * 仿真运行时，物理同步每帧都在改 mesh 的位置，面板必须跟着刷新；
+ * 但如果用户正在输入框里打字，这份刷新就会把用户刚输入的值冲掉
+ * （实测：输入 "5"，120ms 后被改回实时 meshY "1.7135…"）。
+ *
+ * 因此编辑期间**不做回填**，提交或失焦后再恢复同步。
+ */
+const isEditing = ref(false)
+
+const startEditing = () => {
+  isEditing.value = true
+}
+
+const stopEditing = () => {
+  isEditing.value = false
+}
+
+/**
+ * 提交：先结束编辑态（恢复与物理同步的实时刷新），再把值写回 store。
+ */
+const commit = (apply) => {
+  stopEditing()
+  apply()
+}
+
 const handleNameInput = (event) => {
+  startEditing()
   objectName.value = event.target.value
 }
 
 const handlePositionXInput = (event) => {
+  startEditing()
   positionX.value = Number(event.target.value)
 }
 const handlePositionYInput = (event) => {
+  startEditing()
   positionY.value = Number(event.target.value)
 }
 const handlePositionZInput = (event) => {
+  startEditing()
   positionZ.value = Number(event.target.value)
 }
 
 const handleRotationXInput = (event) => {
+  startEditing()
   rotationX.value = Number(event.target.value)
 }
 const handleRotationYInput = (event) => {
+  startEditing()
   rotationY.value = Number(event.target.value)
 }
 const handleRotationZInput = (event) => {
+  startEditing()
   rotationZ.value = Number(event.target.value)
 }
 
 const handleScaleXInput = (event) => {
+  startEditing()
   scaleX.value = Number(event.target.value)
 }
 const handleScaleYInput = (event) => {
+  startEditing()
   scaleY.value = Number(event.target.value)
 }
 const handleScaleZInput = (event) => {
+  startEditing()
   scaleZ.value = Number(event.target.value)
 }
 
-// 当选中对象变化时，自动同步属性
-watch(selectedObject, (newObj) => {
-  if (newObj?.threeObject) {
-    // 同步位置
-    positionX.value = newObj.threeObject.position.x
-    positionY.value = newObj.threeObject.position.y
-    positionZ.value = newObj.threeObject.position.z
+// 监听store中的selectedObjectUuid变化
+watch(
+  () => store.selectedObjectUuid,
+  () => {
+    // 自动响应变化，无需日志
+  },
+  { immediate: true },
+)
 
-    // 同步旋转（转为角度）
-    rotationX.value = THREE.MathUtils.radToDeg(newObj.threeObject.rotation.x)
-    rotationY.value = THREE.MathUtils.radToDeg(newObj.threeObject.rotation.y)
-    rotationZ.value = THREE.MathUtils.radToDeg(newObj.threeObject.rotation.z)
+// 上一次同步过的是哪个对象。
+// 选中对象变了就必须无条件重新同步（并清掉编辑态），否则新对象会显示上一个对象的残值。
+let syncedUuid = null
 
-    // 同步缩放
-    scaleX.value = newObj.threeObject.scale.x
-    scaleY.value = newObj.threeObject.scale.y
-    scaleZ.value = newObj.threeObject.scale.z
-    
-    // 同步名称
-    objectName.value = newObj.name || ''
-  } else {
+/**
+ * 把选中物体的实时状态回填到表单。
+ *
+ * `force` 为 true 表示「选中对象变了」，此时无条件同步。
+ */
+const syncFormFromObject = (force = false) => {
+  const newObj = selectedObject.value
+
+  if (!newObj?.threeObject) {
     // 清除属性值
     objectName.value = ''
     positionX.value = 0
@@ -229,14 +292,60 @@ watch(selectedObject, (newObj) => {
     scaleX.value = 1
     scaleY.value = 1
     scaleZ.value = 1
+    syncedUuid = null
+    isEditing.value = false
+    return
   }
-}, { immediate: true })
+
+  // 正在编辑时不回填：物理同步每帧都在跑，回填会把用户刚输入的值冲掉
+  if (!force && isEditing.value) return
+
+  // 同步位置
+  positionX.value = newObj.threeObject.position.x
+  positionY.value = newObj.threeObject.position.y
+  positionZ.value = newObj.threeObject.position.z
+
+  // 同步旋转（转为角度）
+  rotationX.value = THREE.MathUtils.radToDeg(newObj.threeObject.rotation.x)
+  rotationY.value = THREE.MathUtils.radToDeg(newObj.threeObject.rotation.y)
+  rotationZ.value = THREE.MathUtils.radToDeg(newObj.threeObject.rotation.z)
+
+  // 同步缩放
+  scaleX.value = newObj.threeObject.scale.x
+  scaleY.value = newObj.threeObject.scale.y
+  scaleZ.value = newObj.threeObject.scale.z
+
+  // 同步名称
+  objectName.value = newObj.name || ''
+
+  syncedUuid = newObj.uuid
+}
+
+/**
+ * 显式依赖：不再对选中的 three 对象做深度遍历。
+ *
+ * 触发源是 `simulationState.frameCount`——它是一个原始数字，每帧只读一次，
+ * 不触碰对象图；它与 mesh 的移动同源（物理循环推进时递增），
+ * 因此仿真运行时面板照样实时刷新，却不再每帧把整棵 mesh 图遍历一遍。
+ *
+ * 另外两个依赖项覆盖「选中对象变了」和「对象改名了」两种情况。
+ */
+watch(
+  () => [store.selectedObject?.uuid, store.selectedObject?.name, store.simulationState.frameCount],
+  () => {
+    const uuid = store.selectedObject?.uuid ?? null
+    const selectionChanged = uuid !== syncedUuid
+    if (selectionChanged) isEditing.value = false
+    syncFormFromObject(selectionChanged)
+  },
+  { immediate: true },
+)
 
 // 更新名称
 const updateName = () => {
   if (!selectedObject.value) return
   store.updateObject(selectedObject.value.uuid, {
-    name: objectName.value
+    name: objectName.value,
   })
 }
 
@@ -246,19 +355,15 @@ const updatePosition = () => {
 
   const { uuid, threeObject } = selectedObject.value
   // 更新Three.js物体位置
-  threeObject.position.set(
-    positionX.value,
-    positionY.value,
-    positionZ.value,
-  )
+  threeObject.position.set(positionX.value, positionY.value, positionZ.value)
 
   // 同步到store
   store.updateObject(uuid, {
     position: {
       x: threeObject.position.x,
       y: threeObject.position.y,
-      z: threeObject.position.z
-    }
+      z: threeObject.position.z,
+    },
   })
 }
 
@@ -279,8 +384,8 @@ const updateRotation = () => {
     rotation: {
       x: threeObject.rotation.x,
       y: threeObject.rotation.y,
-      z: threeObject.rotation.z
-    }
+      z: threeObject.rotation.z,
+    },
   })
 }
 
@@ -290,19 +395,15 @@ const updateScale = () => {
 
   const { uuid, threeObject } = selectedObject.value
   // 更新Three.js物体缩放
-  threeObject.scale.set(
-    scaleX.value,
-    scaleY.value,
-    scaleZ.value,
-  )
+  threeObject.scale.set(scaleX.value, scaleY.value, scaleZ.value)
 
   // 同步到store
   store.updateObject(uuid, {
     scale: {
       x: threeObject.scale.x,
       y: threeObject.scale.y,
-      z: threeObject.scale.z
-    }
+      z: threeObject.scale.z,
+    },
   })
 }
 

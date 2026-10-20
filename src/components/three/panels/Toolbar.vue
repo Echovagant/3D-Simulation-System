@@ -64,6 +64,14 @@
       >
         <i class="fas fa-save"></i>
       </button>
+      <button
+        class="toolbar-btn"
+        @click="handleExportScene"
+        :disabled="!isSceneInitialized"
+        title="导出场景 JSON"
+      >
+        <i class="fas fa-file-export"></i>
+      </button>
     </div>
 
     <!-- 状态提示 -->
@@ -96,7 +104,7 @@ const importModelInProgress = ref(false);
 // 计算属性
 const isSceneInitialized = computed(() => getIsSceneInitialized());
 const isPlaying = computed(() => store.simulationState.isPlaying);
-const hasSelectedObject = computed(() => !!store.selectedObjectUuid);
+const hasSelectedObject = computed(() => !!store.selectedObject);
 
 // 显示临时消息
 const showTempMessage = (message, duration = 2000) => {
@@ -114,8 +122,7 @@ const handlePlayPause = () => {
 
 // 重置模拟
 const handleResetSimulation = () => {
-  store.stopSimulation();
-  store.startSimulation();
+  store.resetSimulation();
   showTempMessage('重置物理模拟');
 };
 
@@ -153,29 +160,22 @@ const handleImportModel = async () => {
 
 // 删除选中对象
 const handleRemoveSelected = () => {
-  console.log('[DEBUG] handleRemoveSelected被调用');
-  
-  if (hasSelectedObject.value) {
-    console.log('[DEBUG] 有选中对象，开始删除流程');
-    const objectName = store.selectedObject?.name || '对象';
-    const objectUuid = store.selectedObjectUuid;
-    
-    console.log(`[DEBUG] 开始删除对象: ${objectName} (UUID: ${objectUuid})`);
-    console.log('[DEBUG] 删除前场景对象数量:', store.objects.length);
-    
-    try {
-      store.removeSelectedObject();
-      console.log('[DEBUG] store.removeSelectedObject()调用完成');
-    } catch (error) {
-      console.error('[DEBUG] store.removeSelectedObject()调用出错:', error);
-    }
-    
-    console.log('[DEBUG] 删除后场景对象数量:', store.objects.length);
-    console.log('[DEBUG] 当前选中对象UUID:', store.selectedObjectUuid);
-    
+  if (!hasSelectedObject.value) return;
+
+  const objectName = store.selectedObject?.name || '对象';
+
+  const before = store.objects.length;
+  try {
+    store.removeSelectedObject();
+  } catch {
+    // 删除失败时走下面的“未删除”分支，不谎报成功
+  }
+  const after = store.objects.length;
+
+  if (after < before) {
     showTempMessage(`已删除 ${objectName}`);
   } else {
-    console.log('[DEBUG] 没有选中对象，无法删除');
+    showTempMessage('未选中可删除的对象', 3000);
   }
 };
 
@@ -185,11 +185,30 @@ const handleSaveScene = async () => {
   if (!sceneName) return;
 
   try {
-    await store.saveScene(sceneName);
-    showTempMessage(`场景保存成功: ${sceneName}`);
+    // 场景 id 必须拿住：它是「找回这个场景」的凭据
+    // （右侧「我的场景」列表与仿真实验室的「从编辑器加载」都靠它）
+    const sceneId = await store.saveScene(sceneName);
+    showTempMessage(`场景保存成功: ${sceneName}（ID: ${sceneId}，可在右侧「我的场景」中打开）`, 5000);
   } catch (error) {
-    console.error('保存场景失败:', error);
+
     showTempMessage('场景保存失败', 3000);
+  }
+};
+
+// 导出场景 JSON（用的是与保存完全相同的场景文档格式）
+const handleExportScene = () => {
+  try {
+    const doc = store.buildSceneDocument('导出场景');
+    const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `scene-${doc.id}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showTempMessage('场景已导出为 JSON', 3000);
+  } catch (error) {
+    showTempMessage('导出场景失败', 3000);
   }
 };
 
