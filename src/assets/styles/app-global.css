@@ -153,9 +153,11 @@
 }
 
 /* Hover效果（目标导航的颜色变化） */
+/* #ffa117 在白底上只有 2.03:1，18px 正文达不到 WCAG AA（4.5:1），
+   换成同一琥珀色相的深琥珀 #96560a：白底 5.78:1、active 底色 #e4e9f5 上 4.76:1。 */
 .nav-item:hover .nav-link .icon,
 .nav-item:hover .nav-link .text {
-  color: #ffa117; /* 目标导航的hover颜色 */
+  color: #96560a; /* 目标导航的hover颜色（深琥珀，AA 合规） */
 }
 
 /* Active状态的图标特殊样式（目标导航的圆形背景） */

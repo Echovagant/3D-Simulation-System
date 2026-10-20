@@ -91,7 +91,7 @@
 </template>
 
 <script lang="ts" setup name="Overview">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router' // 引入RouterLink类型
 
 // 标签云数据 - 展示系统相关技术和特性
@@ -124,6 +124,24 @@ const handleScrollDown = () => {
   }
 }
 
+// 标签云的动画帧与交互监听必须在组件卸载时收掉：
+// 否则路由离开后 requestAnimationFrame 会一直排期（实测卸载后仍以 ~120 次/2s 的频率跑），
+// document 上的鼠标/触摸监听也会残留。
+let frameId: number | null = null
+// 卸载后置位：万一有一帧已经在派发途中，也不能再排下一帧
+let stopped = false
+// AbortController 一次性摘掉下面所有 addEventListener 注册的监听
+const interactions = new AbortController()
+
+onUnmounted(() => {
+  stopped = true
+  if (frameId !== null) {
+    cancelAnimationFrame(frameId)
+    frameId = null
+  }
+  interactions.abort()
+})
+
 // 实现3D标签云旋转效果
 onMounted(() => {
   // 明确指定为HTMLElement类型
@@ -138,75 +156,104 @@ onMounted(() => {
 
   // 自动旋转效果
   const autoRotate = () => {
+    if (stopped) return
     if (!isDragging) {
       currentRotationY += 0.3// 这行控制旋转速度
       tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
     }
-    requestAnimationFrame(autoRotate)
+    frameId = requestAnimationFrame(autoRotate)
   }
 
   // 鼠标交互 - 指定为MouseEvent类型
-  tagCloud.addEventListener('mousedown', (e: MouseEvent) => {
-    isDragging = true
-    startX = e.clientX
-    startY = e.clientY
-  })
+  tagCloud.addEventListener(
+    'mousedown',
+    (e: MouseEvent) => {
+      isDragging = true
+      startX = e.clientX
+      startY = e.clientY
+    },
+    { signal: interactions.signal },
+  )
 
-  document.addEventListener('mousemove', (e: MouseEvent) => {
-    if (!isDragging) return
+  document.addEventListener(
+    'mousemove',
+    (e: MouseEvent) => {
+      if (!isDragging) return
 
-    const deltaX = e.clientX - startX
-    const deltaY = e.clientY - startY
+      const deltaX = e.clientX - startX
+      const deltaY = e.clientY - startY
 
-    currentRotationY += deltaX * 0.5
-    currentRotationX -= deltaY * 0.5
+      currentRotationY += deltaX * 0.5
+      currentRotationX -= deltaY * 0.5
 
-    // 限制X轴旋转角度，避免过度翻转
-    currentRotationX = Math.max(-30, Math.min(30, currentRotationX))
+      // 限制X轴旋转角度，避免过度翻转
+      currentRotationX = Math.max(-30, Math.min(30, currentRotationX))
 
-    tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
+      tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
 
-    startX = e.clientX
-    startY = e.clientY
-  })
+      startX = e.clientX
+      startY = e.clientY
+    },
+    { signal: interactions.signal },
+  )
 
-  document.addEventListener('mouseup', () => {
-    isDragging = false
-  })
+  document.addEventListener(
+    'mouseup',
+    () => {
+      isDragging = false
+    },
+    { signal: interactions.signal },
+  )
 
-  document.addEventListener('mouseleave', () => {
-    isDragging = false
-  })
+  document.addEventListener(
+    'mouseleave',
+    () => {
+      isDragging = false
+    },
+    { signal: interactions.signal },
+  )
 
   // 触摸设备支持 - 指定为TouchEvent类型
-  tagCloud.addEventListener('touchstart', (e: TouchEvent) => {
-    if (e.touches.length === 1) {
-      isDragging = true
+  tagCloud.addEventListener(
+    'touchstart',
+    (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        isDragging = true
+        startX = e.touches[0].clientX
+        startY = e.touches[0].clientY
+      }
+    },
+    { signal: interactions.signal },
+  )
+
+  document.addEventListener(
+    'touchmove',
+    (e: TouchEvent) => {
+      if (!isDragging || e.touches.length !== 1) return
+
+      const deltaX = e.touches[0].clientX - startX
+      const deltaY = e.touches[0].clientY - startY
+
+      currentRotationY += deltaX * 0.5
+      currentRotationX -= deltaY * 0.5
+
+      currentRotationX = Math.max(-30, Math.min(30, currentRotationX))
+
+      tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
+
       startX = e.touches[0].clientX
       startY = e.touches[0].clientY
-    }
-  })
+    },
+    { signal: interactions.signal },
+  )
 
-  document.addEventListener('touchmove', (e: TouchEvent) => {
-    if (!isDragging || e.touches.length !== 1) return
-
-    const deltaX = e.touches[0].clientX - startX
-    const deltaY = e.touches[0].clientY - startY
-
-    currentRotationY += deltaX * 0.5
-    currentRotationX -= deltaY * 0.5
-
-    currentRotationX = Math.max(-30, Math.min(30, currentRotationX))
-
-    tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
-
-    startX = e.touches[0].clientX
-    startY = e.touches[0].clientY
-  })
-
-  document.addEventListener('touchend', () => {
-    isDragging = false
-  })
+  document.addEventListener(
+    'touchend',
+    () => {
+      isDragging = false
+    },
+    { signal: interactions.signal },
+  )
 
   autoRotate()
 })
@@ -233,17 +280,15 @@ onMounted(() => {
 
 .title {
   font-size: 48px;
-  color: #ffd700;
+  color: #333;
   margin-bottom: 15px;
   letter-spacing: 5px;
-  text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
   animation: fadeIn 1.5s ease-out;
 }
 
 .subtitle {
   font-size: 20px;
-  color: #f0f0f0;
-  opacity: 0.9;
+  color: #666;
   max-width: 700px;
   margin: 0 auto;
 }
@@ -272,10 +317,10 @@ onMounted(() => {
   top: 50%;
   left: 50%;
   padding: 8px 16px;
-  background-color: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 215, 0, 0.3);
+  background-color: rgba(110, 90, 240, 0.1);
+  border: 1px solid rgba(110, 90, 240, 0.25);
   border-radius: 20px;
-  color: #fff;
+  color: #4B37C9;
   font-size: 14px;
   transform-origin: 0 0;
   text-align: center;
@@ -285,8 +330,8 @@ onMounted(() => {
 }
 
 .tag:hover {
-  background-color: rgba(255, 215, 0, 0.8);
-  color: #000;
+  background-color: rgba(110, 90, 240, 0.16);
+  color: #4B37C9;
   transform: rotateY(var(--rotation)) translateZ(220px) scale(1.2);
   z-index: 10;
 }
@@ -298,10 +343,9 @@ onMounted(() => {
 
 .section-title {
   text-align: center;
-  color: #ffd700;
+  color: #333;
   font-size: 28px;
   margin-bottom: 40px;
-  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
 }
 
 .features-grid {
@@ -323,25 +367,24 @@ onMounted(() => {
 
 .feature-item:hover {
   transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 10px 20px rgba(110, 90, 240, 0.15);
 }
 
 .feature-item .icon {
   font-size: 32px;
-  color: #ffd700;
+  color: #6E5AF0;
   min-width: 40px;
   margin-top: 5px;
 }
 
 .feature-content h3 {
-  color: #fff;
+  color: #333;
   margin-bottom: 10px;
   font-size: 18px;
 }
 
 .feature-content p {
-  color: #f0f0f0;
-  opacity: 0.8;
+  color: #666;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -362,22 +405,22 @@ onMounted(() => {
   border-radius: 10px;
   padding: 30px 20px;
   text-align: center;
-  color: #fff;
+  color: #333;
   text-decoration: none;
   transition: all 0.3s ease;
-  border: 1px solid transparent;
+  border: 1px solid rgba(110, 90, 240, 0.12);
 }
 
 .access-card:hover {
-  background-color: rgba(255, 215, 0, 0.1);
-  border-color: rgba(255, 215, 0, 0.5);
+  background-color: rgba(110, 90, 240, 0.08);
+  border-color: rgba(110, 90, 240, 0.35);
   transform: translateY(-5px) scale(1.02);
 }
 
 .access-icon {
   font-size: 40px;
   margin-bottom: 15px;
-  color: #ffd700;
+  color: #6E5AF0;
 }
 
 .access-card h3 {
@@ -387,7 +430,7 @@ onMounted(() => {
 
 .access-card p {
   font-size: 14px;
-  opacity: 0.8;
+  color: #666;
 }
 
 /* 动画效果 */
@@ -449,8 +492,8 @@ onMounted(() => {
   backdrop-filter: none;
 
   /* 清除默认按钮样式，避免干扰 */
-  border: 1px solid #ffd700; /* 金色边框（呼应页面主题色） */
-  color: #ffd700; /* 金色文字（呼应标题/图标色） */
+  border: 1px solid #6E5AF0; /* 靛紫边框（与导航图标同源） */
+  color: #6E5AF0; /* 靛紫文字（与导航图标同源） */
   padding: 10px 24px; /* 按钮内边距，保证点击区域 */
   font-size: 16px; /* 字体大小，保证可读性 */
   border-radius: 30px; /* 圆角，提升美观度 */
@@ -461,9 +504,10 @@ onMounted(() => {
 }
 /* 按钮hover效果（可选，增强交互感） */
 .quick-know-btn:hover {
-  background-color: rgba(255, 215, 0, 0.1); /* 淡金色背景 */
+  background-color: rgba(110, 90, 240, 0.14); /* 淡靛紫背景 */
+  color: #4B37C9; /* 靛紫加深，浅底上仍达 AA */
   transform: translateY(-2px); /* 轻微上浮 */
-  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.2); /* 金色阴影 */
+  box-shadow: 0 4px 12px rgba(110, 90, 240, 0.25); /* 靛紫阴影 */
 }
 /* 按钮点击反馈（可选，增强手感） */
 .quick-know-btn:active {

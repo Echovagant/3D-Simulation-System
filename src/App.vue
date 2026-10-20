@@ -1,6 +1,8 @@
 <template>
   <div class="app">
-    <TechGridUniverse />
+    <div class="app-background">
+      <TechGridUniverse />
+    </div>
     <div class="app-container">
       <!-- 侧边导航 -->
       <aside class="shell" v-show="showNavigate()" :class="{ show: sidebarShow }">
@@ -103,10 +105,14 @@
 
 <script lang="ts" setup name="App">
 import Header from './components/layout/Header.vue'
-import TechGridUniverse from './components/common/Background/TechGridUniverse.vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { defineAsyncComponent, ref, watch, onMounted, onUnmounted } from 'vue'
 import '@/assets/styles/app-global.css'
+
+// 背景是纯装饰组件，用异步组件加载：即使它只有几 KB，也不该阻塞首屏渲染。
+const TechGridUniverse = defineAsyncComponent(
+  () => import('./components/common/Background/TechGridUniverse.vue'),
+)
 
 const isMobile = ref(false)
 // 监听窗口大小变化，更新设备类型
@@ -195,3 +201,17 @@ onUnmounted(() => {
   document.removeEventListener('click', handleOutsideClick)
 })
 </script>
+
+<style scoped>
+/*
+ * 背景容器：背景是纯装饰组件，异步加载期间用它占位，避免闪白。
+ * 底色与背景 canvas 铺的底色一致（#f7f8fc 浅色靛紫网络的画布底色），
+ * 异步分块到位时不会有可见的跳变。
+ */
+.app-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: #f7f8fc;
+}
+</style>
