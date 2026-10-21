@@ -1,7 +1,3 @@
-<div align="center">
-  <img src="docs/assets/cover.png" alt="3D 仿真系统" width="880" />
-</div>
-
 <h1 align="center">
   <img src="src/assets/images/logo.svg" alt="" width="42" height="42" />
   3D 仿真系统
@@ -30,7 +26,6 @@
     <td align="center"><b>252.08 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>267</b><br><sub>测试用例 · 32 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
-    <td align="center"><b>9</b><br><sub>模型 · 全部自制</sub></td>
   </tr>
 </table>
 
