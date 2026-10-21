@@ -15,18 +15,24 @@
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
   <img alt="Vitest 28 files / 225 cases" src="https://img.shields.io/badge/test-28%20files%20%2F%20225%20cases-16a34a?logo=vitest&logoColor=fd9714">
-  <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
+  <img alt="10 build gates" src="https://img.shields.io/badge/build%20gates-10%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
+
+<div align="center">
+  <img src="docs/assets/demo.gif" alt="刚体物理仿真与规则式智能体真实运行录屏" width="880" />
+  <br>
+  <sub>真实运行录屏（生产产物）· <a href="docs/assets/demo.mp4">下载 720p MP4</a></sub>
+</div>
 
 <table>
   <tr>
     <td align="center"><b>251.80 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>225</b><br><sub>测试用例 · 28 个文件</sub></td>
-    <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
+    <td align="center"><b>10</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>12</b><br><sub>运行时依赖 · 审计前 34</sub></td>
     <td align="center"><b>239</b><br><sub>死类名 · 审计前 757</sub></td>
-    <td align="center"><b>9</b><br><sub>可加载模型 · 全部有据</sub></td>
+    <td align="center"><b>9</b><br><sub>模型 · 全部自制</sub></td>
   </tr>
 </table>
 
@@ -47,7 +53,7 @@
 
 一个**工程化**的 3D 场景编辑与仿真平台：左边编辑场景，右边跑物理，中间能放规则式智能体。
 
-它不是一个「能跑就行」的 demo。这个仓库做过一次**完整的代码审计**——19 份实施计划、4 轮独立复核，审计报告与实施计划都在仓库外归档。审计前 `npm run build` 跑不过、物理循环启动就死、删个物体刚体还在场上碰撞、模型在生产环境 404、模型库展示的全是编出来的数字。现在这些全部修掉，并且用 **11 道构建闸门**守住不回退。
+它不是一个「能跑就行」的 demo。这个仓库做过一次**完整的代码审计**——19 份实施计划、4 轮独立复核，审计报告与实施计划都在仓库外归档。审计前 `npm run build` 跑不过、物理循环启动就死、删个物体刚体还在场上碰撞、模型在生产环境 404、模型库展示的全是编出来的数字。现在这些全部修掉，并且用 **10 道构建闸门**守住不回退。
 
 ## 核心能力
 
@@ -70,7 +76,7 @@
 <tr>
 <td width="33%" valign="top" align="center">
 <b>📦 模型资源库</b><br><br>
-<sub>9 个内置条目<b>全部可加载</b>，其中 7 个是本仓库程序化生成的</sub>
+<sub>9 个内置条目<b>全部可加载</b>，且全部是本仓库自己生成的</sub>
 </td>
 <td width="33%" valign="top" align="center">
 <b>📚 系统文档</b><br><br>
@@ -112,7 +118,7 @@
 
 ## 模型与资产
 
-这个仓库里的 3D 资产**大部分是自己生成的**，不是找来的素材。三条流水线都是声明式输入 + 确定性输出：
+这个仓库里的 3D 资产**全部是自己生成的**，没有一件是找来的素材。三条流水线都是声明式输入 + 确定性输出：
 
 | 命令 | 做什么 | 输入 |
 | --- | --- | --- |
@@ -128,8 +134,8 @@
 <table>
 <tr>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/mech.png" alt="机甲" width="100%"><br><sub>机甲</sub></td>
-<td width="16%" align="center"><img src="public/assets/models/thumbnails/Fox.png" alt="狐狸" width="100%"><br><sub>狐狸</sub></td>
-<td width="16%" align="center"><img src="public/assets/models/thumbnails/DamagedHelmet.png" alt="破损头盔" width="100%"><br><sub>破损头盔</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/drone.png" alt="无人机" width="100%"><br><sub>无人机</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/hover-guardian.png" alt="悬浮守卫" width="100%"><br><sub>悬浮守卫</sub></td>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/space-station-interior.png" alt="太空站内部" width="100%"><br><sub>太空站内部</sub></td>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/forest.png" alt="森林场景" width="100%"><br><sub>森林场景</sub></td>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/city-street.png" alt="城市街道" width="100%"><br><sub>城市街道</sub></td>
@@ -138,7 +144,7 @@
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/energy-blaster.png" alt="科幻武器" width="100%"><br><sub>科幻武器</sub></td>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/arcane-book.png" alt="魔法书" width="100%"><br><sub>魔法书</sub></td>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/terminal-console.png" alt="控制台" width="100%"><br><sub>控制台</sub></td>
-<td colspan="3" align="center"><sub>—— 其中 7 个本仓库生成，2 个为第三方资产（CC BY 4.0，署名见 NOTICE）</sub></td>
+<td colspan="3" align="center"><sub>—— 全部由本仓库的几何配方生成，无第三方素材</sub></td>
 </tr>
 </table>
 </div>
@@ -148,7 +154,7 @@
 >
 > ```js
 > P(G.box(0.42, 0.62, 0.26), [0, 1.13, 0], '#6E5AF0'),            // 躯干
-> P(G.sphere(0.06), [0, 1.22, 0.16], '#FFA117', { emissive: '#FFA117' }), // 胸口能源
+> P(G.icosa(0.06), [0, 1.22, 0.16], '#FFA117', { emissive: '#FFA117' }), // 胸口能源
 > ```
 
 ## 快速开始
@@ -160,7 +166,7 @@ cd 3D-Simulation-System
 npm install
 
 npm run dev        # 开发服务器
-npm run build      # 类型检查 + 构建 + 测试 + 11 道闸门
+npm run build      # 类型检查 + 构建 + 测试 + 10 道闸门
 npm run preview    # 预览生产产物
 ```
 
@@ -171,14 +177,15 @@ npm run preview    # 预览生产产物
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 开发服务器 |
-| `npm run build` | `type-check` + `vite build` + `npm test` + 11 道闸门 |
+| `npm run build` | `type-check` + `vite build` + `npm test` + 10 道闸门 |
 | `npm test` | Vitest 全量用例（28 文件 / 225 例） |
 | `npm run type-check` | `vue-tsc` 类型检查（零错误） |
 | `npm run verify:all` | 单独跑全部校验闸门 |
-| `npm run gen:brand` | 从 SVG 母版重新生成 logo 与 favicon |
 | `npm run gen:models` | 重新生成程序化模型（几何配方在 `scripts/model-recipes.mjs`） |
 | `npm run gen:thumbnails` | 从真实模型文件重新渲染缩略图 |
+| `npm run gen:brand` | 从 SVG 母版重新生成 logo 与 favicon |
 | `npm run gen:docs` | 重新生成 README 封面与页面截图 |
+| `npm run record:demo` | 重新录制 README 顶部的演示视频 |
 | `npm run format` | Prettier 格式化（只对 `src/` 下的非 `.vue` 文件安全） |
 
 ## 技术栈
@@ -202,22 +209,14 @@ npm run preview    # 预览生产产物
 
 ## 架构
 
-```
-┌──────────────┐   sceneEditorStore（Pinia，单一真源）
-│  场景编辑器   │──▶ objects: shallowRef<SceneObject[]>
-└──────────────┘    selectedObject / simulationState / renderState
-        │                       ▲
-        │  update-transform 事件 │  updateObject
-        ▼                       │
-┌──────────────┐         ┌──────┴───────┐
-│ useSceneEditor│────────▶│  刚体（Rapier）│  ← 唯一物理权威
-│  刚体账本     │         └──────────────┘
-│  碰撞体账本    │              │
-└──────────────┘              │ syncPhysicsToObjects（每帧绝对覆盖）
-        ▲                      ▼
-        │            ┌──────────────┐
-        │            │ threeObject   │ ← 裸对象，markRaw，不被 Vue 代理
-        └────────────┴──────────────┘
+```mermaid
+flowchart LR
+  U["用户编辑<br/>场景编辑器 · 属性面板"] -->|update-transform 事件| S["sceneEditorStore · Pinia<br/>objects: shallowRef<br/>单一真源"]
+  S -->|updateObject| P["刚体 Rapier<br/>唯一物理权威"]
+  P -->|syncPhysicsToObjects<br/>每帧绝对覆盖| M["threeObject<br/>markRaw · 不被 Vue 代理"]
+  M -->|mesh 位置回写| S
+  P -.->|碰撞体账本| S
+  T["固定步长累加器<br/>fixedTimeStep = 1/60"] --> P
 ```
 
 **三条硬规则**
@@ -249,13 +248,13 @@ npm run preview    # 预览生产产物
 | 指标 | 数值 |
 | --- | --- |
 | 入口 chunk | **251.80 KB**（上限 1536 KB） |
-| 产物体积 | 11.61 MB |
+| 产物体积 | 7.61 MB |
 | 运行时依赖 | 12 个（审计前 34 个） |
 | 测试 | 28 文件 / 225 例全绿 |
 | 类型检查 | 0 错误 |
 | 7 个页面 | 0 console error / 0 未捕获异常 / 0 网络失败 |
 | 死 Tailwind 类名 | 757 → **239** |
-| 可加载模型 | 9 个（7 个程序化生成 + 2 个第三方 CC BY 4.0） |
+| 可加载模型 | 9 个（**全部程序化生成**） |
 
 > 唯一的 console 输出是一条来自 **Rapier compat 包内部**的弃用警告
 > （`using deprecated parameters for the initialization function`）——
@@ -282,16 +281,18 @@ src/
     ├── images/logo.svg   # 品牌标识母版（矢量）
     └── styles/           # 主题令牌 + AI 面板工具层
 scripts/
-├── model-recipes.mjs     # 7 个模型的几何配方（声明式）
+├── model-recipes.mjs     # 9 个模型的几何配方（声明式）
 ├── generate-model-assets.mjs    # 配方 -> GLB
 ├── render-model-thumbnails.mjs  # GLB -> 缩略图
 ├── generate-brand-assets.mjs     # SVG 母版 -> logo / favicon
 ├── generate-docs-assets.mjs      # 封面 + 页面截图
+├── record-demo.mjs                # 录制 README 顶部的演示视频
 ├── check-model-metadata.mjs      # 模型属性与 GLB 实测对账
 ├── check-asset-licenses.mjs      # 资产来源与协议核对
 └── ...                          # 其余 9 道闸门
-public/assets/models/     # 9 个模型 + 9 张渲染缩略图
-docs/                     # 封面与 7 张页面截图
+public/assets/models/     # 9 个模型 + 9 张渲染缩略图（全部自制）
+docs/assets/              # 封面 + 演示视频（GIF / MP4）
+docs/screenshots/         # 7 张页面截图
 ```
 
 </details>
@@ -306,21 +307,13 @@ docs/                     # 封面与 7 张页面截图
 
 ## 贡献
 
-欢迎提 Issue 与 PR。动手前请先读 [`DESIGN.md`](DESIGN.md)（设计令牌唯一真源）与本 README 的「质量保障」——**改完必须跑 `npm run build`**，11 道闸门全绿才算完成。
+欢迎提 Issue 与 PR。动手前请先读 [`DESIGN.md`](DESIGN.md)（设计令牌唯一真源）与本 README 的「质量保障」——**改完必须跑 `npm run build`**，10 道闸门全绿才算完成。
 
 ## 许可证
 
 本项目采用 **Apache License 2.0**，完整文本见 [`LICENSE`](LICENSE)。
 
-> **代码**适用 Apache-2.0。仓库内**随附的 3D 模型文件不适用该协议**——
-> 它们各自保留原始许可，署名见 [`NOTICE`](NOTICE)：
-
-| 文件 | 作者 | 协议 |
-| --- | --- | --- |
-| `DamagedHelmet.glb` | ctxwing (2018)，Khronos glTF 示例资产 | CC BY 4.0 |
-| `Fox.glb` | PixelMannen、@tomkranis、@AsoboStudio | CC BY 4.0 |
-
-其余资产——**7 个 3D 模型、9 张模型缩略图、站点 logo、favicon、README 封面与页面截图**——全部由本项目自己的脚本生成（`npm run gen:models` / `gen:thumbnails` / `gen:brand` / `gen:docs`），随 Apache-2.0 发布。
+仓库里的**每一份非源码资产都是本项目自己生成的**——9 个 3D 模型、9 张模型缩略图、站点 logo、favicon、README 封面与页面截图，全部由 `npm run gen:models` / `gen:thumbnails` / `gen:brand` / `gen:docs` 生成，随 Apache-2.0 发布，**不含任何第三方模型、贴图或字体素材**。
 
 `verify:asset-licenses` 闸门会持续核对这件事：每个资产的来源都要有交代，不得出现带限制或传染性的协议，依赖里也不允许混进 GPL / AGPL / CC-BY-NC。
 
@@ -330,4 +323,3 @@ docs/                     # 封面与 7 张页面截图
 - [Rapier](https://rapier.rs/) — 刚体物理
 - [Vue](https://vuejs.org/) / [Vite](https://vite.dev/) / [Pinia](https://pinia.vuejs.org/) — 框架层
 - [Font Awesome Free](https://fontawesome.com/) — 图标
-- [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets) — 示例模型
