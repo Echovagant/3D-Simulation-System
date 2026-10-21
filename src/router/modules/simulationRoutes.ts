@@ -6,7 +6,7 @@ const simulationRoutes: RouteRecordRaw[] = [
     name: 'SimulationLab',
     component: () => import('@/views/SimulationLab.vue'),
     meta: {
-      title: '仿真实验室',
+      title: '3D仿真系统 - 仿真实验室',
       requiresAuth: false,
       icon: '🔬',
     },
@@ -23,7 +23,7 @@ const simulationRoutes: RouteRecordRaw[] = [
     name: 'SimulationLabWithPreset',
     component: () => import('@/views/SimulationLab.vue'),
     meta: {
-      title: '仿真实验室 - 预设',
+      title: '3D仿真系统 - 仿真实验室 - 预设',
       requiresAuth: false,
       icon: '🔬',
     },

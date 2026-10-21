@@ -6,7 +6,7 @@ const docsRoutes: RouteRecordRaw[] = [
     name: 'Docs',
     component: () => import('@/views/Docs.vue'),
     meta: {
-      title: '系统使用指南',
+      title: '3D仿真系统 - 系统文档',
       description: '3D场景编辑与仿真系统的使用文档'
     },
     children: [

@@ -6,7 +6,7 @@ const aiRoutes: RouteRecordRaw[] = [
     name: 'AIPlayground',
     component: () => import('@/views/AIPlayground.vue'),
     meta: {
-      title: 'AI演武场',
+      title: '3D仿真系统 - AI演武场',
       description: 'AI与3D环境交互实验平台',
       requiresAuth: false
     }
