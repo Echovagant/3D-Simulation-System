@@ -338,6 +338,37 @@ npm run verify:overview-contrast   # 总览页对比度
 npm run build                      # 含全部闸门
 ```
 
+## 附：品牌标识
+
+站点标识的**矢量母版**是 `src/assets/images/logo.svg`。它由 `npm run gen:brand`
+栅格化成 `src/assets/images/logo.png`（页头用）与 `public/favicon.ico`——
+**要改设计就改母版 SVG，然后重跑生成命令**，不要手改那两个产物。
+
+### 设计语义
+
+| 元素 | 含义 |
+| --- | --- |
+| 等距立方体 | 3D 场景里的一个对象 |
+| 引出标注线 + 琥珀节点 | 对这个对象做测量 / 分析 / 仿真——项目的内核 |
+| 靛紫三面 | `--color-accent` / `--color-accent-hover` / 浅靛，靠明度差分出三个受光面 |
+
+### 配色
+
+| 用途 | 值 | 对应令牌 |
+| --- | --- | --- |
+| 顶面 | `#8E80F7` | 浅靛（accent 的高光面） |
+| 左面 | `#6E5AF0` | `--color-accent` |
+| 右面 | `#4B37C9` | `--color-accent-hover` |
+| 引出线 | `#6E5AF0` | `--color-accent` |
+| 节点 | `#FFA117` | 琥珀（深底上的强调色） |
+
+琥珀只出现在一枚节点上——**大面积用琥珀会毁掉主色的单一性**。
+
+### 尺寸适配
+
+标识在 16px 仍要成立（favicon 32px、页头 46px、圆形徽标）。构图刻意留出
+四周安全边距：方形与圆形裁切下都不切到节点。
+
 ## 附：门禁清单
 
 | 脚本 | 守什么 |

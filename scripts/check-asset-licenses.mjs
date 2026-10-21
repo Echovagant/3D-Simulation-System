@@ -37,6 +37,7 @@ const SELF_GENERATED = [
   /^public\/assets\/models\/(characters|environments|props)\/(mech|city-street|forest|space-station-interior|arcane-book|energy-blaster|terminal-console)\.glb$/,
   /^public\/assets\/models\/thumbnails\/.+\.png$/,
   /^src\/assets\/images\/logo\.png$/,
+  /^src\/assets\/images\/logo\.svg$/,
   /^public\/favicon\.ico$/,
 ]
 

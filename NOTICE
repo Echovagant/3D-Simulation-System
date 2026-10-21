@@ -36,7 +36,8 @@ and is covered by the Apache License 2.0 in LICENSE:
     (geometry recipes: scripts/model-recipes.mjs; generator: scripts/generate-model-assets.mjs)
   - every model thumbnail under public/assets/models/thumbnails/
     (rendered from the model files by scripts/render-model-thumbnails.mjs)
-  - the site logo src/assets/images/logo.png and the favicon public/favicon.ico
+  - the site logo src/assets/images/logo.svg (vector master) with its raster
+    derivatives src/assets/images/logo.png and public/favicon.ico
     (rendered by scripts/generate-brand-assets.mjs)
   - the README cover docs/assets/cover.png and the page screenshots
     under docs/screenshots/

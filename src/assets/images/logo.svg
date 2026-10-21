@@ -1,0 +1,16 @@
+<!-- 3D 仿真系统站点标识（矢量母版）。设计说明见 DESIGN.md「品牌标识」一节。 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="3D 仿真系统">
+  <!-- 等距立方体：顶面 / 左面 / 右面三个受光面 -->
+  <g stroke-linejoin="round" stroke-width="9" stroke="#6E5AF0" stroke-opacity=".15">
+    <polygon points="214,192 334,250 214,308 94,250" fill="#8E80F7"/>
+    <polygon points="94,250 214,308 214,424 94,366" fill="#6E5AF0"/>
+    <polygon points="214,308 334,250 334,366 214,424" fill="#4B37C9"/>
+  </g>
+  <!-- 引出标注线：从立方体顶点折向右上角的琥珀节点 -->
+  <polyline points="222,190 286,196 376,138"
+            fill="none" stroke="#6E5AF0" stroke-width="10"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- 琥珀节点 -->
+  <circle cx="376" cy="138" r="31" fill="#FFA117"/>
+  <circle cx="376" cy="138" r="12" fill="#FFFFFF" fill-opacity=".95"/>
+</svg>
