@@ -50,7 +50,7 @@
         :key="model.id"
         @click="selectModel(model)"
       >
-        <div class="model-preview">
+        <div class="model-preview" :class="`model-preview--${model.category}`">
           <img
             :src="model.thumbnailUrl"
             :alt="model.name"
@@ -168,7 +168,7 @@
         </div>
         <div class="modal-body">
           <div class="model-detail-grid">
-            <div class="model-preview-large">
+            <div class="model-preview-large" :class="`model-preview--${selectedModel.category}`">
               <!-- 这里可以集成3D预览组件 -->
               <img
                 :src="selectedModel.thumbnailUrl"
@@ -579,7 +579,26 @@ const modelMeta = (model: Model): string =>
   position: relative;
   height: 160px;
   overflow: hidden;
-  background-color: #f5f5f5;
+}
+
+/*
+ * 分类渐变是缩略图的背景层，配色的唯一真源。
+ * 占位条目画的是透明 SVG（只有首字），真实模型叠的是透明 PNG（真实渲染图）——
+ * 两者共用这层背景。
+ */
+.model-preview--characters,
+.model-preview-large.model-preview--characters {
+  background: linear-gradient(135deg, rgb(56, 189, 248), rgb(99, 102, 241));
+}
+
+.model-preview--environments,
+.model-preview-large.model-preview--environments {
+  background: linear-gradient(135deg, rgb(16, 185, 129), rgb(13, 148, 136));
+}
+
+.model-preview--props,
+.model-preview-large.model-preview--props {
+  background: linear-gradient(135deg, rgb(251, 146, 60), rgb(236, 72, 153));
 }
 
 .model-thumbnail {
@@ -886,7 +905,6 @@ const modelMeta = (model: Model): string =>
 }
 
 .model-preview-large {
-  background-color: #f5f5f5;
   border-radius: 8px;
   overflow: hidden;
   display: flex;

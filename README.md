@@ -131,6 +131,7 @@ npm run preview    # 预览生产产物
 | `npm test` | Vitest 全量用例（28 文件 / 222 例） |
 | `npm run type-check` | `vue-tsc` 类型检查（零错误） |
 | `npm run verify:all` | 单独跑全部校验闸门 |
+| `npm run gen:thumbnails` | 从真实模型文件重新渲染缩略图 |
 | `npm run format` | Prettier 格式化（只对 `src/` 下的非 `.vue` 文件安全） |
 
 ## 技术栈
@@ -191,7 +192,7 @@ npm run preview    # 预览生产产物
 | `verify:bundle-size` | 入口 chunk ≤ 1.5 MB |
 | `verify:deps` | 20 个零引用依赖不得复活 |
 | `verify:tailwind` | 死 Tailwind 类名不得超过 239 处 |
-| `verify:model-metadata` | 模型库的文件属性必须与磁盘上的 GLB 一致 |
+| `verify:model-metadata` | 模型库的文件属性与缩略图必须与磁盘上的 GLB 一致 |
 | `npm test` | 28 个测试文件 / 222 个用例 |
 
 **当前实测**

@@ -19,9 +19,14 @@ describe('createThumbnail', () => {
     expect(svg).not.toContain('>&<')
   })
 
-  it('未知分类回退到道具配色，不会抛错', () => {
-    const svg = decodeURIComponent(createThumbnail('未知', 'not-a-category'))
-    expect(svg).toContain('linearGradient')
+  it('背景透明——分类渐变在 CSS 里，配色只有一个真源', () => {
+    const svg = decodeURIComponent(createThumbnail('士兵', 'characters'))
+    expect(svg).not.toContain('linearGradient')
+    expect(svg).not.toContain('<rect')
+  })
+
+  it('未知分类不会抛错', () => {
+    expect(() => createThumbnail('未知', 'not-a-category')).not.toThrow()
   })
 
   it('空名字回退到问号', () => {

@@ -82,6 +82,7 @@ const parseEntries = (source) => {
     entries.push({
       id,
       name: field('name'),
+      thumbnailUrl: field('thumbnailUrl'),
       modelUrl: field('modelUrl'),
       format: field('format'),
       size: numField('size'),
@@ -103,6 +104,7 @@ if (entries.length === 0) {
 
 const problems = []
 const rows = []
+const thumbnailInfo = []
 
 for (const entry of entries) {
   const isPlaceholder = entry.modelUrl === '#'
@@ -147,6 +149,26 @@ for (const entry of entries) {
     problems.push(`${entry.id} ${entry.name}：文件扩展名是 .glb，format 应为 GLB，实际 "${entry.format}"`)
   }
 
+  // 缩略图必须是**从文件渲染出来的真实图片**，不能退回占位图
+  const thumbnail = entry.thumbnailUrl ?? ''
+  if (!thumbnail.startsWith('/assets/models/thumbnails/')) {
+    problems.push(
+      `${entry.id} ${entry.name}：缩略图应指向渲染图 /assets/models/thumbnails/*.png，实际 "${thumbnail}"`,
+    )
+  } else {
+    const thumbPath = join(publicRoot, thumbnail.replace(/^\//, ''))
+    if (!existsSync(thumbPath)) {
+      problems.push(`${entry.id} ${entry.name}：缩略图文件不存在 -> ${thumbnail}（跑 npm run gen:thumbnails 生成）`)
+    } else {
+      const bytes = statSync(thumbPath).size
+      // 真实渲染图至少几十 KB；占位图是内联 SVG，不会走到这里
+      if (bytes < 8 * 1024) {
+        problems.push(`${entry.id} ${entry.name}：缩略图只有 ${bytes} B，疑似不是真实渲染图`)
+      }
+      thumbnailInfo.push(`${entry.name} ${bytes} B`)
+    }
+  }
+
   rows.push({
     name: entry.name,
     kind: '真实文件',
@@ -157,6 +179,10 @@ for (const entry of entries) {
 console.log('内置模型元数据核对（数据源：public/ 下 GLB 实测）\n')
 for (const row of rows) {
   console.log(`  ${row.name.padEnd(10)} ${row.kind.padEnd(8)} ${row.detail}`)
+}
+if (thumbnailInfo.length > 0) {
+  console.log('\n渲染缩略图：')
+  for (const t of thumbnailInfo) console.log(`  ${t}`)
 }
 console.log(`\n条目总数 ${rows.length}（真实文件 ${rows.filter((r) => r.kind === '真实文件').length}，占位 ${rows.filter((r) => r.kind === '占位').length}）`)
 
