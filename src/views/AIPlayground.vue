@@ -85,7 +85,8 @@
         在<span class="ai-lead-accent">真实渲染的3D场地</span
         >里运行规则式智能体：它们读取场景里的真实感知、绕开障碍物并自主移动。
         <span class="ai-lead-muted"
-          >本页不含模型推理，也不做训练。碰撞为解析式计算（未接入刚体物理引擎，没有摩擦、反弹与质量）。</span
+          >本页不含模型推理，也不做训练。碰撞与运动由 Rapier 刚体物理引擎求解：有质量、摩擦、弹性，
+          撞上障碍物会被挡下并沿着箱体滑开。</span
         >
       </p>
       <div class="header-divider"></div>
@@ -226,9 +227,10 @@
           </div>
         </div>
 
-        <!-- 物理现状的页面可见说明：碰撞是解析式的，不是刚体物理 -->
+        <!-- 物理现状的页面可见说明：碰撞由 Rapier 刚体引擎求解 -->
         <p class="physics-note">
-          碰撞为解析式计算：演武场没有接入刚体物理引擎，智能体与障碍物靠包围盒判定，没有摩擦、反弹与质量。
+          物理由 Rapier 刚体引擎求解：智能体与障碍物都是真实刚体，有质量、摩擦与弹性；
+          感知（视野内障碍物数量、最近距离）直接来自引擎的形状查询，碰撞判定来自接触流形。
         </p>
       </div>
 
@@ -361,7 +363,7 @@ const updateCameraFromKeys = (delta: number) => {
   activeCamera.position.add(move)
 }
 
-const initializeScene = () => {
+const initializeScene = async () => {
   if (!viewportRef.value) return
   isLoading.value = true
 
@@ -377,6 +379,9 @@ const initializeScene = () => {
     controls.initControls()
     // 建出智能体与障碍物（场景对象由 useAI 持有）
     ai.syncScene()
+    // 建物理世界：地面、围墙、智能体与障碍物的刚体。
+    // ⚠️ 必须 await——Rapier 是按需加载的 WASM，没就绪之前刚体还不存在。
+    await ai.initPhysics()
 
     startAnimationLoop()
   } catch (error) {
@@ -395,7 +400,7 @@ const startAnimationLoop = () => {
 
     controls.updateControls()
     updateCameraFromKeys(delta)
-    // 推进智能体运动（状态读取自真实场景对象）
+    // 推进智能体运动：内部按固定步长（1/60 秒）切分，逐步施加转向冲量并步进物理引擎
     ai.updateAgents(delta)
 
     // 渲染场景
@@ -415,7 +420,8 @@ const cleanup = () => {
 }
 
 onMounted(() => {
-  initializeScene()
+  // 初始化是异步的（Rapier 要先加载 WASM），失败会在内部记日志
+  void initializeScene()
   // 窗口resize监听
   const handleResize = () => renderer.handleResize()
   window.addEventListener('resize', handleResize)

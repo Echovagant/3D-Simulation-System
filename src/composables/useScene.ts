@@ -3,17 +3,21 @@ import { onMounted, watch } from 'vue'
 import * as THREE from 'three'
 import { useThree } from './useThree'
 
-const GROUND_NAME = 'ai-arena-ground'
 const GRID_NAME = 'ai-arena-grid'
 const AMBIENT_LIGHT_NAME = 'ai-arena-ambient-light'
 const DIRECTIONAL_LIGHT_NAME = 'ai-arena-directional-light'
 
 /**
- * 演武场的静态布景：地面 + 网格 + 灯光。
+ * 演武场的静态布景：网格 + 灯光。
  *
  * ⚠️ 场景本身由 `useThree` 单例持有，这里只往里放东西；
- * `addLights` / `addGround` 都是**幂等**的（按名字查重），
+ * `addLights` / `addGrid` 都是**幂等**的（按名字查重），
  * 避免历史上"onMounted 里重复调用"造成的 2 个地面 + 4 个灯。
+ *
+ * ⚠️ 地面**不在这里**建：地面的外观与碰撞体必须是同一个物体，
+ * 否则会出现"看起来的地板"和"实际的地板"两个东西——
+ * 智能体会浮在看起来的地面上，或者陷进地板里。
+ * 地面由物理引擎在 `useAI.initPhysics()` 里一并建出来。
  */
 export function useScene() {
   const { scene, camera, renderer, initThree } = useThree()
@@ -34,20 +38,9 @@ export function useScene() {
     }
   }
 
-  /** 地面平面 + 网格辅助线（幂等） */
-  const addGround = (): void => {
+  /** 网格辅助线（幂等）——贴在地面顶面之上 1 厘米 */
+  const addGrid = (): void => {
     if (!scene.value) return
-    if (!scene.value.getObjectByName(GROUND_NAME)) {
-      const ground = new THREE.Mesh(
-        new THREE.PlaneGeometry(60, 60),
-        new THREE.MeshStandardMaterial({ color: 0x1f2530, roughness: 0.95, metalness: 0 }),
-      )
-      ground.name = GROUND_NAME
-      ground.rotation.x = -Math.PI / 2
-      ground.position.y = 0
-      ground.receiveShadow = true
-      scene.value.add(ground)
-    }
     if (!scene.value.getObjectByName(GRID_NAME)) {
       // 网格不用智能体那道亮黄——画面里唯一的黄色像素应当是智能体本身
       const grid = new THREE.GridHelper(60, 60, 0x6f7c8c, 0x39414f)
@@ -61,7 +54,7 @@ export function useScene() {
   const initScene = (): void => {
     initThree()
     addLights()
-    addGround()
+    addGrid()
   }
 
   // 渲染器就绪后按画布尺寸校正相机比例（保持画面不失真）
@@ -82,6 +75,6 @@ export function useScene() {
     scene,
     initScene,
     addLights,
-    addGround,
+    addGrid,
   }
 }

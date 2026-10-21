@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
-import { defineComponent, h } from 'vue'
+import { defineComponent, h, nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import * as THREE from 'three'
 import { useAiStore } from '@/stores/aiStore'
@@ -13,6 +13,8 @@ type AIApi = ReturnType<typeof useAI>
 
 const AGENT_MESH_PREFIX = 'ai-agent-'
 const OBSTACLE_MESH_PREFIX = 'ai-obstacle-'
+/** 场地半边长（米） */
+const ARENA_HALF_SIZE = 24
 
 let wrapper: VueWrapper | null = null
 
@@ -59,7 +61,28 @@ const makeDecision = (
   timestamp: Date.now(),
 })
 
-describe('useAI —— 智能体与场景的真实联动', () => {
+/**
+ * 起一个演武场。
+ *
+ * @param density 障碍物密度（0 = 空场地，方便断言纯运动学）
+ */
+const setupArena = async (density = 0): Promise<{ api: AIApi; store: ReturnType<typeof useAiStore> }> => {
+  const store = useAiStore()
+  store.updateEnvironmentSettings({ obstaclesDensity: density })
+  await nextTick()
+
+  const api = mountAI()
+  await api.initPhysics()
+  return { api, store }
+}
+
+/** 推进仿真若干秒（按固定步长喂真实时间） */
+const advance = (api: AIApi, seconds: number): void => {
+  const steps = Math.round(seconds * 60)
+  for (let i = 0; i < steps; i += 1) api.updateAgents(1 / 60)
+}
+
+describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     const three = useThree()
@@ -73,59 +96,53 @@ describe('useAI —— 智能体与场景的真实联动', () => {
     vi.useRealTimers()
   })
 
-  it('getAgentCurrentState 返回的是场景对象的真实坐标，而不是随机数', () => {
-    const api = mountAI()
-    api.syncScene()
-
-    const store = useAiStore()
+  it('智能体是真正的动态刚体：有质量、位置来自物理世界', async () => {
+    const { api, store } = await setupArena()
     const agent = store.agents[0]
-    const mesh = findAgentMesh(agent.id)
-    expect(mesh).not.toBeNull()
+    const mesh = findAgentMesh(agent.id)!
 
-    mesh!.position.set(3.5, 0.4, -7.25)
+    const body = mesh.userData.physics?.body
+    expect(body).toBeTruthy()
+    expect(body.isDynamic()).toBe(true)
+    // 质量是 2 千克（由密度 × 碰撞体体积反推）
+    expect(body.mass()).toBeCloseTo(2, 1)
 
-    const state = api.getAgentCurrentState(agent.id)
-    expect(state.position).toEqual([3.5, 0.4, -7.25])
-    expect(state.id).toBe(agent.id)
+    // 网格位置是刚体的镜像：改刚体，网格跟着走
+    body.setTranslation({ x: 3.5, y: 0.4, z: -7.25 }, true)
+    api.updateAgents(1 / 60)
+    expect(mesh.position.x).toBeCloseTo(3.5, 3)
+    expect(mesh.position.z).toBeCloseTo(-7.25, 3)
   })
 
-  it('executeAgentDecision 的 move 分支真的推动场景对象移动', () => {
-    const api = mountAI()
-    api.syncScene()
-
-    const store = useAiStore()
+  it('executeAgentDecision 的 move 分支真的推动智能体沿期望方向移动', async () => {
+    const { api, store } = await setupArena()
     const agent = store.agents[0]
     agent.status = 'running'
     const mesh = findAgentMesh(agent.id)!
-    mesh.position.set(0, 0.4, 0)
+    const start = mesh.position.clone()
 
     api.executeAgentDecision(makeDecision(agent.id, 'move', { direction: [1, 0, 0], speed: 5 }))
-    api.updateAgents(0.5)
+    advance(api, 1)
 
-    // 速度 5 m/s × 0.5 s = 2.5 m
-    expect(mesh.position.x).toBeCloseTo(2.5, 5)
-    expect(mesh.position.z).toBeCloseTo(0, 5)
+    expect(mesh.position.x - start.x).toBeGreaterThan(3)
+    expect(mesh.position.z - start.z).toBeCloseTo(0, 1)
   })
 
-  it('executeAgentDecision 的 rotate 分支把智能体掉头（两次 180° 转向产生相反位移）', () => {
-    const api = mountAI()
-    api.syncScene()
-
-    const store = useAiStore()
+  it('executeAgentDecision 的 rotate 分支把智能体掉头（两次相反朝向产生相反位移）', async () => {
+    const { api, store } = await setupArena()
     const agent = store.agents[0]
     agent.status = 'running'
     const mesh = findAgentMesh(agent.id)!
-    const start = new THREE.Vector3(0, 0.4, 0)
-    mesh.position.copy(start)
+    const start = mesh.position.clone()
 
     // 先用 move 把朝向钉在 +Z
     api.executeAgentDecision(makeDecision(agent.id, 'move', { direction: [0, 0, 1], speed: 5 }))
-    api.updateAgents(0.5)
+    advance(api, 1)
     const firstStep = mesh.position.clone().sub(start)
 
     // 再转 180°，应当朝反方向走
     api.executeAgentDecision(makeDecision(agent.id, 'rotate', { angle: Math.PI }))
-    api.updateAgents(0.5)
+    advance(api, 1)
     const secondStep = mesh.position.clone().sub(start).sub(firstStep)
 
     expect(firstStep.z).toBeGreaterThan(0)
@@ -133,65 +150,166 @@ describe('useAI —— 智能体与场景的真实联动', () => {
     expect(firstStep.dot(secondStep)).toBeLessThan(0)
   })
 
-  it('proximity 感知与场景里的障碍物几何一致（不是随机数）', () => {
-    const api = mountAI()
-    api.syncScene()
-
-    const store = useAiStore()
+  it('智能体撞上障碍物时不会被穿过去（碰撞由物理引擎的接触求解器处理）', async () => {
+    const { api, store } = await setupArena(0.5)
     const agent = store.agents[0]
+    agent.status = 'running'
     const mesh = findAgentMesh(agent.id)!
+
     const obstacles = findObstacleMeshes()
     expect(obstacles.length).toBeGreaterThan(0)
+    const obstacle = obstacles[0]
+    const box = new THREE.Box3().setFromObject(obstacle)
 
-    const state = api.getAgentCurrentState(agent.id)
-    const data = state.sensors.proximity.data as { obstacles: number; distance: number }
-
-    const distances = obstacles.map((obstacle) =>
-      new THREE.Box3().setFromObject(obstacle).distanceToPoint(mesh.position),
+    // 朝障碍物中心冲过去
+    const direction = obstacle.position.clone().sub(mesh.position)
+    direction.y = 0
+    direction.normalize()
+    api.executeAgentDecision(
+      makeDecision(agent.id, 'move', { direction: [direction.x, 0, direction.z], speed: 8 }),
     )
-    expect(data.distance).toBeCloseTo(Math.min(...distances), 4)
 
-    const range = Number(agent.parameters.awarenessRange) || 10
-    expect(data.obstacles).toBe(distances.filter((distance) => distance <= range).length)
+    let minSpeed = Number.POSITIVE_INFINITY
+    for (let i = 0; i < 240; i += 1) {
+      api.updateAgents(1 / 60)
+      // 一步都不能进到障碍物内部
+      expect(box.containsPoint(mesh.position)).toBe(false)
+      const velocity = mesh.userData.physics.body.linvel()
+      minSpeed = Math.min(minSpeed, Math.hypot(velocity.x, velocity.z))
+    }
+
+    // 撞上的那一刻，物理引擎吃掉了正对着障碍物的速度分量
+    expect(minSpeed).toBeLessThan(8 * 0.8)
   })
 
-  it('智能体撞上障碍物时不会穿过去（哪怕一步跨过整个障碍物）', () => {
-    const api = mountAI()
-    api.syncScene()
-
-    const store = useAiStore()
+  it('撞上障碍物时状态变成 collided（信号来自接触流形，不是坐标判定）', async () => {
+    const { api, store } = await setupArena(0.5)
     const agent = store.agents[0]
     agent.status = 'running'
     const mesh = findAgentMesh(agent.id)!
 
     const obstacle = findObstacleMeshes()[0]
-    const box = new THREE.Box3().setFromObject(obstacle)
-    const center = box.getCenter(new THREE.Vector3())
-    const obstacleWidth = box.max.x - box.min.x
+    const direction = obstacle.position.clone().sub(mesh.position)
+    direction.y = 0
+    direction.normalize()
+    api.executeAgentDecision(
+      makeDecision(agent.id, 'move', { direction: [direction.x, 0, direction.z], speed: 8 }),
+    )
 
-    // 一步跨过整个障碍物还多出 3 米——没有子步化的话，智能体会直接传到障碍物另一侧
-    const stepDistance = obstacleWidth + 3
-    const speed = stepDistance / 0.5
-    mesh.position.set(box.min.x - 1.5, 0.4, center.z)
-    api.executeAgentDecision(makeDecision(agent.id, 'move', { direction: [1, 0, 0], speed }))
-
-    for (let step = 0; step < 10; step += 1) {
-      api.updateAgents(0.5)
-      // 不能停在障碍物内部
-      expect(box.containsPoint(mesh.position)).toBe(false)
-      // 也不能直接传到障碍物另一侧（那说明碰撞检测被跳过了）
-      expect(mesh.position.x).toBeLessThan(box.max.x)
+    let sawCollision = false
+    for (let i = 0; i < 240; i += 1) {
+      api.updateAgents(1 / 60)
+      if (api.getAgentCurrentState(agent.id).status === 'collided') sawCollision = true
     }
+    expect(sawCollision).toBe(true)
   })
 
-  it('挂载时仿真已经开启，决策循环也会启动（immediate 的回归保护）', () => {
+  it('proximity 感知来自物理引擎：与碰撞体自己算出来的距离一致', async () => {
+    const { api, store } = await setupArena(0.5)
+    const agent = store.agents[0]
+    const mesh = findAgentMesh(agent.id)!
+
+    const state = api.getAgentCurrentState(agent.id)
+    const data = state.sensors.proximity.data as { obstacles: number; distance: number }
+
+    // 用碰撞体独立算一遍最近距离与视野内数量
+    const distances = findObstacleMeshes().map((obstacle) => {
+      const collider = obstacle.userData.physics.collider
+      const projection = collider.projectPoint(mesh.position, true)
+      return Math.hypot(
+        projection.point.x - mesh.position.x,
+        projection.point.y - mesh.position.y,
+        projection.point.z - mesh.position.z,
+      )
+    })
+    const range = Number(agent.parameters.awarenessRange) || 10
+
+    expect(data.distance).toBeCloseTo(Math.min(...distances), 3)
+    expect(data.obstacles).toBe(distances.filter((distance) => distance <= range).length)
+  })
+
+  it('固定步长：同样的总时间，切成不同步数推进的结果完全一致', async () => {
+    // 第一遍：60 次 1/60 秒
+    const first = await setupArena()
+    const agent1 = first.store.agents[0]
+    agent1.status = 'running'
+    const mesh1 = findAgentMesh(agent1.id)!
+    first.api.executeAgentDecision(makeDecision(agent1.id, 'move', { direction: [1, 0, 0], speed: 5 }))
+    for (let i = 0; i < 60; i += 1) first.api.updateAgents(1 / 60)
+    const fine = mesh1.position.clone()
+
+    // 拆掉重来：换一个全新的物理世界，避免求解器的热启动状态干扰对比
+    wrapper?.unmount()
+    wrapper = null
+
+    // 第二遍：30 次 1/30 秒（同样是一秒，但一步顶两步）
+    const second = await setupArena()
+    const agent2 = second.store.agents[0]
+    agent2.status = 'running'
+    const mesh2 = findAgentMesh(agent2.id)!
+    second.api.executeAgentDecision(makeDecision(agent2.id, 'move', { direction: [1, 0, 0], speed: 5 }))
+    for (let i = 0; i < 30; i += 1) second.api.updateAgents(1 / 30)
+    const coarse = mesh2.position.clone()
+
+    // 步数相同 → 轨迹逐位相同：仿真速度与显示帧率无关
+    expect(coarse.x).toBeCloseTo(fine.x, 6)
+    expect(coarse.z).toBeCloseTo(fine.z, 6)
+  })
+
+  it('围墙把智能体挡在场地里（边界由碰撞体守住）', async () => {
+    const { api, store } = await setupArena()
+    const agent = store.agents[0]
+    agent.status = 'running'
+    const mesh = findAgentMesh(agent.id)!
+
+    api.executeAgentDecision(makeDecision(agent.id, 'move', { direction: [1, 0, 0], speed: 8 }))
+    advance(api, 12)
+
+    // 墙的内表面在 x = 23.75，智能体半宽 0.4 → 中心最多到 23.35 附近
+    expect(mesh.position.x).toBeLessThan(ARENA_HALF_SIZE)
+    expect(mesh.position.x).toBeGreaterThan(ARENA_HALF_SIZE - 1.5)
+  })
+
+  it('暂停时智能体会停下来', async () => {
+    const { api, store } = await setupArena()
+    const agent = store.agents[0]
+    agent.status = 'running'
+    const mesh = findAgentMesh(agent.id)!
+
+    api.executeAgentDecision(makeDecision(agent.id, 'move', { direction: [1, 0, 0], speed: 5 }))
+    advance(api, 1)
+    const before = mesh.position.clone()
+
+    agent.status = 'paused'
+    advance(api, 1)
+
+    expect(mesh.position.distanceTo(before)).toBeLessThan(1)
+  })
+
+  it('移除智能体后对应的场景对象与刚体一起被移除', async () => {
+    const { api, store } = await setupArena()
+    const agent = store.agents[0]
+    const mesh = findAgentMesh(agent.id)
+    expect(mesh).not.toBeNull()
+    const body = mesh!.userData.physics.body
+
+    store.removeAgent(agent.id)
+    api.syncScene()
+
+    expect(findAgentMesh(agent.id)).toBeNull()
+    expect(body.isValid()).toBe(false)
+  })
+
+  it('挂载时仿真已经开启，决策循环也会启动（immediate 的回归保护）', async () => {
+    // ⚠️ 假时钟必须在挂载**之前**换上：决策循环是在 setup 里用 setInterval 建的，
+    // 之后再换假时钟，那个真实的定时器不会被接管。
     vi.useFakeTimers()
 
     const store = useAiStore()
     store.simulationActive = true
 
     const api = mountAI()
-    api.syncScene()
+    await api.initPhysics()
     const agent = store.agents[0]
     agent.status = 'running'
 
@@ -202,36 +320,23 @@ describe('useAI —— 智能体与场景的真实联动', () => {
     expect(agent.logs.some((log) => log.message.startsWith('决定:'))).toBe(true)
   })
 
-  it('仿真运行时智能体确实在场景里移动（决策 → 执行 → 位置变化）', () => {
+  it('仿真运行时智能体确实在场景里移动（决策 → 执行 → 位置变化）', async () => {
     vi.useFakeTimers()
 
     const store = useAiStore()
     store.simulationActive = true
 
     const api = mountAI()
-    api.syncScene()
+    await api.initPhysics()
     const agent = store.agents[0]
     agent.status = 'running'
     const mesh = findAgentMesh(agent.id)!
     const start = mesh.position.clone()
 
     vi.advanceTimersByTime(200)
+    vi.useRealTimers()
     api.updateAgents(0.2)
 
     expect(mesh.position.distanceTo(start)).toBeGreaterThan(0)
-  })
-
-  it('移除智能体后对应的场景对象也被移除', () => {
-    const api = mountAI()
-    api.syncScene()
-
-    const store = useAiStore()
-    const agent = store.agents[0]
-    expect(findAgentMesh(agent.id)).not.toBeNull()
-
-    store.removeAgent(agent.id)
-    api.syncScene()
-
-    expect(findAgentMesh(agent.id)).toBeNull()
   })
 })
