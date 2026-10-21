@@ -85,8 +85,9 @@
         在<span class="ai-lead-accent">真实渲染的3D场地</span
         >里运行规则式智能体：它们读取场景里的真实感知、绕开障碍物并自主移动。
         <span class="ai-lead-muted"
-          >本页不含模型推理，也不做训练。碰撞与运动由 Rapier 刚体物理引擎求解：有质量、摩擦、弹性，
-          撞上障碍物会被挡下并沿着箱体滑开。</span
+          >碰撞与运动由 Rapier 刚体物理引擎求解：有质量、摩擦、弹性，
+          撞上障碍物会被挡下并沿着箱体滑开。默认不调用任何外部模型；
+          若自行填入 API Key，右侧面板还可开启 LLM 决策与旁路解释。</span
         >
       </p>
       <div class="header-divider"></div>
@@ -252,6 +253,23 @@
           </div>
           <AiDebugPanel />
         </div>
+
+        <div class="panel right-panel animate-fade-in-left delay-100">
+          <div class="panel-glow"></div>
+          <div class="panel-header">
+            <span class="ai-panel-title">
+              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
+                <path
+                  fill-rule="evenodd"
+                  d="M10 3a3 3 0 00-3 3v1a3 3 0 00-2 5.2A3 3 0 007 17h1a1 1 0 001-1v-2h2v2a1 1 0 001 1h1a3 3 0 004-4.8A3 3 0 0015 7V6a3 3 0 00-3-3H10zm0 2h2a1 1 0 011 1v1a1 1 0 001 1 1 1 1 0 011 1 1 1 0 00-1 1v1a1 1 0 01-1 1h-1a1 1 0 01-1-1v-2H9v2a1 1 0 01-1 1H7a1 1 0 01-1-1 1 1 0 00-1-1 1 1 0 010-2 1 1 0 001-1V6a1 1 0 011-1z"
+                  clip-rule="evenodd"
+                />
+              </svg>
+              LLM 增强
+            </span>
+          </div>
+          <LlmPanel :agent-id="explainTargetId" :get-snapshot="getSnapshot" />
+        </div>
       </div>
     </div>
 
@@ -281,7 +299,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { useThree } from '@/composables/useThree'
 import { useCamera } from '@/composables/useCamera'
@@ -289,9 +307,11 @@ import { useScene } from '@/composables/useScene'
 import { useRenderer } from '@/composables/useRenderer'
 import { useControls } from '@/composables/useControls'
 import { useAI } from '@/composables/useAI'
+import { useAiStore } from '@/stores/aiStore'
 import AiController from '@/components/three/ai/AiController.vue'
 import AiDebugPanel from '@/components/three/ai/AiDebugPanel.vue'
 import AiEnvironmentPanel from '@/components/three/ai/AiEnvironmentPanel.vue'
+import LlmPanel from '@/components/three/ai/LlmPanel.vue'
 
 // DOM引用
 const viewportRef = ref<HTMLDivElement | null>(null)
@@ -304,6 +324,15 @@ const scene = useScene()
 const renderer = useRenderer()
 const controls = useControls()
 const ai = useAI()
+const aiStore = useAiStore()
+
+/** 旁路解释针对哪个智能体：优先选中的，否则第一个 */
+const explainTargetId = computed<string | null>(
+  () => aiStore.selectedAgentId ?? aiStore.agents[0]?.id ?? null,
+)
+
+/** 取智能体当前状态快照（LLM 面板要用） */
+const getSnapshot = (agentId: string) => ai.buildSnapshot(agentId)
 
 let animationId: number | null = null
 const clock = new THREE.Clock()

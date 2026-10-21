@@ -5,6 +5,7 @@ import { defineComponent, h, nextTick } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import * as THREE from 'three'
 import { useAiStore } from '@/stores/aiStore'
+import { useLlmStore } from '@/stores/llmStore'
 import { useThree } from './useThree'
 import { useAI } from './useAI'
 import type { AiDecision } from '@/types'
@@ -81,6 +82,17 @@ const advance = (api: AIApi, seconds: number): void => {
   const steps = Math.round(seconds * 60)
   for (let i = 0; i < steps; i += 1) api.updateAgents(1 / 60)
 }
+
+/** 造一个最小可用的 Response 替身（LLM 客户端会读 choices[0].message.content） */
+const jsonResponse = (content: string): Response =>
+  ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: { get: () => null },
+    json: async () => ({ id: 'r1', choices: [{ message: { content } }] }),
+    text: async () => '',
+  }) as unknown as Response
 
 describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
   beforeEach(() => {
@@ -286,6 +298,21 @@ describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
     expect(mesh.position.distanceTo(before)).toBeLessThan(1)
   })
 
+  it('空场地（障碍物密度 0）时感知不炸——Rapier 的全局投影查询在"过滤器全拒"时会 panic', async () => {
+    const { api, store } = await setupArena(0)
+    const agent = store.agents[0]
+
+    const state = api.getAgentCurrentState(agent.id)
+    const data = state.sensors.proximity.data as { obstacles: number; distance: number }
+    expect(data.obstacles).toBe(0)
+    expect(data.distance).toBe(999)
+
+    // 喂给 LLM 的快照也不能炸
+    const snapshot = api.buildSnapshot(agent.id)
+    expect(snapshot).not.toBeNull()
+    expect(snapshot?.nearestObstacleDistance).toBe(999)
+  })
+
   it('移除智能体后对应的场景对象与刚体一起被移除', async () => {
     const { api, store } = await setupArena()
     const agent = store.agents[0]
@@ -298,6 +325,68 @@ describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
 
     expect(findAgentMesh(agent.id)).toBeNull()
     expect(body.isValid()).toBe(false)
+  })
+
+  it('LLM 控制器模式下动作来自模型，而不是规则式', async () => {
+    const { api, store } = await setupArena()
+    const agent = store.agents[0]
+    agent.status = 'running'
+
+    const llm = useLlmStore()
+    llm.applyKey('unit-test-key')
+    llm.mode = 'llm'
+
+    // 模型说"转 180 度"——空场地里规则式只会说 move，所以出现 rotate 就证明动作来自模型
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse('{"action":"rotate","angle":3.14159}')),
+    )
+
+    // ⚠️ 假时钟必须在决策循环创建**之前**换上：循环是 setInterval，
+    // 之后再换假时钟，那个真实的定时器不会被接管。
+    vi.useFakeTimers()
+    store.simulationActive = true
+    await nextTick()
+
+    await vi.advanceTimersByTimeAsync(150) // 决策循环跑一拍 → 发出请求
+    await vi.advanceTimersByTimeAsync(150) // 模型回复到货 → 下一拍执行
+
+    expect(api.decisionQueue.value.some((decision) => decision.action === 'rotate')).toBe(true)
+    vi.unstubAllGlobals()
+  })
+
+  it('LLM 调用失败时自动回落到规则式，智能体照样动', async () => {
+    const { api, store } = await setupArena()
+    const agent = store.agents[0]
+    agent.status = 'running'
+    const mesh = findAgentMesh(agent.id)!
+
+    const llm = useLlmStore()
+    llm.applyKey('unit-test-key')
+    llm.mode = 'llm'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down')
+      }),
+    )
+
+    vi.useFakeTimers()
+    store.simulationActive = true
+    await nextTick()
+
+    await vi.advanceTimersByTimeAsync(150)
+    await vi.advanceTimersByTimeAsync(150)
+
+    // 降级状态被点亮
+    expect(llm.degraded).toBe(true)
+    // 规则式接管：智能体继续朝目标点走
+    expect(api.decisionQueue.value.some((decision) => decision.action === 'move')).toBe(true)
+    const before = mesh.position.clone()
+    vi.useRealTimers()
+    advance(api, 1)
+    expect(mesh.position.distanceTo(before)).toBeGreaterThan(0)
+    vi.unstubAllGlobals()
   })
 
   it('挂载时仿真已经开启，决策循环也会启动（immediate 的回归保护）', async () => {

@@ -1,0 +1,160 @@
+// @vitest-environment jsdom
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
+import { useLlmStore } from './llmStore'
+import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '@/services/llm/secret'
+import { llmConfig } from '@/config/llm'
+import type { AgentSnapshot } from '@/services/llm/prompts'
+
+/**
+ * 一个"长得像密钥"的假 key——只用来验证它不会进响应式状态。
+ * 仓库里不允许出现真密钥，所以这行显式豁免（闸门：scripts/check-no-secrets.mjs）。
+ */
+const FAKE_KEY = 'sk-secret-value-123456' // secret-scan: allow
+
+const snapshot: AgentSnapshot = {
+  id: 'agent-1',
+  name: '导航机器人',
+  type: 'basic',
+  position: [0, 0.4, 0],
+  velocity: [0, 0, 0],
+  goalDirection: [0, 1],
+  goal: [0, 0.4, 10],
+  nearestObstacleDistance: 100,
+  obstaclesInRange: 0,
+  awarenessRange: 10,
+  maxSpeed: 8,
+  collided: false,
+}
+
+const okResponse = (content: string) =>
+  ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: { get: () => null },
+    json: async () => ({ id: 'r1', choices: [{ message: { content } }] }),
+    text: async () => '',
+  }) as unknown as Response
+
+describe('LLM store', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    clearApiKey()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('key 只进内存，不出现在 store 的状态里', () => {
+    const store = useLlmStore()
+    expect(store.configured).toBe(false)
+
+    store.applyKey(FAKE_KEY)
+
+    expect(store.configured).toBe(true)
+    expect(hasApiKey()).toBe(true)
+    // ⚠️ 整个状态序列化一遍都不该出现 key——它不在响应式里
+    expect(JSON.stringify(store.$state)).not.toContain(FAKE_KEY)
+    expect(Object.keys(store.$state)).not.toContain('apiKey')
+  })
+
+  it('清除 key 后状态回到未配置', () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    store.clearKey()
+    expect(store.configured).toBe(false)
+    expect(hasApiKey()).toBe(false)
+  })
+
+  it('没配 key 时请求动作直接失败，不会出网', async () => {
+    const store = useLlmStore()
+    let called = false
+    vi.stubGlobal('fetch', async () => {
+      called = true
+      return okResponse('{}')
+    })
+
+    const action = await store.requestAction(snapshot)
+    expect(action).toBeNull()
+    expect(called).toBe(false)
+    expect(store.lastError).toContain('未配置')
+  })
+
+  it('模型返回可用动作时能解析出来', async () => {
+    const store = useLlmStore()
+    store.applyKey('test-key')
+    vi.stubGlobal('fetch', async () =>
+      okResponse('{"action":"move","direction":[0,1],"speed":4}'),
+    )
+
+    const action = await store.requestAction(snapshot)
+    expect(action?.action).toBe('move')
+    expect(action?.speed).toBe(4)
+    expect(store.callCount).toBe(1)
+    expect(store.degraded).toBe(false)
+  })
+
+  it('模型返回无法解析的内容时返回 null（调用方回落规则式）', async () => {
+    const store = useLlmStore()
+    store.applyKey('test-key')
+    vi.stubGlobal('fetch', async () => okResponse('我想让它往前走。'))
+
+    const action = await store.requestAction(snapshot)
+    expect(action).toBeNull()
+    expect(store.lastError).toContain('无法解析')
+  })
+
+  it('超过调用上限后不再发请求', async () => {
+    const store = useLlmStore()
+    store.applyKey('test-key')
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      return okResponse('{"action":"wait"}')
+    })
+
+    for (let i = 0; i < llmConfig.maxCallsPerSession; i += 1) {
+      await store.requestAction(snapshot)
+    }
+    expect(calls).toBe(llmConfig.maxCallsPerSession)
+
+    const action = await store.requestAction(snapshot)
+    expect(action).toBeNull()
+    expect(calls).toBe(llmConfig.maxCallsPerSession)
+    expect(store.lastError).toContain('上限')
+  })
+
+  it('调用失败会记下错误并进入降级状态', async () => {
+    const store = useLlmStore()
+    store.applyKey('test-key')
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('network down')
+    })
+
+    const action = await store.requestAction(snapshot)
+    expect(action).toBeNull()
+    expect(store.lastError).toContain('请求失败')
+    store.markDegraded('已回落到规则式')
+    expect(store.degraded).toBe(true)
+  })
+
+  it('解释请求成功时把文本放进 explanation', async () => {
+    const store = useLlmStore()
+    store.applyKey('test-key')
+    vi.stubGlobal('fetch', async () => okResponse('因为前方有箱子挡路，所以它往右绕。'))
+
+    const text = await store.requestExplanation(snapshot)
+    expect(text).toContain('箱子')
+    expect(store.explanation).toContain('箱子')
+    expect(store.explaining).toBe(false)
+  })
+
+  it('key 的读取入口在 secret 模块，不经过 store', () => {
+    setApiKey('another-secret')
+    expect(getApiKey()).toBe('another-secret')
+    clearApiKey()
+    expect(getApiKey()).toBe('')
+  })
+})

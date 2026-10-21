@@ -3,10 +3,13 @@ import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import type * as RapierModule from '@dimforge/rapier3d'
 import { useAiStore, type AiAgent } from '@/stores/aiStore'
+import { useLlmStore } from '@/stores/llmStore'
 import { useThree } from './useThree'
 import { usePhysics } from './usePhysics'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
 import { simulationConfig } from '@/config/simulation'
+import { llmConfig } from '@/config/llm'
+import type { AgentSnapshot, LlmAction } from '@/services/llm/prompts'
 import type { AiDecision, AiAgentState } from '@/types'
 
 /** 场地半边长（米）——智能体被限制在这个范围内（由四面墙挡住） */
@@ -39,6 +42,8 @@ const WALL_HEIGHT = 1.2
 const WALL_THICKNESS = 0.5
 /** 决策周期（毫秒） */
 const DECISION_INTERVAL_MS = 100
+/** 智能体允许的最大速度（米/秒）——LLM 给的速度会被夹在这个范围内 */
+const LLM_MAX_SPEED = 8
 /** 避障判定半径（米） */
 const AVOID_DISTANCE = 3.5
 /** 避障转向角（弧度） */
@@ -71,6 +76,10 @@ interface AgentRuntime {
   goalIndex: number
   /** 最近一次感知时是否真的撞上了障碍物（来自物理引擎的接触流形） */
   blocked: boolean
+  /** 上一次执行的动作（喂给 LLM 当上下文） */
+  lastAction?: string
+  /** 上一次执行的动作参数 */
+  lastParameters?: Record<string, unknown>
   /** 智能体在物理世界里的刚体 */
   body: RapierModule.RigidBody | null
   /** 智能体在物理世界里的碰撞体 */
@@ -109,6 +118,14 @@ const arenaObstacles: ArenaObstacle[] = []
 const arenaWalls: THREE.Object3D[] = []
 /** 障碍物碰撞体的句柄集合——感知查询靠它把"障碍物"和"地面/围墙/其它智能体"区分开 */
 const obstacleColliderHandles = new Set<number>()
+/** LLM 决策已到货、等待下一拍执行 */
+const llmDecisions = new Map<string, AiDecision>()
+/** 正在飞行的 LLM 请求（每个智能体最多一个） */
+const llmInFlight = new Set<string>()
+/** 上一拍 LLM 失败、这一拍要回落规则式的智能体 */
+const llmFallbacks = new Set<string>()
+/** 上一次发起 LLM 请求的时间戳（毫秒） */
+let lastLlmRequestAt = 0
 /** 上一次构建障碍物时的密度，用来判断需不需要重建 */
 let lastObstacleDensity: number | null = null
 
@@ -139,6 +156,7 @@ const goalPosition = (index: number): THREE.Vector3 => {
 
 export function useAI() {
   const aiStore = useAiStore()
+  const llm = useLlmStore()
   const three = useThree()
   const physics = usePhysics()
 
@@ -158,71 +176,43 @@ export function useAI() {
     simulationConfig.physics.maxFrameDelta,
   )
 
-  /** 感知查询用的球形查询体，按半径缓存（同一个半径复用同一个 WASM 对象） */
-  const senseBalls = new Map<number, RapierModule.Ball>()
-  const getSenseBall = (radius: number): RapierModule.Ball | null => {
-    const cached = senseBalls.get(radius)
-    if (cached) return cached
-    const engine = physics.getRapierModule()
-    if (!engine) return null
-    const ball = new engine.Ball(radius)
-    senseBalls.set(radius, ball)
-    return ball
-  }
-
   /**
    * 感知：视野内的障碍物数量与最近距离。
    *
-   * ⚠️ 两个数字都来自**物理引擎的查询**，不是手算的包围盒：
-   * - 数量：`world.intersectionsWithShape` 用一个半径等于感知范围的球做形状查询；
-   * - 最近距离：`world.projectPoint` 把智能体所在点投影到最近的障碍物碰撞体上。
+   * ⚠️ 两个数字都来自**物理引擎的形状计算**（`collider.projectPoint` 把智能体所在点
+   * 投影到障碍物表面上），不是手算的包围盒。
+   *
+   * ⚠️ 这里刻意**不用** `world.projectPoint` 的全局查询：那个接口的过滤回调
+   * 一旦把所有碰撞体都拒掉（空场地就是如此），Rapier 0.19.3 会在 WASM 内部
+   * 直接 panic 并污染整个实例。逐碰撞体查询没有这个风险，
+   * 而且碰撞体最多十几个，比全局查询还快。
    */
   const senseObstacles = (position: THREE.Vector3, range: number): ObstacleSense => {
-    const world = physics.world.value
-    if (!world) return { count: 0, distance: NO_OBSTACLE_DISTANCE, nearestPoint: null }
-
-    const isObstacle = (collider: RapierModule.Collider | null): boolean =>
-      Boolean(collider) && obstacleColliderHandles.has(collider!.handle)
-
-    // 最近障碍物：把当前点投影到最近的障碍物表面上
+    let count = 0
     let distance = NO_OBSTACLE_DISTANCE
     let nearestPoint: THREE.Vector3 | null = null
-    const projection = world.projectPoint(
-      { x: position.x, y: position.y, z: position.z },
-      true,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      isObstacle,
-    )
-    if (projection) {
-      nearestPoint = new THREE.Vector3(
-        projection.point.x,
-        projection.point.y,
-        projection.point.z,
-      )
-      distance = nearestPoint.distanceTo(position)
-    }
 
-    // 视野内的障碍物数量：一次球形形状查询
-    let count = 0
-    const ball = getSenseBall(range)
-    if (ball) {
-      world.intersectionsWithShape(
-        { x: position.x, y: position.y, z: position.z },
-        { x: 0, y: 0, z: 0, w: 1 },
-        ball,
-        (collider) => {
-          if (isObstacle(collider)) count += 1
-          return true
-        },
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        isObstacle,
-      )
+    for (const obstacle of arenaObstacles) {
+      const collider = obstacle.collider
+      if (!collider) continue
+
+      // 引擎把点投影到碰撞体表面上：得到的是"到障碍物表面的真实距离"
+      const projection = collider.projectPoint(position, true)
+      if (!projection) continue
+      const dx = projection.point.x - position.x
+      const dy = projection.point.y - position.y
+      const dz = projection.point.z - position.z
+      const gap = Math.hypot(dx, dy, dz)
+
+      if (gap <= range) count += 1
+      if (gap < distance) {
+        distance = gap
+        nearestPoint = new THREE.Vector3(
+          projection.point.x,
+          projection.point.y,
+          projection.point.z,
+        )
+      }
     }
 
     return { count, distance, nearestPoint }
@@ -674,6 +664,10 @@ export function useAI() {
     const object = agentObjects.get(decision.agentId)
     if (!runtime || !object) return
 
+    // 记下这次动作——LLM 解释层与控制器都要拿它当上下文
+    runtime.lastAction = decision.action
+    runtime.lastParameters = { ...decision.parameters }
+
     switch (decision.action) {
       case 'move': {
         const direction = decision.parameters.direction
@@ -723,6 +717,128 @@ export function useAI() {
     }
   }
 
+  /**
+   * 把决策写进队列并执行——规则式与 LLM 两条路走的是**同一段代码**。
+   *
+   * 这一点很重要：LLM 只决定"往哪走"，位移照样由冲量控制器算、
+   * 由 Rapier 积分。换控制器不会改变物理层的行为。
+   */
+  const applyDecision = (decision: AiDecision): void => {
+    decisionQueue.value.push(decision)
+    if (decisionQueue.value.length > 100) {
+      decisionQueue.value = decisionQueue.value.slice(-50)
+    }
+    executeAgentDecision(decision)
+  }
+
+  /** 智能体当前状态的快照——喂给 LLM 的全部输入 */
+  const buildSnapshot = (agentId: string): AgentSnapshot | null => {
+    const object = agentObjects.get(agentId)
+    const runtime = agentRuntimes.get(agentId)
+    const agent = aiStore.agents.find((item) => item.id === agentId)
+    if (!object || !runtime || !agent) return null
+
+    const awareness = Number(agent.parameters.awarenessRange) || 10
+    const sense = senseObstacles(object.position, awareness)
+
+    const toGoal = runtime.goal.clone().sub(object.position)
+    toGoal.y = 0
+    const length = toGoal.length()
+    const goalDirection: [number, number] =
+      length > 1e-6 ? [toGoal.x / length, toGoal.z / length] : [0, 1]
+
+    return {
+      id: agent.id,
+      name: agent.name,
+      type: agent.type,
+      position: [object.position.x, object.position.y, object.position.z],
+      velocity: [runtime.velocity.x, runtime.velocity.y, runtime.velocity.z],
+      goalDirection,
+      goal: [runtime.goal.x, runtime.goal.y, runtime.goal.z],
+      nearestObstacleDistance: sense.distance,
+      obstaclesInRange: sense.count,
+      awarenessRange: awareness,
+      maxSpeed: LLM_MAX_SPEED,
+      collided: runtime.blocked,
+      lastAction: runtime.lastAction,
+      lastParameters: runtime.lastParameters,
+    }
+  }
+
+  /** LLM 给的动作 → 仓库统一的决策结构 */
+  const toAiDecision = (agentId: string, action: LlmAction): AiDecision => {
+    const base = { agentId, confidence: 0.8, timestamp: Date.now() }
+    if (action.action === 'move' && action.direction) {
+      return {
+        ...base,
+        action: 'move',
+        parameters: {
+          direction: [action.direction[0], 0, action.direction[1]],
+          speed: action.speed ?? 5,
+        },
+      }
+    }
+    if (action.action === 'rotate') {
+      return { ...base, action: 'rotate', parameters: { angle: action.angle ?? 0 } }
+    }
+    return { ...base, action: 'wait', parameters: {} }
+  }
+
+  /**
+   * LLM 控制器的一拍。
+   *
+   * LLM 是**异步且慢**的（一次往返几秒），所以这里刻意不让它阻塞仿真：
+   * - 有到货的决策 → 这一拍执行它
+   * - 请求还在飞 → 这一拍什么都不做，智能体沿用上一次的期望速度
+   * - 上次失败 → 这一拍回落到规则式，并把智能体标记为"已降级"
+   *
+   * @returns true 表示这一拍已经处理了（不需要再走规则式）
+   */
+  const handleLlmDecision = (agentId: string): boolean => {
+    const ready = llmDecisions.get(agentId)
+    if (ready) {
+      llmDecisions.delete(agentId)
+      applyDecision(ready)
+      return true
+    }
+
+    if (llmFallbacks.has(agentId)) {
+      llmFallbacks.delete(agentId)
+      return false
+    }
+
+    if (llmInFlight.has(agentId)) return true
+
+    // 频率限制：LLM 再快也不该比这个频率更密
+    const now = Date.now()
+    if (now - lastLlmRequestAt < llmConfig.minIntervalMs) return true
+    lastLlmRequestAt = now
+
+    const snapshot = buildSnapshot(agentId)
+    if (!snapshot) return true
+
+    llmInFlight.add(agentId)
+    llm
+      .requestAction(snapshot)
+      .then((action) => {
+        llmInFlight.delete(agentId)
+        if (!action) {
+          // 没拿到可用动作 → 这一拍回落到规则式，并把降级状态亮出来
+          llmFallbacks.add(agentId)
+          llm.markDegraded(llm.lastError || 'LLM 控制器不可用，已回落到规则式')
+          return
+        }
+        llm.clearDegraded()
+        llmDecisions.set(agentId, toAiDecision(agentId, action))
+      })
+      .catch(() => {
+        llmInFlight.delete(agentId)
+        llmFallbacks.add(agentId)
+        llm.markDegraded('LLM 控制器调用异常，已回落到规则式')
+      })
+    return true
+  }
+
   const startSimulationLoop = (): void => {
     stopSimulationLoop()
     let lastTime = Date.now()
@@ -735,13 +851,15 @@ export function useAI() {
 
       aiStore.activeAgents.forEach((agent) => {
         if (agent.status !== 'running') return
+
+        // LLM 控制器模式：只有用户显式切过去、且确实配了 key 才走这条路
+        if (llm.mode === 'llm' && llm.configured) {
+          if (handleLlmDecision(agent.id)) return
+        }
+
         const decision = generateAgentDecision(agent.id)
         if (!decision) return
-        decisionQueue.value.push(decision)
-        if (decisionQueue.value.length > 100) {
-          decisionQueue.value = decisionQueue.value.slice(-50)
-        }
-        executeAgentDecision(decision)
+        applyDecision(decision)
       })
     }, DECISION_INTERVAL_MS)
   }
@@ -790,6 +908,10 @@ export function useAI() {
     arenaObstacles.length = 0
     arenaWalls.length = 0
     obstacleColliderHandles.clear()
+    llmDecisions.clear()
+    llmInFlight.clear()
+    llmFallbacks.clear()
+    lastLlmRequestAt = 0
     lastObstacleDensity = null
     accumulator.reset()
   }
@@ -822,6 +944,8 @@ export function useAI() {
     updateAgents,
     syncScene,
     initPhysics,
+    /** 智能体当前状态快照——LLM 解释层用它当输入 */
+    buildSnapshot,
     cleanup,
   }
 }
