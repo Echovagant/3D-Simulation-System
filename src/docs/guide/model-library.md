@@ -3,7 +3,7 @@
 模型库（路由 `/model-library`）用于浏览、管理并把 3D 模型资产送进场景编辑器。
 
 **请先了解当前状态**：库内共 9 个条目，**全部指向仓库中真实存在的模型文件，都能真正加载**。
-其中 7 个是本仓库自己程序化生成的，2 个是第三方资产（署名见 [`NOTICE`](https://github.com/Echovagant/3D-Simulation-System/blob/main/NOTICE)）。
+**9 个全部是本仓库自己程序化生成的**——仓库里不含任何第三方模型素材。
 上传功能目前是“伪上传”，不会真的保存文件。下面的《当前限制》一节有完整说明。
 
 ## 页面结构
@@ -91,8 +91,8 @@
 | 名称 | 类别 | `modelUrl` | 大小 | 多边形 | 材质 | 动画 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 机甲 | 角色 | `/assets/models/characters/mech.glb` | 79,940 B | 656 | 7 | 0 | 本仓库生成 |
-| 狐狸 | 角色 | `/assets/models/characters/Fox.glb` | 162,852 B | 576 | 1 | 3 | 第三方（CC BY 4.0） |
-| 破损头盔 | 角色 | `/assets/models/characters/DamagedHelmet.glb` | 3,773,916 B | 15,452 | 1 | 0 | 第三方（CC BY 4.0） |
+| 无人机 | 角色 | `/assets/models/characters/drone.glb` | 94,136 B | 796 | 6 | 0 | 本仓库生成 |
+| 悬浮守卫 | 角色 | `/assets/models/characters/hover-guardian.glb` | 163,156 B | 1,580 | 6 | 0 | 本仓库生成 |
 | 太空站内部 | 环境 | `/assets/models/environments/space-station-interior.glb` | 170,296 B | 1,616 | 9 | 0 | 本仓库生成 |
 | 森林场景 | 环境 | `/assets/models/environments/forest.glb` | 78,544 B | 664 | 4 | 0 | 本仓库生成 |
 | 城市街道 | 环境 | `/assets/models/environments/city-street.glb` | 47,292 B | 340 | 6 | 0 | 本仓库生成 |
@@ -129,7 +129,7 @@
 三点光渲染后截的图。
 
 > 脚本会按当前骨骼变换算包围盒（`SkinnedMesh.computeBoundingBox()`），
-> 而不是绑定姿态的包围盒——后者对蒙皮模型会算得偏大，狐狸就大了好几倍。
+> 而不是绑定姿态的包围盒——后者对蒙皮模型会算得偏大。
 
 占位图由 `src/utils/thumbnail.ts` 在本地生成（不引入二进制资源，天然离线可用），
 只画首字，**背景由 CSS 的 `.model-preview--<category>` 提供**，配色只有一个真源：
@@ -140,7 +140,7 @@
 ## 当前限制汇总
 
 - 9 个内置条目**全部可加载**，文件属性都是实测值并有闸门核对。
-- 7 个是程序化生成的低多边形模型，造型偏风格化，不是写实资产；狐狸与破损头盔是第三方资产。
+- 全部 9 个都是程序化生成的低多边形模型，造型偏风格化，不是写实资产；仓库不含任何第三方模型素材。
 - 上传的条目只存在于本次会话：刷新即失效（界面用 `sessionOnly` 标注）。
 - “下载模型文件”只弹出提示框，不产生任何下载。
 - 删除条目只影响当前会话的内存数据，刷新页面后会恢复。

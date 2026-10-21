@@ -45,7 +45,9 @@ if (!entryName) {
 }
 const entryKB = (await stat(join(DIST, 'assets', entryName))).size / 1024
 const deps = Object.keys(pkg.dependencies).length
-const gateCount = Object.keys(pkg.scripts).filter((s) => s.startsWith('verify:')).length
+// 闸门数量：从 package.json 的 verify:* 脚本数出来，不写死。
+// 注意排除 verify:all —— 它是汇总入口，不是又一道闸门。
+const gateCount = Object.keys(pkg.scripts).filter((s) => s.startsWith('verify:') && s !== 'verify:all').length
 
 let testCases = '?'
 {

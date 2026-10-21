@@ -111,6 +111,11 @@ const expectWithin = (label, actual, pattern, tolerance, { group = 1 } = {}) => 
 // 运行时依赖
 expect('运行时依赖数', Object.keys(pkg.dependencies).length, /运行时依赖 \| (\d+) 个/)
 
+// 构建闸门数：verify:* 的脚本数，排除汇总入口 verify:all（它不是又一道闸门）
+const gateCount = Object.keys(pkg.scripts).filter((s) => s.startsWith('verify:') && s !== 'verify:all').length
+expect('构建闸门数（指标表）', gateCount, /<b>(\d+)<\/b><br><sub>构建闸门/)
+expect('构建闸门数（正文）', gateCount, /用 \*\*(\d+) 道构建闸门\*\*/)
+
 // Rapier 版本
 expect(
   'Rapier 版本',

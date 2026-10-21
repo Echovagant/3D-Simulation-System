@@ -24,17 +24,22 @@ const notes = []
 
 // ---------- 1. 资产清单 ----------
 
-/** 第三方资产：文件名 -> 必须在 NOTICE 里出现的署名片段 */
-const THIRD_PARTY = new Map([
-  ['DamagedHelmet.glb', 'Damaged Helmet'],
-  ['Fox.glb', 'Fox'],
-])
+/**
+ * 第三方资产：文件名 -> 必须在 NOTICE 里出现的署名片段。
+ *
+ * 当前是**空的**——仓库里所有资产都由本项目自己生成，不含第三方素材。
+ * 这张表留着是为了将来真要引入外部素材时，有个明确的位置记录它的署名，
+ * 而不是随手把文件丢进仓库。往里加一条，就必须在 NOTICE 里写上对应的署名。
+ */
+const THIRD_PARTY = new Map([])
 
 /** 本项目生成：路径匹配（相对仓库根） */
 const SELF_GENERATED = [
   /^docs\/assets\/cover\.png$/,
+  /^docs\/assets\/demo\.gif$/,
+  /^docs\/assets\/demo\.mp4$/,
   /^docs\/screenshots\/.+\.png$/,
-  /^public\/assets\/models\/(characters|environments|props)\/(mech|city-street|forest|space-station-interior|arcane-book|energy-blaster|terminal-console)\.glb$/,
+  /^public\/assets\/models\/(characters|environments|props)\/(mech|drone|hover-guardian|city-street|forest|space-station-interior|arcane-book|energy-blaster|terminal-console)\.glb$/,
   /^public\/assets\/models\/thumbnails\/.+\.png$/,
   /^src\/assets\/images\/logo\.png$/,
   /^src\/assets\/images\/logo\.svg$/,

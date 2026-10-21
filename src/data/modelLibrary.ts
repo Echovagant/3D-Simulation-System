@@ -36,9 +36,9 @@ export const isPlaceholderModel = (model: Pick<Model, 'modelUrl'>): boolean =>
  * 缩略图同样是**从这些文件渲染出来的**（npm run gen:thumbnails），
  * 不是占位图——卡片上看到的就是点进去加载到的东西。
  *
- * 其中 7 个模型是本仓库自己程序化生成的（scripts/model-recipes.mjs + generate-model-assets.mjs），
- * 随 Apache-2.0 发布，不涉及任何第三方素材授权；
- * 狐狸与破损头盔是第三方资产，署名见 NOTICE。
+ * 全部 9 个模型都是本仓库程序化生成的
+ * （几何配方 scripts/model-recipes.mjs + 生成器 scripts/generate-model-assets.mjs），
+ * 随 Apache-2.0 发布，不含任何第三方素材。
  */
 
 // 角色模型
@@ -59,30 +59,30 @@ export const createCharacterModels = (seed: number = 0): Model[] => [
   },
   {
     id: 'char-002',
-    name: '狐狸',
-    description: '低多边形狐狸，含 3 段循环动画',
+    name: '无人机',
+    description: '四旋翼巡检机，云台镜头与琥珀顶灯',
     category: 'characters',
-    thumbnailUrl: '/assets/models/thumbnails/Fox.png',
-    modelUrl: '/assets/models/characters/Fox.glb',
+    thumbnailUrl: '/assets/models/thumbnails/drone.png',
+    modelUrl: '/assets/models/characters/drone.glb',
     format: 'GLB',
-    size: 162852,
+    size: 94136,
     uploadDate: getRandomDate(seed + 1),
-    polyCount: 576,
-    materialCount: 1,
-    hasAnimation: true
+    polyCount: 796,
+    materialCount: 6,
+    hasAnimation: false
   },
   {
     id: 'char-003',
-    name: '破损头盔',
-    description: '带战斗损伤的飞行头盔，源自 Khronos glTF 示例资产',
+    name: '悬浮守卫',
+    description: '带独眼与三推进器的悬浮球形守卫',
     category: 'characters',
-    thumbnailUrl: '/assets/models/thumbnails/DamagedHelmet.png',
-    modelUrl: '/assets/models/characters/DamagedHelmet.glb',
+    thumbnailUrl: '/assets/models/thumbnails/hover-guardian.png',
+    modelUrl: '/assets/models/characters/hover-guardian.glb',
     format: 'GLB',
-    size: 3773916,
+    size: 163156,
     uploadDate: getRandomDate(seed + 2),
-    polyCount: 15452,
-    materialCount: 1,
+    polyCount: 1580,
+    materialCount: 6,
     hasAnimation: false
   }
 ];
