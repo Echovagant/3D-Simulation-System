@@ -71,7 +71,7 @@
         </div>
         <div class="model-info">
           <h3 class="model-name">{{ model.name }}</h3>
-          <p class="model-meta">{{ formatFileSize(model.size) }} · {{ formatDate(model.uploadDate) }}</p>
+          <p class="model-meta">{{ modelMeta(model) }}</p>
           <p v-if="model.sessionOnly" class="session-badge">仅本次会话有效</p>
         </div>
       </div>
@@ -185,11 +185,11 @@
                 </tr>
                 <tr>
                   <th>文件格式</th>
-                  <td>{{ selectedModel.format }}</td>
+                  <td>{{ isPlaceholder(selectedModel) ? '—' : selectedModel.format }}</td>
                 </tr>
                 <tr>
                   <th>文件大小</th>
-                  <td>{{ formatFileSize(selectedModel.size) }}</td>
+                  <td>{{ isPlaceholder(selectedModel) ? '—' : formatFileSize(selectedModel.size) }}</td>
                 </tr>
                 <tr>
                   <th>上传日期</th>
@@ -197,15 +197,15 @@
                 </tr>
                 <tr>
                   <th>多边形数量</th>
-                  <td>{{ selectedModel.polyCount.toLocaleString() }}</td>
+                  <td>{{ geomStat(selectedModel, selectedModel.polyCount.toLocaleString()) }}</td>
                 </tr>
                 <tr>
                   <th>材质数量</th>
-                  <td>{{ selectedModel.materialCount }}</td>
+                  <td>{{ geomStat(selectedModel, String(selectedModel.materialCount)) }}</td>
                 </tr>
                 <tr>
                   <th>是否包含动画</th>
-                  <td>{{ selectedModel.hasAnimation ? '是' : '否' }}</td>
+                  <td>{{ geomStat(selectedModel, selectedModel.hasAnimation ? '是' : '否') }}</td>
                 </tr>
                 </tbody>
               </table>
@@ -244,6 +244,8 @@ interface Model {
   name: string;
   thumbnailUrl: string;
   category: 'characters' | 'environments' | 'props';
+  /** 模型文件地址；'#' 表示占位条目（没有可加载的文件） */
+  modelUrl: string;
   format: string;
   size: number;
   uploadDate: string;
@@ -406,6 +408,32 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
   const category = categories.find(c => c.id === categoryId);
   return category ? category.name : '未知类别';
 };
+
+/**
+ * 占位条目没有可加载的文件，因此不报告任何文件属性。
+ * 界面显示「—」而不是一组看起来很真的假数字。
+ */
+const isPlaceholder = (model: Model): boolean => model.modelUrl === '#';
+
+/** 会话上传的模型没有做几何分析，面数/材质/动画是未知的 */
+const statsPending = (model: Model): boolean => model.sessionOnly === true;
+
+/**
+ * 面数 / 材质数 / 动画的显示值。
+ *
+ * 三种状态各有各的实话可说：
+ * - 占位条目：没有文件 → 「—」
+ * - 会话上传：文件在，但没解析过几何 → 「待分析」
+ * - 内置模型：数值真实，且由 verify:model-metadata 闸门逐项核对过
+ */
+const geomStat = (model: Model, value: string): string =>
+  isPlaceholder(model) ? '—' : statsPending(model) ? '待分析' : value;
+
+/** 卡片副标题：占位条目如实说明状态，其余显示真实文件属性 */
+const modelMeta = (model: Model): string =>
+  isPlaceholder(model)
+    ? '占位条目 · 暂无可加载文件'
+    : `${formatFileSize(model.size)} · ${formatDate(model.uploadDate)}`;
 </script>
 
 <style scoped>

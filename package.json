@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "run-p type-check \"build-only {@}\" -- && npm test && npm run verify:clean && npm run verify:no-babylon && npm run verify:overview-contrast && npm run verify:docs && npm run verify:bundle-size && npm run verify:deps && npm run verify:tailwind",
+    "build": "run-p type-check \"build-only {@}\" -- && npm test && npm run verify:clean && npm run verify:no-babylon && npm run verify:overview-contrast && npm run verify:docs && npm run verify:bundle-size && npm run verify:deps && npm run verify:tailwind && npm run verify:model-metadata",
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
@@ -19,7 +19,8 @@
     "verify:docs": "node scripts/check-docs.mjs",
     "verify:bundle-size": "node scripts/check-entry-bundle-size.mjs",
     "verify:tailwind": "node scripts/check-tailwind-classes.mjs",
-    "verify:all": "npm run verify:clean && npm run verify:no-babylon && npm run verify:overview-contrast && npm run verify:docs && npm run verify:deps && npm run verify:tailwind && npm run verify:bundle-size",
+    "verify:model-metadata": "node scripts/check-model-metadata.mjs",
+    "verify:all": "npm run verify:clean && npm run verify:no-babylon && npm run verify:overview-contrast && npm run verify:docs && npm run verify:deps && npm run verify:tailwind && npm run verify:bundle-size && npm run verify:model-metadata",
     "test": "vitest run",
     "test:watch": "vitest",
     "coverage": "vitest run --coverage"
