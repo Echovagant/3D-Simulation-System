@@ -90,7 +90,7 @@
 
 | 名称 | 类别 | `modelUrl` | 大小 | 多边形 | 材质 | 动画 | 来源 |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 士兵 | 角色 | `/assets/models/characters/soldier.glb` | 79,940 B | 656 | 7 | 0 | 本仓库生成 |
+| 机甲 | 角色 | `/assets/models/characters/mech.glb` | 79,940 B | 656 | 7 | 0 | 本仓库生成 |
 | 狐狸 | 角色 | `/assets/models/characters/Fox.glb` | 162,852 B | 576 | 1 | 3 | 第三方（CC BY 4.0） |
 | 破损头盔 | 角色 | `/assets/models/characters/DamagedHelmet.glb` | 3,773,916 B | 15,452 | 1 | 0 | 第三方（CC BY 4.0） |
 | 太空站内部 | 环境 | `/assets/models/environments/space-station-interior.glb` | 170,296 B | 1,616 | 9 | 0 | 本仓库生成 |

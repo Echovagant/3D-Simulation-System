@@ -3,12 +3,12 @@ import { createThumbnail } from './thumbnail'
 
 describe('createThumbnail', () => {
   it('生成 data:image/svg+xml 的 data URI', () => {
-    const url = createThumbnail('士兵', 'characters')
+    const url = createThumbnail('机甲', 'characters')
     expect(url.startsWith('data:image/svg+xml,')).toBe(true)
   })
 
   it('取名字的首字作为占位字符', () => {
-    expect(decodeURIComponent(createThumbnail('士兵', 'characters'))).toContain('>士<')
+    expect(decodeURIComponent(createThumbnail('机甲', 'characters'))).toContain('>机<')
     expect(decodeURIComponent(createThumbnail('A&B 测试', 'characters'))).toContain('>A<')
   })
 
@@ -20,7 +20,7 @@ describe('createThumbnail', () => {
   })
 
   it('背景透明——分类渐变在 CSS 里，配色只有一个真源', () => {
-    const svg = decodeURIComponent(createThumbnail('士兵', 'characters'))
+    const svg = decodeURIComponent(createThumbnail('机甲', 'characters'))
     expect(svg).not.toContain('linearGradient')
     expect(svg).not.toContain('<rect')
   })

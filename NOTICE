@@ -12,7 +12,7 @@ Bundled 3D model assets
 declarative geometry recipes (scripts/model-recipes.mjs). They are covered by
 the Apache License 2.0 in LICENSE and need no third-party attribution:
 
-  soldier.glb, space-station-interior.glb, forest.glb, city-street.glb,
+  mech.glb, space-station-interior.glb, forest.glb, city-street.glb,
   energy-blaster.glb, arcane-book.glb, terminal-console.glb
 
 The remaining two are third-party assets, redistributed unmodified. Both are

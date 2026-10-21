@@ -45,11 +45,11 @@ export const isPlaceholderModel = (model: Pick<Model, 'modelUrl'>): boolean =>
 export const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-001',
-    name: '士兵',
-    description: '风格化太空士兵，装甲与能源核心为靛紫主色',
+    name: '机甲',
+    description: '风格化机甲，装甲与能源核心为靛紫主色',
     category: 'characters',
-    thumbnailUrl: '/assets/models/thumbnails/soldier.png',
-    modelUrl: '/assets/models/characters/soldier.glb',
+    thumbnailUrl: '/assets/models/thumbnails/mech.png',
+    modelUrl: '/assets/models/characters/mech.glb',
     format: 'GLB',
     size: 79940,
     uploadDate: getRandomDate(seed + 0),

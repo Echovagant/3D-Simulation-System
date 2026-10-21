@@ -41,10 +41,10 @@ const P = (geo, pos, color, opts = {}) => ({ geo, pos, color, ...opts })
 export const MODEL_RECIPES = [
   {
     id: 'char-001',
-    file: 'soldier',
+    file: 'mech',
     category: 'characters',
-    name: '士兵',
-    description: '风格化太空士兵，装甲与能源核心为靛紫主色',
+    name: '机甲',
+    description: '风格化机甲，装甲与能源核心为靛紫主色',
     targetSize: 2.0,
     parts: [
       P(G.box(0.2, 0.1, 0.32), [-0.13, 0.05, 0.03], '#4B37C9'),
