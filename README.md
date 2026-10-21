@@ -2,7 +2,10 @@
   <img src="docs/assets/cover.png" alt="3D 仿真系统" width="880" />
 </div>
 
-<h1 align="center">3D 仿真系统</h1>
+<h1 align="center">
+  <img src="src/assets/images/logo.svg" alt="" width="42" height="42" />
+  3D 仿真系统
+</h1>
 <p align="center"><b>基于 Vue 3 + Three.js + Rapier3D 的 Web3D 场景编辑与物理仿真平台</b></p>
 
 <p align="center">
@@ -12,18 +15,18 @@
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
   <img alt="Vitest 28 files / 225 cases" src="https://img.shields.io/badge/test-28%20files%20%2F%20225%20cases-16a34a?logo=vitest&logoColor=fd9714">
-  <img alt="9 build gates" src="https://img.shields.io/badge/build%20gates-9%20passed-16a34a?logo=githubactions&logoColor=2088ff">
+  <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
 
 <table>
   <tr>
-    <td align="center"><b>250.48 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>251.80 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>225</b><br><sub>测试用例 · 28 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>12</b><br><sub>运行时依赖 · 审计前 34</sub></td>
     <td align="center"><b>239</b><br><sub>死类名 · 审计前 757</sub></td>
-    <td align="center"><b>0</b><br><sub>类型错误</sub></td>
+    <td align="center"><b>9</b><br><sub>可加载模型 · 全部有据</sub></td>
   </tr>
 </table>
 
@@ -31,8 +34,8 @@
   <a href="#这是什么">这是什么</a> ·
   <a href="#核心能力">核心能力</a> ·
   <a href="#界面">界面</a> ·
+  <a href="#模型与资产">模型与资产</a> ·
   <a href="#快速开始">快速开始</a> ·
-  <a href="#技术栈">技术栈</a> ·
   <a href="#架构">架构</a> ·
   <a href="#质量保障">质量保障</a> ·
   <a href="#许可证">许可证</a>
@@ -107,6 +110,47 @@
 </table>
 </div>
 
+## 模型与资产
+
+这个仓库里的 3D 资产**大部分是自己生成的**，不是找来的素材。三条流水线都是声明式输入 + 确定性输出：
+
+| 命令 | 做什么 | 输入 |
+| --- | --- | --- |
+| `npm run gen:models` | 用 three.js 基本体拼装模型、归一化尺寸、导出 GLB | `scripts/model-recipes.mjs` 的几何配方 |
+| `npm run gen:thumbnails` | 从**导出的文件**渲染缩略图（透明背景） | `public/assets/models/**/*.glb` |
+| `npm run gen:brand` | 从矢量母版栅格化出 logo 与 favicon | `src/assets/images/logo.svg` |
+
+为什么自己造：**零许可风险**（随 Apache-2.0 发布，不像外部素材要逐个查协议、逐个署名）、**确定性**（同一份配方永远产出同样的文件，可以纳入闸门核对）、**体量与面数可控**。
+
+模型库里的 9 个条目全部可加载，卡片上显示的**就是这些文件本身的渲染**：
+
+<div align="center">
+<table>
+<tr>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/mech.png" alt="机甲" width="100%"><br><sub>机甲</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/Fox.png" alt="狐狸" width="100%"><br><sub>狐狸</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/DamagedHelmet.png" alt="破损头盔" width="100%"><br><sub>破损头盔</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/space-station-interior.png" alt="太空站内部" width="100%"><br><sub>太空站内部</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/forest.png" alt="森林场景" width="100%"><br><sub>森林场景</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/city-street.png" alt="城市街道" width="100%"><br><sub>城市街道</sub></td>
+</tr>
+<tr>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/energy-blaster.png" alt="科幻武器" width="100%"><br><sub>科幻武器</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/arcane-book.png" alt="魔法书" width="100%"><br><sub>魔法书</sub></td>
+<td width="16%" align="center"><img src="public/assets/models/thumbnails/terminal-console.png" alt="控制台" width="100%"><br><sub>控制台</sub></td>
+<td colspan="3" align="center"><sub>—— 其中 7 个本仓库生成，2 个为第三方资产（CC BY 4.0，署名见 NOTICE）</sub></td>
+</tr>
+</table>
+</div>
+
+> **改造型只需要改配方。** 加一个零件、改个颜色、重跑 `npm run gen:models && npm run gen:thumbnails` 就行。
+> 几何配方长这样：
+>
+> ```js
+> P(G.box(0.42, 0.62, 0.26), [0, 1.13, 0], '#6E5AF0'),            // 躯干
+> P(G.sphere(0.06), [0, 1.22, 0.16], '#FFA117', { emissive: '#FFA117' }), // 胸口能源
+> ```
+
 ## 快速开始
 
 ```bash
@@ -131,9 +175,10 @@ npm run preview    # 预览生产产物
 | `npm test` | Vitest 全量用例（28 文件 / 225 例） |
 | `npm run type-check` | `vue-tsc` 类型检查（零错误） |
 | `npm run verify:all` | 单独跑全部校验闸门 |
-| `npm run gen:brand` | 重新生成站点 logo 与 favicon |
+| `npm run gen:brand` | 从 SVG 母版重新生成 logo 与 favicon |
 | `npm run gen:models` | 重新生成程序化模型（几何配方在 `scripts/model-recipes.mjs`） |
 | `npm run gen:thumbnails` | 从真实模型文件重新渲染缩略图 |
+| `npm run gen:docs` | 重新生成 README 封面与页面截图 |
 | `npm run format` | Prettier 格式化（只对 `src/` 下的非 `.vue` 文件安全） |
 
 ## 技术栈
@@ -203,7 +248,7 @@ npm run preview    # 预览生产产物
 
 | 指标 | 数值 |
 | --- | --- |
-| 入口 chunk | **250.48 KB**（上限 1536 KB） |
+| 入口 chunk | **251.80 KB**（上限 1536 KB） |
 | 产物体积 | 11.61 MB |
 | 运行时依赖 | 12 个（审计前 34 个） |
 | 测试 | 28 文件 / 225 例全绿 |
@@ -233,9 +278,20 @@ src/
 ├── views/                # 7 个页面
 ├── docs/                 # 11 篇文档正文（会被渲染进系统文档页）
 ├── utils/                # 固定步长累加器 / markdown 渲染 / 缩略图 …
-└── assets/styles/        # 主题令牌 + AI 面板工具层
-scripts/                  # 11 道构建闸门
-public/assets/models/     # 9 个模型（7 个程序化生成 + 2 个 CC BY 4.0，署名见 NOTICE）
+└── assets/
+    ├── images/logo.svg   # 品牌标识母版（矢量）
+    └── styles/           # 主题令牌 + AI 面板工具层
+scripts/
+├── model-recipes.mjs     # 7 个模型的几何配方（声明式）
+├── generate-model-assets.mjs    # 配方 -> GLB
+├── render-model-thumbnails.mjs  # GLB -> 缩略图
+├── generate-brand-assets.mjs     # SVG 母版 -> logo / favicon
+├── generate-docs-assets.mjs      # 封面 + 页面截图
+├── check-model-metadata.mjs      # 模型属性与 GLB 实测对账
+├── check-asset-licenses.mjs      # 资产来源与协议核对
+└── ...                          # 其余 9 道闸门
+public/assets/models/     # 9 个模型 + 9 张渲染缩略图
+docs/                     # 封面与 7 张页面截图
 ```
 
 </details>
@@ -264,7 +320,7 @@ public/assets/models/     # 9 个模型（7 个程序化生成 + 2 个 CC BY 4.0
 | `DamagedHelmet.glb` | ctxwing (2018)，Khronos glTF 示例资产 | CC BY 4.0 |
 | `Fox.glb` | PixelMannen、@tomkranis、@AsoboStudio | CC BY 4.0 |
 
-其余资产——**7 个 3D 模型、9 张模型缩略图、站点 logo、favicon、README 封面与页面截图**——全部由本项目自己的脚本生成（`npm run gen:models` / `gen:thumbnails` / `gen:brand`），随 Apache-2.0 发布。
+其余资产——**7 个 3D 模型、9 张模型缩略图、站点 logo、favicon、README 封面与页面截图**——全部由本项目自己的脚本生成（`npm run gen:models` / `gen:thumbnails` / `gen:brand` / `gen:docs`），随 Apache-2.0 发布。
 
 `verify:asset-licenses` 闸门会持续核对这件事：每个资产的来源都要有交代，不得出现带限制或传染性的协议，依赖里也不允许混进 GPL / AGPL / CC-BY-NC。
 

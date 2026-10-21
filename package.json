@@ -28,7 +28,8 @@
     "coverage": "vitest run --coverage",
     "gen:models": "node scripts/generate-model-assets.mjs",
     "verify:asset-licenses": "node scripts/check-asset-licenses.mjs",
-    "gen:brand": "node scripts/generate-brand-assets.mjs"
+    "gen:brand": "node scripts/generate-brand-assets.mjs",
+    "gen:docs": "node scripts/generate-docs-assets.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d": "^0.19.3",
