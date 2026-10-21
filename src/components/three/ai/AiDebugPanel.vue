@@ -46,8 +46,8 @@
       </div>
     </div>
 
-    <!-- 物理模式：如实说明碰撞是解析式的，没有刚体物理引擎 -->
-    <p class="physics-mode">物理模式：解析式碰撞（未接入刚体物理引擎，没有摩擦、反弹与质量）</p>
+    <!-- 物理模式：如实说明碰撞由 Rapier 刚体引擎求解 -->
+    <p class="physics-mode">物理模式：Rapier 刚体物理（质量 · 摩擦 · 弹性 · 固定步长 1/60 秒）</p>
 
     <!-- 日志显示 -->
     <div class="ai-flex-1 ai-clip ai-flex ai-flex-col">
@@ -189,7 +189,7 @@ const formatDifficulty = (difficulty: string) => {
 </script>
 
 <style scoped>
-/* 物理模式说明：如实告知碰撞是解析式的，不是有摩擦/反弹/质量的刚体物理 */
+/* 物理模式说明：碰撞由 Rapier 刚体引擎求解 */
 .physics-mode {
   margin: 0 0 0.5rem;
   font-size: 0.7rem;

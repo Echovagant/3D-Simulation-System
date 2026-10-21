@@ -94,21 +94,25 @@
 
 ### 状态快照的来源
 
-`getAgentCurrentState` 读的是**真实场景对象**：位置、旋转来自智能体网格本身，
-速度来自上一帧的实际位移；`sensors` 里的 `proximity` 是对场景里每个障碍物的
-`THREE.Box3` 做 `distanceToPoint` 算出来的——视野内的障碍物数量与最近距离都是真数出来的。
-上一帧被障碍物挡住时，`status` 会是 `collided`。
+`getAgentCurrentState` 读的是**真实场景对象**：位置、旋转来自智能体网格本身
+（网格位置由 Rapier 刚体每步回写），速度来自刚体的 `linvel()`；
+`sensors` 里的 `proximity` 来自**物理引擎的查询**——
+视野内障碍物数量用 `world.intersectionsWithShape` 做球形形状查询，
+最近距离用 `world.projectPoint` 把智能体所在点投影到最近的障碍物碰撞体上。
+真的撞上障碍物时（窄相位接触流形里接触点数 > 0），`status` 会是 `collided`。
 
 ### 执行入口
 
 `executeAgentDecision` 把决策写成智能体的**期望速度**（不是直接改坐标）：
 `move` 按方向与速度设定速度矢量，`rotate` 累加朝向并按新朝向给出速度，
 `wait` 把速度清零，`interact` 写一条 warning 日志（交互尚未实现）。
-真正的位移由渲染循环每帧调用 `updateAgents(deltaSeconds)` 完成，
-途中会做**解析式碰撞**：位移按智能体半径拆成子步逐段判定，撞上障碍物就沿单轴滑动。
+真正的位移由渲染循环每帧调用 `updateAgents(deltaSeconds)` 完成：
+它按固定步长（1/60 秒）把真实时间切成整步，每一步先把期望速度与实际速度的差
+换算成冲量施加到刚体上，再让 Rapier 推进一步。
 
-> 这不是刚体物理：演武场没有接 Rapier，没有摩擦、反弹与质量。
-> 需要真物理的场景请用场景编辑器的 `useSceneEditor`。
+> 碰撞是**刚体物理**：撞上障碍物会被接触求解器挡下并沿障碍物滑开，
+> 摩擦与弹性都是碰撞体上的真实参数。需要更复杂的物理交互请用场景编辑器
+> （`useSceneEditor` + Rapier）。
 
 ## 界面层如何使用这些接口
 

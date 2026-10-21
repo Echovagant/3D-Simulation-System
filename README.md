@@ -27,10 +27,10 @@
 
 <table>
   <tr>
-    <td align="center"><b>251.80 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>225</b><br><sub>测试用例 · 28 个文件</sub></td>
+    <td align="center"><b>251.65 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>238</b><br><sub>测试用例 · 29 个文件</sub></td>
     <td align="center"><b>10</b><br><sub>构建闸门 · 全绿</sub></td>
-    <td align="center"><b>12</b><br><sub>运行时依赖 · 审计前 34</sub></td>
+    <td align="center"><b>11</b><br><sub>运行时依赖 · 审计前 34</sub></td>
     <td align="center"><b>239</b><br><sub>死类名 · 审计前 757</sub></td>
     <td align="center"><b>9</b><br><sub>模型 · 全部自制</sub></td>
   </tr>
@@ -70,7 +70,7 @@
 </td>
 <td width="33%" valign="top" align="center">
 <b>🤖 AI 演武场</b><br><br>
-<sub>规则式智能体读真实感知、绕开障碍物自主移动</sub>
+<sub>Rapier 刚体物理 + 规则式智能体读真实感知自主移动</sub>
 </td>
 </tr>
 <tr>
@@ -93,6 +93,7 @@
 **它真正做对的几件事：**
 
 - **一个场景只有一套物理。** 手写积分器和 Rapier 并行驱动同一个物体的历史已经删干净，Rapier 是唯一权威。
+- **AI 演武场跑的是真物理。** 智能体与障碍物都是 Rapier 刚体：转向用冲量实现，"撞上会被挡下并沿箱体滑开"是接触求解器的结果，不是代码里手写的滑动；感知（视野内障碍物数量、最近距离）来自引擎的形状查询，撞没撞上来自接触流形。此前这里是解析式包围盒判定，没有摩擦、弹性与质量。
 - **仿真速度与显示刷新率解耦。** 60Hz / 30Hz / 15Hz 屏上都是 **60.3~60.6 步/秒**——此前同一场景在 30Hz 屏上只跑 44% 速度。
 - **Vue 不再代理 three.js 对象。** `objects` 用 `shallowRef`、`threeObject` 打 `markRaw`，属性面板不再每帧遍历整棵场景图：每帧属性访问 **410.7 → 44.4（−89.2%）**，`ScriptDuration` **−92.4%**。
 - **改变换真的改到物理上。** 属性面板改位置 / 旋转 / 缩放 → 走 `update-transform` 事件写回刚体与碰撞体，缩放会同步重建碰撞体形状。
@@ -241,25 +242,26 @@ flowchart LR
 | `verify:model-metadata` | 模型库的文件属性与缩略图必须与磁盘上的 GLB 一致 |
 | `verify:readme` | README 里的数字、图片、锚点必须与真实产物一致 |
 | `verify:asset-licenses` | 每个资产的来源与协议都要清楚，不得有带限制的协议 |
-| `npm test` | 28 个测试文件 / 225 个用例 |
+| `npm test` | 29 个测试文件 / 238 个用例 |
 
 **当前实测**
 
 | 指标 | 数值 |
 | --- | --- |
-| 入口 chunk | **251.80 KB**（上限 1536 KB） |
-| 产物体积 | 7.61 MB |
-| 运行时依赖 | 12 个（审计前 34 个） |
-| 测试 | 28 文件 / 225 例全绿 |
+| 入口 chunk | **251.65 KB**（上限 1536 KB） |
+| 产物体积 | 5.45 MB |
+| 运行时依赖 | 11 个（审计前 34 个） |
+| 测试 | 29 文件 / 238 例全绿 |
 | 类型检查 | 0 错误 |
-| 7 个页面 | 0 console error / 0 未捕获异常 / 0 网络失败 |
+| 7 个页面 | 0 console error / 0 console warning / 0 未捕获异常 / 0 网络失败 |
 | 死 Tailwind 类名 | 757 → **239** |
 | 可加载模型 | 9 个（**全部程序化生成**） |
 
-> 唯一的 console 输出是一条来自 **Rapier compat 包内部**的弃用警告
+> 早先唯一的 console 输出是 **Rapier compat 包内部**的弃用警告
 > （`using deprecated parameters for the initialization function`）——
-> 该包的公开签名就是无参 `init()`，内部却仍按旧参数格式调用 wasm-bindgen，
-> 从公开 API 侧无法规避，因此如实记录在此。
+> 那个包把 1.5MB 的 WASM 以 base64 内联进 JS，产物里因此多出一个 2.2MB 的 chunk。
+> 现在物理引擎统一走官方包（`@dimforge/rapier3d`，WASM 拆成独立资源、多页共享），
+> 警告没了，产物也瘦了 **2.16 MB**。
 
 **这仓库刚做完一次全面审计**——19 份实施计划、4 轮独立复核，发现的问题全部落地并用闸门守住。审计报告与实施计划归档在仓库外（含逐条处置记录与被驳回的误判）。
 

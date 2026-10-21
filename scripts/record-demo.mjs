@@ -125,6 +125,19 @@ const clickByTitle = async (title) => {
   return r
 }
 
+/** 点一个文字匹配的按钮（面板里的按钮多数没有 title，只有文字） */
+const clickByText = async (text) => {
+  const r = await evalJs(cdp, sessionId, `(() => {
+    const el = [...document.querySelectorAll('button')]
+      .find((b) => (b.innerText || '').includes(${JSON.stringify(text)}));
+    if (!el) return false;
+    el.click();
+    return true;
+  })()`)
+  console.log(`   点击按钮「${text}」-> ${r ? 'ok' : '未找到'}`)
+  return r
+}
+
 const goto = async (route, wait) => {
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${PORT}${route}` }, sessionId)
   await sleep(wait)
@@ -150,7 +163,10 @@ await sleep(3500)
 
 console.log(' ② AI 演武场：智能体自主移动')
 await goto('/ai-playground', 6000)
-await sleep(3500)
+// ⚠️ 必须真的启动仿真：演武场的智能体默认是「空闲」状态，
+// 不点开始的话录下来的是一片静止的场地，与"自主移动"的说法对不上。
+await clickByText('开始')
+await sleep(4500)
 
 await cdp.send('Page.stopScreencast', {}, sessionId)
 await sleep(300)

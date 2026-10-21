@@ -116,10 +116,10 @@ const gateCount = Object.keys(pkg.scripts).filter((s) => s.startsWith('verify:')
 expect('构建闸门数（指标表）', gateCount, /<b>(\d+)<\/b><br><sub>构建闸门/)
 expect('构建闸门数（正文）', gateCount, /用 \*\*(\d+) 道构建闸门\*\*/)
 
-// Rapier 版本
+// Rapier 版本（运行时依赖官方包；compat 只是测试环境的别名目标）
 expect(
   'Rapier 版本',
-  pkg.dependencies['@dimforge/rapier3d-compat'].replace('^', ''),
+  pkg.dependencies['@dimforge/rapier3d'].replace('^', ''),
   /Rapier3D（WASM） \| ([\d.]+)/,
 )
 
