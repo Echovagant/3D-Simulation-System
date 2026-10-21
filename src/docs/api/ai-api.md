@@ -119,10 +119,56 @@
 - `src/components/three/ai/AiEnvironmentPanel.vue`：环境配置面板。场景类型、难度、障碍物密度、时间限制、胜利条件都绑定在一份本地副本上，只有点击“应用设置”才会通过 `updateEnvironmentSettings` 写回仓库；其余输入框的即时更新回调目前是空函数。
 - `src/components/three/ai/AiController.vue`：智能体面板。“添加代理”会创建一个名为“AI代理 N”、类型为 `basic` 的智能体；选中智能体后可调移动速度、反应时间、感知范围、避障（`basic` 适用）以及启用学习、记忆保留（`advanced` 适用）。
 - `src/components/three/ai/AiDebugPanel.vue`：调试面板。提供“开始 / 暂停”“重置”“清空日志”三个按钮，并按时间顺序汇总所有智能体的日志，可按类型过滤。
+- `src/components/three/ai/LlmPanel.vue`：LLM 面板。填 Key、切决策来源、触发解释；状态来自 `useLlmStore`。
+
+## LLM 接入（可选）
+
+### 模块
+
+| 模块 | 职责 |
+| --- | --- |
+| `src/config/llm.ts` | base_url、模型、超时、输出上限、调用上限等常量（默认值对着官方文档核过，可用 `VITE_MINIMAX_BASE_URL` / `VITE_MINIMAX_MODEL` 覆盖） |
+| `src/services/llm/secret.ts` | API key 的**唯一**存放点：模块作用域，不进响应式、不落盘；另有 `redactSecrets` 负责把密钥样式的片段从错误信息里抹掉 |
+| `src/services/llm/client.ts` | `callLlm(options)`：发一次 chat/completions。**永不抛异常**，失败也返回 `{ ok: false, error }` |
+| `src/services/llm/prompts.ts` | 提示词构造（`buildDecisionMessages` / `buildExplainMessages`）与动作解析（`parseLlmAction`） |
+| `src/stores/llmStore.ts` | 对外的状态与动作：`configured` / `mode` / `explanation` / `degraded` / `callCount` |
+
+### `useLlmStore`
+
+| 成员 | 说明 |
+| --- | --- |
+| `configured` | 是否已配置 API key（**store 里没有 key 字段**，只有这个布尔值） |
+| `mode` | `'rule'`（默认，规则式）或 `'llm'` |
+| `explanation` / `explaining` | 最近一次解释与"模型思考中"标记 |
+| `degraded` | LLM 控制器是否已降级回规则式 |
+| `callCount` | 本次会话已发出的调用次数（上限见 `llmConfig.maxCallsPerSession`） |
+| `lastError` | 最近一次错误（已脱敏） |
+| `applyKey(value)` / `clearKey()` | 写入 / 清除 key（只在内存里） |
+| `testConnection()` | 发一个极短请求做连通性测试 |
+| `requestExplanation(snapshot)` | 请求一次解释，成功后写进 `explanation` |
+| `requestAction(snapshot)` | 请求一个动作；返回 `null` 表示"这次没有可用动作"，调用方必须回落规则式 |
+| `markDegraded(reason)` / `clearDegraded()` / `setError(msg)` / `resetSession()` | 状态维护 |
+
+### `useAI` 里的 LLM 分支
+
+- `buildSnapshot(agentId)`：把智能体此刻的**真实状态**整理成 `AgentSnapshot`（位置、速度、目标点方向、最近障碍物距离、视野内障碍物数量、感知范围、是否碰撞、上一次动作）。
+- 决策回路在 `mode === 'llm' && configured` 时改走 LLM：
+  有到货的决策就执行它；请求还在飞就沿用上一次的期望速度；上一次失败就这一拍回落规则式并点亮降级标记。
+- 两条路最终都走同一个 `executeAgentDecision`，所以**物理层的行为完全一致**——LLM 换掉的只是"往哪走"。
+
+### 动作校验
+
+`parseLlmAction` 是 LLM 与物理之间**唯一**的闸门：
+
+- 从回复里抠出第一个完整 JSON 对象（容忍 Markdown 代码块与前后闲话）；
+- 动作只能是 `move` / `rotate` / `wait`；
+- `move` 的方向必须是非零向量且会被归一化，速度夹在 0.5~8；
+- `rotate` 的角度夹在 ±π；
+- 任何一项不通过就返回 `null` → 回落规则式。
 
 ## 当前限制
 
-- 智能体行为由**规则式决策**推导（读取真实场景感知 → 避障 → 朝目标点移动），**没有接入任何外部模型，也没有任何训练模型导入入口**。
+- 智能体行为**默认**由规则式决策推导（读取真实场景感知 → 避障 → 朝目标点移动）；接入外部模型是**可选**的，需要使用者自己填 API Key，且没有训练模型导入入口、没有训练回路。
 - 唯一的随机性是**障碍物布局**：它使用固定种子（`ARENA_SEED = 20260101`）的线性同余伪随机，因此同一密度下布局可复现，刷新页面不会换一副场地。
 - `decisionQueue` 虽然在持续填充，但当前界面并没有展示这个队列；能看到的是写入智能体日志的“决定: …”条目。
 - `AiDecision.action` 中的 `'interact'` 分支从未被生成。

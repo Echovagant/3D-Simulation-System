@@ -56,6 +56,15 @@ Rapier 的场景查询（`projectPoint` / `intersectionsWithShape` / `contactPai
 
 因此 `initPhysics` 建完世界后会先预热一步，让世界处于"可查询"状态。
 
+### 全局投影查询在"过滤器全拒"时也会 panic
+
+`world.projectPoint` 带过滤回调时，如果回调**拒绝了所有碰撞体**（典型场景：
+场地里一个障碍物都没有），Rapier 0.19.3 会在 WASM 内部 panic——同样会污染整个实例。
+
+AI 演武场因此没有用全局投影查询，而是**逐碰撞体**调用 `collider.projectPoint`：
+障碍物最多十几个，逐个算反而更快，也彻底绕开这个雷。
+只有"是否撞上"用 `world.contactPair`（窄相位接触流形），它不需要过滤器。
+
 ### 刚体与碰撞体的建立规则
 
 `addRigidBody` 只处理带有 `userData.physics` 的物体，并按其中的 `shape` 字段选择碰撞体：
