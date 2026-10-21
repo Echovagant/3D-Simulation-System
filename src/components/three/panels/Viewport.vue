@@ -1,8 +1,6 @@
 <template>
   <!-- 这是Three.js渲染的容器，画布会通过JS动态挂载到这个div中 -->
-  <div class="viewport-container" ref="containerRef">
-    <div class="debug-indicator">Viewport组件已加载</div>
-  </div>
+  <div class="viewport-container" ref="containerRef"></div>
 </template>
 
 <script setup lang="ts">
@@ -382,19 +380,6 @@ watch(
   100% {
     border-color: #3b82f6;
   }
-}
-
-/* 调试指示器样式 */
-.debug-indicator {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: rgba(0, 0, 0, 0.7);
-  color: white;
-  padding: 5px 10px;
-  border-radius: 4px;
-  font-size: 12px;
-  z-index: 1000;
 }
 
 /* 确保Three.js画布占满容器 */

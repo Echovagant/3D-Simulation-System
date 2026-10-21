@@ -33,10 +33,13 @@
  *      枚举具体类名，因此新增的 Tailwind 写法也能被自动识别。
  *
  * 基线怎么读：
- *   MAX_DEAD_TAILWIND_CLASSES = 死类名**出现次数**的上限（当前值 757）。
+ *   MAX_DEAD_TAILWIND_CLASSES = 死类名**出现次数**的上限（当前值 239）。
  *   收紧它 = 有人在真的清理（删掉 N 个死类名就把常量改小 N，不用改逻辑）。
  *   放宽它 = 有人在新增，本闸门失效。
  *   环境变量 MAX_DEAD_TAILWIND_CLASSES 可覆盖默认值，方便 CI 里临时放宽/收紧。
+ *
+ *   历史：初版基线 757。AI 演武场（AIPlayground + 三个 AI 面板）原先有 518 处
+ *   死工具类，已全部替换为语义类（ai-panel-kit.css），基线随之下调到 239。
  *
  *   注：任务里给的参考值 169 用的是另一个口径（"含有死类名的 class 属性"个数，
  *   且只数静态 class 属性、不数 :class 绑定）。本脚本用的是"死类名出现次数"，
@@ -61,7 +64,7 @@ const srcDir = join(repoRoot, 'src')
  * 收紧它意味着有人在真的清理；放宽它意味着有人在新增。
  * 可用环境变量 MAX_DEAD_TAILWIND_CLASSES 覆盖。
  */
-const MAX_DEAD_TAILWIND_CLASSES = 757
+const MAX_DEAD_TAILWIND_CLASSES = 239
 const parsedMax = Number.parseInt(process.env.MAX_DEAD_TAILWIND_CLASSES ?? '', 10)
 const maxDead =
   Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : MAX_DEAD_TAILWIND_CLASSES

@@ -1,47 +1,45 @@
 <template>
-  <div class="ai-controller p-4 bg-black/70 rounded-lg border border-yellow-500/30">
-    <h3 class="text-yellow-400 text-lg font-bold mb-3 flex items-center">
-      <i class="fa fa-robot mr-2"></i>AI代理控制
+  <div class="ai-form ai-controller ai-p-4 ai-bg-panel ai-r-lg ai-b ai-b-amber">
+    <h3 class="ai-t-amber ai-fs-lg ai-fw-bold ai-mb-3 ai-flex ai-items-center">
+      <i class="fa fa-robot ai-mr-2"></i>AI代理控制
     </h3>
 
     <!-- 代理列表 -->
-    <div class="mb-4">
-      <div class="flex justify-between items-center mb-2">
-        <label class="text-yellow-300 text-sm">代理列表</label>
+    <div class="ai-mb-4">
+      <div class="ai-flex ai-justify-between ai-items-center ai-mb-2">
+        <label class="ai-t-amber-soft ai-fs-sm">代理列表</label>
         <button
           @click="addNewAgent"
-          class="text-xs bg-yellow-600 text-black px-2 py-1 rounded hover:bg-yellow-500 transition-colors"
+          class="ai-fs-xs ai-bg-amber ai-t-on-amber ai-px-2 ai-py-1 ai-r-sm hover:bg-yellow-500 transition-colors"
         >
-          <i class="fa fa-plus mr-1"></i>添加代理
+          <i class="fa fa-plus ai-mr-1"></i>添加代理
         </button>
       </div>
 
-      <div class="space-y-2 max-h-40 overflow-y-auto pr-1">
+      <div class="ai-space-y-2 max-h-40 ai-scroll pr-1">
         <div
           v-for="agent in agents"
           :key="agent.id"
           @click="selectAgent(agent.id)"
-          class="p-2 rounded border cursor-pointer transition-all"
-          :class="{
-            'border-yellow-500 bg-yellow-500/10': selectedAgentId === agent.id,
-            'border-gray-600 hover:border-gray-400' : selectedAgentId !== agent.id
-          }"
+          class="ai-p-2 ai-r-sm ai-b cursor-pointer transition-all"
+          :class="[
+              selectedAgentId === agent.id ? 'ai-b-amber ai-bg-amber-faint' : 'ai-b-gray',
+            ]"
         >
-          <div class="flex justify-between items-center">
-            <span class="text-white text-sm">{{ agent.name }}</span>
+          <div class="ai-flex ai-justify-between ai-items-center">
+            <span class="ai-t-primary ai-fs-sm">{{ agent.name }}</span>
             <span
-              class="text-xs px-1.5 py-0.5 rounded"
-              :class="{
-                'bg-green-600': agent.status === 'running',
-                'bg-yellow-600': agent.status === 'paused',
-                'bg-gray-600': agent.status === 'idle',
-                'bg-red-600': agent.status === 'error'
-              }"
+              class="ai-fs-xs ai-px-1 ai-py-05 ai-r-sm"
+              :class="[
+                agent.status === 'running' ? 'ai-bg-green' :
+                agent.status === 'paused' ? 'ai-bg-amber' :
+                agent.status === 'error' ? 'ai-bg-red' : 'ai-bg-chip',
+              ]"
             >
               {{ formatStatus(agent.status) }}
             </span>
           </div>
-          <div class="text-xs text-gray-400 mt-1">
+          <div class="ai-fs-xs ai-t-muted ai-mt-1">
             类型: {{ formatAgentType(agent.type) }}
           </div>
         </div>
@@ -49,14 +47,14 @@
     </div>
 
     <!-- 选中代理的参数设置 -->
-    <div v-if="selectedAgent" class="mt-4">
-      <h4 class="text-yellow-300 text-sm font-semibold mb-2">
+    <div v-if="selectedAgent" class="ai-mt-4">
+      <h4 class="ai-t-amber-soft ai-fs-sm ai-fw-semibold ai-mb-2">
         {{ selectedAgent.name }} 参数设置
       </h4>
 
-      <div class="grid grid-cols-2 gap-2 text-xs">
+      <div class="ai-grid ai-grid-2 ai-gap-2 ai-fs-xs">
         <div v-if="selectedAgent.type === 'basic'">
-          <label class="text-gray-300 block mb-1">移动速度</label>
+          <label class="ai-t block ai-mb-1">移动速度</label>
           <input
             type="range"
             min="1"
@@ -64,13 +62,13 @@
             step="0.5"
             v-model.number="selectedAgent.parameters.speed"
             @change="updateAgentParameters"
-            class="w-full accent-yellow-500"
+            class="ai-w-full accent-yellow-500"
           >
-          <span class="text-yellow-400">{{ selectedAgent.parameters.speed }}</span>
+          <span class="ai-t-amber">{{ selectedAgent.parameters.speed }}</span>
         </div>
 
         <div v-if="selectedAgent.type === 'basic' || selectedAgent.type === 'advanced'">
-          <label class="text-gray-300 block mb-1">反应时间 (s)</label>
+          <label class="ai-t block ai-mb-1">反应时间 (s)</label>
           <input
             type="range"
             min="0.1"
@@ -78,13 +76,13 @@
             step="0.1"
             v-model.number="selectedAgent.parameters.reactionTime"
             @change="updateAgentParameters"
-            class="w-full accent-yellow-500"
+            class="ai-w-full accent-yellow-500"
           >
-          <span class="text-yellow-400">{{ selectedAgent.parameters.reactionTime }}</span>
+          <span class="ai-t-amber">{{ selectedAgent.parameters.reactionTime }}</span>
         </div>
 
         <div v-if="selectedAgent.type === 'basic' || selectedAgent.type === 'advanced'">
-          <label class="text-gray-300 block mb-1">感知范围</label>
+          <label class="ai-t block ai-mb-1">感知范围</label>
           <input
             type="range"
             min="1"
@@ -92,43 +90,43 @@
             step="1"
             v-model.number="selectedAgent.parameters.awarenessRange"
             @change="updateAgentParameters"
-            class="w-full accent-yellow-500"
+            class="ai-w-full accent-yellow-500"
           >
-          <span class="text-yellow-400">{{ selectedAgent.parameters.awarenessRange }}</span>
+          <span class="ai-t-amber">{{ selectedAgent.parameters.awarenessRange }}</span>
         </div>
 
         <div v-if="selectedAgent.type === 'basic' || selectedAgent.type === 'advanced'">
-          <label class="text-gray-300 block mb-1">避障</label>
-          <div class="flex items-center mt-1">
-            <label class="inline-flex items-center cursor-pointer">
+          <label class="ai-t block ai-mb-1">避障</label>
+          <div class="ai-flex ai-items-center ai-mt-1">
+            <label class="inline-flex ai-items-center cursor-pointer">
               <input
                 type="checkbox"
                 v-model="selectedAgent.parameters.avoidObstacles"
                 @change="updateAgentParameters"
                 class="sr-only peer"
               >
-              <div class="relative w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-600"></div>
+              <div class="ai-relative ai-w-9 ai-h-5 ai-bg-raised peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 ai-r-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-600"></div>
             </label>
           </div>
         </div>
 
         <div v-if="selectedAgent.type === 'advanced'">
-          <label class="text-gray-300 block mb-1">启用学习</label>
-          <div class="flex items-center mt-1">
-            <label class="inline-flex items-center cursor-pointer">
+          <label class="ai-t block ai-mb-1">启用学习</label>
+          <div class="ai-flex ai-items-center ai-mt-1">
+            <label class="inline-flex ai-items-center cursor-pointer">
               <input
                 type="checkbox"
                 v-model="selectedAgent.parameters.learningEnabled"
                 @change="updateAgentParameters"
                 class="sr-only peer"
               >
-              <div class="relative w-9 h-5 bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-600"></div>
+              <div class="ai-relative ai-w-9 ai-h-5 ai-bg-raised peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 ai-r-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-600"></div>
             </label>
           </div>
         </div>
 
         <div v-if="selectedAgent.type === 'advanced'">
-          <label class="text-gray-300 block mb-1">记忆保留 (s)</label>
+          <label class="ai-t block ai-mb-1">记忆保留 (s)</label>
           <input
             type="range"
             min="10"
@@ -136,18 +134,18 @@
             step="10"
             v-model.number="selectedAgent.parameters.memoryRetention"
             @change="updateAgentParameters"
-            class="w-full accent-yellow-500"
+            class="ai-w-full accent-yellow-500"
           >
-          <span class="text-yellow-400">{{ selectedAgent.parameters.memoryRetention }}</span>
+          <span class="ai-t-amber">{{ selectedAgent.parameters.memoryRetention }}</span>
         </div>
       </div>
 
-      <div class="mt-3 flex justify-end">
+      <div class="ai-mt-3 ai-flex ai-justify-end">
         <button
           @click="removeSelectedAgent"
-          class="text-xs text-red-400 hover:text-red-300 transition-colors"
+          class="ai-fs-xs ai-t-red hover:text-red-300 transition-colors"
         >
-          <i class="fa fa-trash mr-1"></i>移除代理
+          <i class="fa fa-trash ai-mr-1"></i>移除代理
         </button>
       </div>
     </div>

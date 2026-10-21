@@ -1,8 +1,8 @@
 <template>
-  <div class="ai-playground-container min-h-screen flex flex-col relative overflow-hidden">
+  <div class="ai-playground-container">
     <!-- 使用您提供的SVG背景 -->
     <svg
-      class="svg-bg fixed inset-0"
+      class="svg-bg"
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 1440 1000"
       preserveAspectRatio="xMidYMid slice"
@@ -72,19 +72,19 @@
     </svg>
 
     <!-- 顶部标题区域 -->
-    <div class="page-header mb-8 text-center relative z-10 pt-10">
+    <div class="page-header">
       <div class="header-glow"></div>
-      <h1 class="text-[clamp(2rem,5vw,3.5rem)] font-bold text-white tracking-wider relative">
+      <h1 class="ai-title">
         <span class="title-text">
-          <span class="inline-block animate-pulse mr-3">🧠</span>AI演武场
+          <span class="ai-title-emoji">🧠</span>AI演武场
         </span>
       </h1>
       <p
-        class="text-white mt-4 max-w-2xl mx-auto text-base md:text-lg px-4 leading-relaxed font-light"
+        class="ai-lead"
       >
-        在<span class="text-yellow-400 font-medium">真实渲染的3D场地</span
+        在<span class="ai-lead-accent">真实渲染的3D场地</span
         >里运行规则式智能体：它们读取场景里的真实感知、绕开障碍物并自主移动。
-        <span class="text-gray-400"
+        <span class="ai-lead-muted"
           >本页不含模型推理，也不做训练。碰撞为解析式计算（未接入刚体物理引擎，没有摩擦、反弹与质量）。</span
         >
       </p>
@@ -93,15 +93,15 @@
 
     <!-- 主内容区域 -->
     <div
-      class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 w-full px-5 sm:px-8 max-w-7xl mx-auto relative z-10 pb-10"
+      class="ai-layout"
     >
       <!-- 左侧面板 -->
-      <div class="lg:col-span-3 flex flex-col gap-6">
+      <div class="ai-col-3">
         <div class="panel left-panel animate-fade-in-right">
           <div class="panel-glow"></div>
           <div class="panel-header">
-            <span class="flex items-center">
-              <svg class="w-5 h-5 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+            <span class="ai-panel-title">
+              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"
                 />
@@ -115,8 +115,8 @@
         <div class="panel left-panel animate-fade-in-right delay-100">
           <div class="panel-glow"></div>
           <div class="panel-header">
-            <span class="flex items-center">
-              <svg class="w-5 h-5 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+            <span class="ai-panel-title">
+              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fill-rule="evenodd"
                   d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
@@ -136,11 +136,11 @@
         都不生效。视口高度由 scoped CSS 的 .ai-viewport 给出（否则视口高度会被画布内容顶起来，
         画布尺寸又反过来影响视口高度，形成反馈）。
       -->
-      <div class="lg:col-span-6 panel center-panel animate-fade-in-up">
+      <div class="ai-col-6 panel center-panel animate-fade-in-up">
         <div class="panel-glow"></div>
         <div class="panel-header">
-          <span class="flex items-center">
-            <svg class="w-5 h-5 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+          <span class="ai-panel-title">
+            <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fill-rule="evenodd"
                 d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"
@@ -149,14 +149,14 @@
             </svg>
             3D环境视图
           </span>
-          <div class="flex gap-2">
-            <span class="w-3 h-3 rounded-full bg-red-500 animate-pulse"></span>
+          <div class="ai-dots">
+            <span class="ai-dot ai-dot-red"></span>
             <span
-              class="w-3 h-3 rounded-full bg-yellow-500 animate-pulse"
+              class="ai-dot ai-dot-amber"
               style="animation-delay: 0.2s"
             ></span>
             <span
-              class="w-3 h-3 rounded-full bg-green-500 animate-pulse"
+              class="ai-dot ai-dot-green"
               style="animation-delay: 0.4s"
             ></span>
           </div>
@@ -166,41 +166,41 @@
           <!-- 加载状态优化 -->
           <div
             v-if="isLoading"
-            class="absolute inset-0 flex items-center justify-center bg-black/90 z-10 rounded-b-lg"
+            class="ai-loading"
           >
-            <div class="text-yellow-400 flex flex-col items-center">
+            <div class="ai-loading-inner">
               <div
-                class="w-20 h-20 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mb-5"
+                class="ai-spinner"
               ></div>
-              <p class="font-medium text-xl mb-2">加载3D环境...</p>
-              <p class="text-sm text-yellow-500/70">正在初始化3D场景与智能体</p>
-              <div class="w-72 h-1.5 bg-gray-800 rounded-full mt-5 overflow-hidden">
-                <div class="h-full bg-yellow-500 rounded-full progress-bar"></div>
+              <p class="ai-loading-title">加载3D环境...</p>
+              <p class="ai-loading-sub">正在初始化3D场景与智能体</p>
+              <div class="ai-progress">
+                <div class="ai-progress-bar"></div>
               </div>
             </div>
           </div>
 
           <!-- 操作提示卡片 -->
           <div
-            class="absolute bottom-5 left-5 text-sm text-gray-200 bg-black/80 backdrop-blur-md px-4 py-3 rounded-xl border border-yellow-500/40 shadow-2xl transition-all duration-300 hover:bg-black/90 hover:border-yellow-500/60"
+            class="ai-hint"
           >
-            <p class="mb-2 flex items-center">
-              <span class="control-key mr-2">🖱️</span> 鼠标拖动: 旋转视角
+            <p class="ai-hint-row">
+              <span class="control-key">🖱️</span> 鼠标拖动: 旋转视角
             </p>
-            <p class="mb-2 flex items-center">
-              <span class="control-key mr-2">↕️</span> 滚轮: 缩放
+            <p class="ai-hint-row">
+              <span class="control-key">↕️</span> 滚轮: 缩放
             </p>
-            <p class="flex items-center">
-              <span class="control-key mr-2">⇧</span> Shift+拖动: 平移
+            <p class="ai-panel-title">
+              <span class="control-key">⇧</span> Shift+拖动: 平移
             </p>
           </div>
 
           <!-- 视角指示器 -->
           <div
-            class="absolute top-5 right-5 bg-black/80 backdrop-blur-md rounded-xl p-3 border border-yellow-500/40 text-yellow-400 text-sm shadow-xl"
+            class="ai-camera-panel"
           >
-            <div class="flex items-center justify-center mb-2 font-medium">
-              <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <div class="ai-camera-title">
+              <svg class="ai-icon" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fill-rule="evenodd"
                   d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"
@@ -209,18 +209,18 @@
               </svg>
               视角控制
             </div>
-            <div class="grid grid-cols-3 gap-2 text-center">
-              <div class="p-2 bg-gray-900 rounded-md">W</div>
-              <div class="p-2 bg-yellow-500/30 rounded-md text-yellow-400 font-semibold">↑</div>
-              <div class="p-2 bg-gray-900 rounded-md">R</div>
-              <div class="p-2 bg-yellow-500/30 rounded-md text-yellow-400 font-semibold">←</div>
-              <div class="p-2 bg-yellow-500/30 rounded-md text-yellow-400 font-semibold">↓</div>
-              <div class="p-2 bg-yellow-500/30 rounded-md text-yellow-400 font-semibold">→</div>
-              <div class="p-2 bg-gray-900 rounded-md">Q</div>
-              <div class="p-2 bg-gray-900 rounded-md">S</div>
-              <div class="p-2 bg-gray-900 rounded-md">E</div>
+            <div class="ai-keygrid">
+              <div class="ai-key">W</div>
+              <div class="ai-key ai-key-active">↑</div>
+              <div class="ai-key">R</div>
+              <div class="ai-key ai-key-active">←</div>
+              <div class="ai-key ai-key-active">↓</div>
+              <div class="ai-key ai-key-active">→</div>
+              <div class="ai-key">Q</div>
+              <div class="ai-key">S</div>
+              <div class="ai-key">E</div>
             </div>
-            <p class="mt-2 text-[11px] text-gray-400 leading-relaxed">
+            <p class="ai-camera-hint">
               W/S 前后 · A/D 左右 · Q/E 升降 · R 复位
             </p>
           </div>
@@ -233,12 +233,12 @@
       </div>
 
       <!-- 右侧面板 -->
-      <div class="lg:col-span-3">
+      <div class="ai-col-3 ai-col-right">
         <div class="panel right-panel animate-fade-in-left">
           <div class="panel-glow"></div>
           <div class="panel-header">
-            <span class="flex items-center">
-              <svg class="w-5 h-5 mr-2 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+            <span class="ai-panel-title">
+              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
                 <path
                   fill-rule="evenodd"
                   d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
@@ -254,21 +254,21 @@
     </div>
 
     <!-- 页脚 -->
-    <div class="mt-12 mb-8 text-center text-sm text-gray-400 relative z-10">
+    <div class="ai-footer">
       <div class="footer-divider"></div>
-      <p class="flex items-center justify-center gap-4 mt-5">
-        <span class="flex items-center">
+      <p class="ai-footer-row">
+        <span class="ai-panel-title">
           <span
-            class="inline-block w-2.5 h-2.5 rounded-full bg-yellow-500 mr-2 animate-pulse"
+            class="ai-dot ai-dot-amber ai-dot-inline"
           ></span>
           AI演武场 v1.0
         </span>
-        <span class="w-1 h-1 rounded-full bg-gray-600"></span>
-        <span class="flex items-center"> 使用Three.js和Vue构建 </span>
-        <span class="w-1 h-1 rounded-full bg-gray-600"></span>
-        <span class="flex items-center">
+        <span class="ai-dot-sep"></span>
+        <span class="ai-panel-title"> 使用Three.js和Vue构建 </span>
+        <span class="ai-dot-sep"></span>
+        <span class="ai-panel-title">
           <span
-            class="inline-block w-2.5 h-2.5 rounded-full bg-green-500 mr-2 animate-pulse"
+            class="ai-dot ai-dot-green ai-dot-inline"
             style="animation-delay: 0.4s"
           ></span>
           系统运行中
@@ -673,11 +673,11 @@ onUnmounted(() => cleanup())
     grid-template-rows: auto 1fr auto;
   }
 
-  .lg\\:col-span-6 {
+  .ai-col-6 {
     order: -1;
   }
 
-  .lg\\:col-span-3 {
+  .ai-col-3 {
     margin-bottom: 1rem;
   }
 }
@@ -702,5 +702,365 @@ onUnmounted(() => cleanup())
 /* 为面板内容添加内边距 */
 :deep(.panel-content) {
   padding: 1.5rem;
+}
+
+/* ==========================================================================
+   页面骨架与语义色
+   --------------------------------------------------------------------------
+   本仓库**没有**接 Tailwind（无依赖、无 postcss、无 tailwind.config），
+   模板里 `grid-cols-12` / `lg:col-span-*` / `text-white` 这类工具类
+   **全是死类名、不生效**。这一段把页面真正需要的布局与配色用真实 CSS 写出来。
+
+   配色沿用项目令牌层（见仓库根目录 DESIGN.md）：
+   演武场是**深色驾驶舱**（与场景编辑器、仿真实验室的 3D 视口一致），
+   浅色靛紫主色属于界面层，所以这里用的是"深底上的琥珀"=#FFA117
+   （9.65:1 on #0A0C12），而不是浅底上的 #96560A。
+   ========================================================================== */
+
+.ai-playground-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow: hidden;
+  /* 深色底：SVG 顶部是透明的，必须由容器兜底，否则页头白字会浮在浅色应用底上 */
+  background: #0a0c12;
+}
+
+/* 深色底纹：必须盖住整个视口，否则会露出应用的浅色页面底 */
+.svg-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.page-header {
+  position: relative;
+  z-index: 10;
+  padding-top: 2.5rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+/* 12 栏主栅格 */
+.ai-layout {
+  position: relative;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 0 2rem 2.5rem;
+  flex: 1;
+}
+
+.ai-col-3 {
+  grid-column: span 3;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.ai-col-6 {
+  grid-column: span 6;
+}
+
+.ai-col-right {
+  display: block;
+}
+
+/* 页头文字 */
+.ai-title {
+  position: relative;
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.15;
+}
+
+.ai-title-emoji {
+  display: inline-block;
+  margin-right: 0.75rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.ai-lead {
+  max-width: 42rem;
+  margin: 1rem auto 0;
+  padding: 0 1rem;
+  color: #e5e7eb;
+  font-size: 1.0625rem;
+  font-weight: 300;
+  line-height: 1.75;
+}
+
+.ai-lead-accent {
+  color: #ffa117;
+  font-weight: 500;
+}
+
+.ai-lead-muted {
+  color: #9ca3af;
+}
+
+/* 面板标题与图标 */
+.ai-panel-title {
+  display: flex;
+  align-items: center;
+}
+
+.ai-icon-amber {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.5rem;
+  color: #ffa117;
+  flex-shrink: 0;
+}
+
+.ai-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* 状态点 */
+.ai-dots {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ai-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 9999px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.ai-dot-red {
+  background: #ef4444;
+}
+
+.ai-dot-amber {
+  background: #ffa117;
+}
+
+.ai-dot-green {
+  background: #22c55e;
+}
+
+.ai-dot-inline {
+  display: inline-block;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-right: 0.5rem;
+}
+
+.ai-dot-sep {
+  display: inline-block;
+  width: 0.25rem;
+  height: 0.25rem;
+  border-radius: 9999px;
+  background: #4b5563;
+}
+
+/* 加载态 */
+.ai-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+  border-bottom-left-radius: 0.5rem;
+  border-bottom-right-radius: 0.5rem;
+}
+
+.ai-loading-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #ffa117;
+}
+
+.ai-spinner {
+  width: 5rem;
+  height: 5rem;
+  margin-bottom: 1.25rem;
+  border: 4px solid #ffa117;
+  border-top-color: transparent;
+  border-radius: 9999px;
+  animation: spin 1s linear infinite;
+}
+
+.ai-loading-title {
+  margin-bottom: 0.5rem;
+  color: #f3f4f6;
+  font-size: 1.25rem;
+  font-weight: 500;
+}
+
+.ai-loading-sub {
+  color: rgba(255, 161, 23, 0.7);
+  font-size: 0.875rem;
+}
+
+.ai-progress {
+  width: 18rem;
+  height: 0.375rem;
+  margin-top: 1.25rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: #1f2937;
+}
+
+.ai-progress-bar {
+  height: 100%;
+  border-radius: 9999px;
+  background: #ffa117;
+}
+
+/* 操作提示卡 */
+.ai-hint {
+  position: absolute;
+  left: 1.25rem;
+  bottom: 1.25rem;
+  padding: 0.75rem 1rem;
+  color: #e5e7eb;
+  font-size: 0.875rem;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 161, 23, 0.4);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.ai-hint:hover {
+  background: rgba(0, 0, 0, 0.9);
+  border-color: rgba(255, 161, 23, 0.6);
+}
+
+.ai-hint-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.ai-hint-row-last {
+  margin-bottom: 0;
+}
+
+/* 视角指示器 */
+.ai-camera-panel {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  padding: 0.75rem;
+  color: #ffa117;
+  font-size: 0.875rem;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 161, 23, 0.4);
+  border-radius: 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.ai-camera-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.ai-keygrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.ai-key {
+  padding: 0.5rem;
+  border-radius: 0.375rem;
+  background: #111827;
+  color: #e5e7eb;
+}
+
+.ai-key-active {
+  background: rgba(255, 161, 23, 0.3);
+  color: #ffa117;
+  font-weight: 600;
+}
+
+.ai-camera-hint {
+  margin-top: 0.5rem;
+  color: #9ca3af;
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+
+/* 页脚 */
+.ai-footer {
+  position: relative;
+  z-index: 10;
+  margin: 3rem 0 2rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.ai-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.ai-footer-item {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 1024px) {
+  .ai-layout {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ai-col-3,
+  .ai-col-6 {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .ai-layout {
+    grid-template-columns: 1fr;
+    padding: 0 1rem 2rem;
+  }
+
+  .ai-lead {
+    font-size: 0.9375rem;
+  }
+
+  .ai-hint {
+    display: none;
+  }
+
+  .ai-camera-panel {
+    display: none;
+  }
 }
 </style>

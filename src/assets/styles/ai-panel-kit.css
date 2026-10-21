@@ -1,0 +1,300 @@
+/**
+ * AI 演武场 · 深色面板工具层
+ * ---------------------------------------------------------------------------
+ * 本仓库**没有**接 Tailwind（无依赖、无 postcss、无 tailwind.config），
+ * 模板里 `text-gray-300` / `bg-gray-800` / `grid-cols-2` 这类工具类
+ * **全是死类名、不生效**。
+ *
+ * 这三个 AI 面板（环境配置 / AI 控制器 / 调试信息）此前**完全没有自己的样式**，
+ * 外观全靠这些死类名 → 在深色面板里文字继承成深色、几乎不可见。
+ *
+ * 这里用**语义类名**提供一层最小实现，让面板真正可读、可用。
+ * 命名一律 `ai-` 前缀，避免与业务类名冲突。
+ * 令牌取值见仓库根目录 DESIGN.md（深色底上的强调色用 #FFA117，9.65:1 on #0A0C12）。
+ */
+
+/* ---------- 文字 ---------- */
+.ai-t-primary {
+  color: #f9fafb;
+}
+.ai-t-strong {
+  color: #e5e7eb;
+}
+.ai-t {
+  color: #d1d5db;
+}
+.ai-t-muted {
+  color: #9ca3af;
+}
+.ai-t-faint {
+  color: #6b7280;
+}
+.ai-t-amber {
+  color: #ffa117;
+}
+.ai-t-amber-soft {
+  color: #fcd34d;
+}
+.ai-t-red {
+  color: #f87171;
+}
+.ai-t-blue {
+  color: #60a5fa;
+}
+.ai-t-on-amber {
+  color: #111827;
+}
+
+/* ---------- 背景与边框 ---------- */
+.ai-bg-panel {
+  background: rgba(10, 12, 18, 0.7);
+}
+.ai-bg-soft {
+  background: rgba(0, 0, 0, 0.5);
+}
+.ai-bg-sunken {
+  background: #1f2937;
+}
+.ai-bg-raised {
+  background: #374151;
+}
+.ai-bg-chip {
+  background: #4b5563;
+}
+.ai-bg-chip-light {
+  background: #f3f4f6;
+}
+.ai-bg-amber-faint {
+  background: rgba(255, 161, 23, 0.1);
+}
+.ai-bg-amber-soft {
+  background: rgba(255, 161, 23, 0.3);
+}
+.ai-bg-amber {
+  background: #d97706;
+}
+.ai-bg-green {
+  background: #16a34a;
+  color: #ffffff;
+}
+.ai-bg-red {
+  background: #dc2626;
+  color: #ffffff;
+}
+.ai-bg-green:hover {
+  background: #15803d;
+}
+.ai-bg-red:hover {
+  background: #b91c1c;
+}
+.ai-b {
+  border: 1px solid transparent;
+}
+.ai-b-gray {
+  border: 1px solid #374151;
+}
+.ai-b-amber {
+  border: 1px solid rgba(255, 161, 23, 0.3);
+}
+
+/* ---------- 布局 ---------- */
+.ai-flex {
+  display: flex;
+}
+.ai-flex-col {
+  display: flex;
+  flex-direction: column;
+}
+.ai-flex-1 {
+  flex: 1;
+}
+.ai-items-center {
+  display: flex;
+  align-items: center;
+}
+.ai-justify-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ai-justify-end {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+.ai-items-center.ai-justify-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-grid {
+  display: grid;
+}
+.ai-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+.ai-gap-2 {
+  gap: 0.5rem;
+}
+.ai-relative {
+  position: relative;
+}
+.ai-scroll {
+  overflow-y: auto;
+}
+.ai-clip {
+  overflow: hidden;
+}
+.ai-w-full {
+  width: 100%;
+}
+.ai-w-9 {
+  width: 2.25rem;
+}
+.ai-h-5 {
+  height: 1.25rem;
+}
+.ai-h-full {
+  height: 100%;
+}
+.ai-text-center {
+  text-align: center;
+}
+
+/* ---------- 字重与字号 ---------- */
+.ai-fw-bold {
+  font-weight: 700;
+}
+.ai-fw-semibold {
+  font-weight: 600;
+}
+.ai-fw-medium {
+  font-weight: 500;
+}
+.ai-fs-lg {
+  font-size: 1.125rem;
+}
+.ai-fs-sm {
+  font-size: 0.875rem;
+}
+.ai-fs-xs {
+  font-size: 0.75rem;
+}
+
+/* ---------- 圆角 ---------- */
+.ai-r-sm {
+  border-radius: 4px;
+}
+.ai-r-lg {
+  border-radius: 8px;
+}
+.ai-r-full {
+  border-radius: 9999px;
+}
+
+/* ---------- 间距 ---------- */
+.ai-p-4 {
+  padding: 1rem;
+}
+.ai-p-2 {
+  padding: 0.5rem;
+}
+.ai-px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+.ai-px-2 {
+  padding-left: 0.5rem;
+  padding-right: 0.5rem;
+}
+.ai-px-3 {
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+}
+.ai-px-4 {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+.ai-py-05 {
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+}
+.ai-py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+.ai-py-15 {
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+.ai-py-2 {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+.ai-py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+.ai-mb-1 {
+  margin-bottom: 0.25rem;
+}
+.ai-mb-2 {
+  margin-bottom: 0.5rem;
+}
+.ai-mb-3 {
+  margin-bottom: 0.75rem;
+}
+.ai-mb-4 {
+  margin-bottom: 1rem;
+}
+.ai-mt-1 {
+  margin-top: 0.25rem;
+}
+.ai-mt-2 {
+  margin-top: 0.5rem;
+}
+.ai-mt-3 {
+  margin-top: 0.75rem;
+}
+.ai-mt-4 {
+  margin-top: 1rem;
+}
+.ai-mr-1 {
+  margin-right: 0.25rem;
+}
+.ai-mr-2 {
+  margin-right: 0.5rem;
+}
+
+/* ---------- 纵向堆叠间距 ---------- */
+.ai-space-y-1 > * + * {
+  margin-top: 0.25rem;
+}
+.ai-space-y-2 > * + * {
+  margin-top: 0.5rem;
+}
+.ai-space-y-4 > * + * {
+  margin-top: 1rem;
+}
+
+/* ---------- 表单控件（原生控件在深底上默认太亮，统一压一档） ---------- */
+.ai-form input[type='text'],
+.ai-form input[type='number'],
+.ai-form select,
+.ai-form textarea {
+  background: #111827;
+  color: #e5e7eb;
+  border: 1px solid #374151;
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.ai-form input[type='range'] {
+  accent-color: #ffa117;
+}
+
+.ai-form label {
+  color: #9ca3af;
+}

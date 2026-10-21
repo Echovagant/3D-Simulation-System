@@ -9,6 +9,7 @@ import { createPinia } from "pinia";
 
 import '@fortawesome/fontawesome-free/css/all.min.css'
 import './assets/styles/global.css'
+import './assets/styles/ai-panel-kit.css'
 
 const pinia = createPinia();
 const app = createApp(App);

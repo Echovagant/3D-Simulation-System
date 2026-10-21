@@ -444,7 +444,7 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
 .category-tab {
   padding: 10px 20px;
   background-color: rgba(0, 0, 0, 0.6);
-  color: #FFD700;
+  color: #e5e7eb;
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -456,10 +456,10 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
 }
 
 .category-tab.active {
-  background-color: #FFD700;
-  color: #000;
+  background-color: #6e5af0;
+  color: #ffffff;
   font-weight: bold;
-  box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
+  box-shadow: 0 4px 8px rgba(110, 90, 240, 0.35);
 }
 
 .category-tab:hover:not(.active) {
@@ -594,8 +594,8 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
 }
 
 .action-btn:hover {
-  background-color: #FFD700;
-  color: #000;
+  background-color: #6e5af0;
+  color: #ffffff;
 }
 
 .model-info {
@@ -646,8 +646,8 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
 /* 按钮样式 */
 .primary-btn {
   padding: 10px 20px;
-  background-color: #FFD700;
-  color: #000;
+  background-color: #6e5af0;
+  color: #ffffff;
   border: none;
   border-radius: 8px;
   font-weight: bold;
@@ -659,7 +659,7 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
 }
 
 .primary-btn:hover {
-  background-color: #e6c200;
+  background-color: #4b37c9;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
@@ -797,8 +797,8 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
 }
 
 .file-upload-area:hover {
-  border-color: #FFD700;
-  background-color: #fff8e6;
+  border-color: #6e5af0;
+  background-color: #f0effc;
 }
 
 .file-upload-area input {

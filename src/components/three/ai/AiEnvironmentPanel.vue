@@ -1,18 +1,18 @@
 <template>
-  <div class="ai-environment-panel p-4 bg-black/70 rounded-lg border border-yellow-500/30">
-    <h3 class="text-yellow-400 text-lg font-bold mb-3 flex items-center">
-      <i class="fa fa-cogs mr-2"></i>环境设置
+  <div class="ai-form ai-environment-panel ai-p-4 ai-bg-panel ai-r-lg ai-b ai-b-amber">
+    <h3 class="ai-t-amber ai-fs-lg ai-fw-bold ai-mb-3 ai-flex ai-items-center">
+      <i class="fa fa-cogs ai-mr-2"></i>环境设置
     </h3>
 
     <form @submit.prevent="saveSettings">
-      <div class="space-y-4">
+      <div class="ai-space-y-4">
         <!-- 场景类型 -->
         <div>
-          <label class="block text-yellow-300 text-sm mb-1">场景类型</label>
+          <label class="block ai-t-amber-soft ai-fs-sm ai-mb-1">场景类型</label>
           <select
             v-model="settings.scenario"
             @change="updateSettings"
-            class="w-full bg-gray-800 border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+            class="ai-w-full ai-bg-sunken ai-b ai-b-gray ai-t-primary ai-r-sm ai-px-3 ai-py-2 ai-fs-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
           >
             <option value="navigation">导航挑战</option>
             <option value="interaction">物体交互</option>
@@ -23,9 +23,9 @@
 
         <!-- 难度设置 -->
         <div>
-          <label class="block text-yellow-300 text-sm mb-1">难度级别</label>
-          <div class="flex items-center gap-2">
-            <label class="inline-flex items-center cursor-pointer">
+          <label class="block ai-t-amber-soft ai-fs-sm ai-mb-1">难度级别</label>
+          <div class="ai-flex ai-items-center ai-gap-2">
+            <label class="inline-flex ai-items-center cursor-pointer">
               <input
                 type="radio"
                 name="difficulty"
@@ -34,9 +34,9 @@
                 @change="updateSettings"
                 class="sr-only peer accent-yellow-500"
               >
-              <span class="text-sm text-gray-300">简单</span>
+              <span class="ai-fs-sm ai-t">简单</span>
             </label>
-            <label class="inline-flex items-center cursor-pointer">
+            <label class="inline-flex ai-items-center cursor-pointer">
               <input
                 type="radio"
                 name="difficulty"
@@ -45,9 +45,9 @@
                 @change="updateSettings"
                 class="sr-only peer accent-yellow-500"
               >
-              <span class="text-sm text-gray-300">中等</span>
+              <span class="ai-fs-sm ai-t">中等</span>
             </label>
-            <label class="inline-flex items-center cursor-pointer">
+            <label class="inline-flex ai-items-center cursor-pointer">
               <input
                 type="radio"
                 name="difficulty"
@@ -56,14 +56,14 @@
                 @change="updateSettings"
                 class="sr-only peer accent-yellow-500"
               >
-              <span class="text-sm text-gray-300">困难</span>
+              <span class="ai-fs-sm ai-t">困难</span>
             </label>
           </div>
         </div>
 
         <!-- 障碍物密度（使用计算属性格式化） -->
         <div>
-          <label class="block text-yellow-300 text-sm mb-1">
+          <label class="block ai-t-amber-soft ai-fs-sm ai-mb-1">
             障碍物密度: {{ formattedObstaclesDensity }}
           </label>
           <input
@@ -73,13 +73,13 @@
             step="0.1"
             v-model.number="settings.obstaclesDensity"
             @input="updateSettings"
-            class="w-full accent-yellow-500"
+            class="ai-w-full accent-yellow-500"
           >
         </div>
 
         <!-- 时间限制 -->
         <div>
-          <label class="block text-yellow-300 text-sm mb-1">
+          <label class="block ai-t-amber-soft ai-fs-sm ai-mb-1">
             时间限制 (秒，0表示无限制)
           </label>
           <input
@@ -89,24 +89,24 @@
             step="10"
             v-model.number="settings.timeLimit"
             @change="updateSettings"
-            class="w-full bg-gray-800 border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+            class="ai-w-full ai-bg-sunken ai-b ai-b-gray ai-t-primary ai-r-sm ai-px-3 ai-py-2 ai-fs-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
           >
         </div>
 
         <!-- 胜利条件 -->
         <div>
-          <label class="block text-yellow-300 text-sm mb-1">胜利条件</label>
+          <label class="block ai-t-amber-soft ai-fs-sm ai-mb-1">胜利条件</label>
           <input
             type="text"
             v-model="settings.winCondition"
             @change="updateSettings"
-            class="w-full bg-gray-800 border border-gray-700 text-white rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
+            class="ai-w-full ai-bg-sunken ai-b ai-b-gray ai-t-primary ai-r-sm ai-px-3 ai-py-2 ai-fs-sm focus:outline-none focus:ring-1 focus:ring-yellow-500"
           >
         </div>
 
         <button
           type="submit"
-          class="w-full bg-yellow-600 text-black font-medium py-2 px-4 rounded hover:bg-yellow-500 transition-colors text-sm mt-2"
+          class="ai-w-full ai-bg-amber ai-t-on-amber ai-fw-medium ai-py-2 ai-px-4 ai-r-sm hover:bg-yellow-500 transition-colors ai-fs-sm ai-mt-2"
         >
           应用设置
         </button>
