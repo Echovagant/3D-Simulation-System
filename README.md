@@ -20,7 +20,7 @@
   <tr>
     <td align="center"><b>250.48 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>225</b><br><sub>测试用例 · 28 个文件</sub></td>
-    <td align="center"><b>9</b><br><sub>构建闸门 · 全绿</sub></td>
+    <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>12</b><br><sub>运行时依赖 · 审计前 34</sub></td>
     <td align="center"><b>239</b><br><sub>死类名 · 审计前 757</sub></td>
     <td align="center"><b>0</b><br><sub>类型错误</sub></td>
@@ -44,7 +44,7 @@
 
 一个**工程化**的 3D 场景编辑与仿真平台：左边编辑场景，右边跑物理，中间能放规则式智能体。
 
-它不是一个「能跑就行」的 demo。这个仓库做过一次**完整的代码审计**——19 份实施计划、4 轮独立复核，审计报告与实施计划都在仓库外归档。审计前 `npm run build` 跑不过、物理循环启动就死、删个物体刚体还在场上碰撞、模型在生产环境 404、模型库展示的全是编出来的数字。现在这些全部修掉，并且用 **9 道构建闸门**守住不回退。
+它不是一个「能跑就行」的 demo。这个仓库做过一次**完整的代码审计**——19 份实施计划、4 轮独立复核，审计报告与实施计划都在仓库外归档。审计前 `npm run build` 跑不过、物理循环启动就死、删个物体刚体还在场上碰撞、模型在生产环境 404、模型库展示的全是编出来的数字。现在这些全部修掉，并且用 **11 道构建闸门**守住不回退。
 
 ## 核心能力
 
@@ -116,7 +116,7 @@ cd 3D-Simulation-System
 npm install
 
 npm run dev        # 开发服务器
-npm run build      # 类型检查 + 构建 + 测试 + 9 道闸门
+npm run build      # 类型检查 + 构建 + 测试 + 11 道闸门
 npm run preview    # 预览生产产物
 ```
 
@@ -127,10 +127,11 @@ npm run preview    # 预览生产产物
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 开发服务器 |
-| `npm run build` | `type-check` + `vite build` + `npm test` + 9 道闸门 |
+| `npm run build` | `type-check` + `vite build` + `npm test` + 11 道闸门 |
 | `npm test` | Vitest 全量用例（28 文件 / 225 例） |
 | `npm run type-check` | `vue-tsc` 类型检查（零错误） |
 | `npm run verify:all` | 单独跑全部校验闸门 |
+| `npm run gen:brand` | 重新生成站点 logo 与 favicon |
 | `npm run gen:models` | 重新生成程序化模型（几何配方在 `scripts/model-recipes.mjs`） |
 | `npm run gen:thumbnails` | 从真实模型文件重新渲染缩略图 |
 | `npm run format` | Prettier 格式化（只对 `src/` 下的非 `.vue` 文件安全） |
@@ -194,6 +195,8 @@ npm run preview    # 预览生产产物
 | `verify:deps` | 20 个零引用依赖不得复活 |
 | `verify:tailwind` | 死 Tailwind 类名不得超过 239 处 |
 | `verify:model-metadata` | 模型库的文件属性与缩略图必须与磁盘上的 GLB 一致 |
+| `verify:readme` | README 里的数字、图片、锚点必须与真实产物一致 |
+| `verify:asset-licenses` | 每个资产的来源与协议都要清楚，不得有带限制的协议 |
 | `npm test` | 28 个测试文件 / 225 个用例 |
 
 **当前实测**
@@ -201,7 +204,7 @@ npm run preview    # 预览生产产物
 | 指标 | 数值 |
 | --- | --- |
 | 入口 chunk | **250.48 KB**（上限 1536 KB） |
-| 产物体积 | 11.95 MB |
+| 产物体积 | 11.66 MB |
 | 运行时依赖 | 12 个（审计前 34 个） |
 | 测试 | 28 文件 / 225 例全绿 |
 | 类型检查 | 0 错误 |
@@ -231,7 +234,7 @@ src/
 ├── docs/                 # 11 篇文档正文（会被渲染进系统文档页）
 ├── utils/                # 固定步长累加器 / markdown 渲染 / 缩略图 …
 └── assets/styles/        # 主题令牌 + AI 面板工具层
-scripts/                  # 9 道构建闸门
+scripts/                  # 11 道构建闸门
 public/assets/models/     # 9 个模型（7 个程序化生成 + 2 个 CC BY 4.0，署名见 NOTICE）
 ```
 
@@ -247,7 +250,7 @@ public/assets/models/     # 9 个模型（7 个程序化生成 + 2 个 CC BY 4.0
 
 ## 贡献
 
-欢迎提 Issue 与 PR。动手前请先读 [`DESIGN.md`](DESIGN.md)（设计令牌唯一真源）与本 README 的「质量保障」——**改完必须跑 `npm run build`**，9 道闸门全绿才算完成。
+欢迎提 Issue 与 PR。动手前请先读 [`DESIGN.md`](DESIGN.md)（设计令牌唯一真源）与本 README 的「质量保障」——**改完必须跑 `npm run build`**，11 道闸门全绿才算完成。
 
 ## 许可证
 
@@ -260,6 +263,10 @@ public/assets/models/     # 9 个模型（7 个程序化生成 + 2 个 CC BY 4.0
 | --- | --- | --- |
 | `DamagedHelmet.glb` | ctxwing (2018)，Khronos glTF 示例资产 | CC BY 4.0 |
 | `Fox.glb` | PixelMannen、@tomkranis、@AsoboStudio | CC BY 4.0 |
+
+其余资产——**7 个 3D 模型、9 张模型缩略图、站点 logo、favicon、README 封面与页面截图**——全部由本项目自己的脚本生成（`npm run gen:models` / `gen:thumbnails` / `gen:brand`），随 Apache-2.0 发布。
+
+`verify:asset-licenses` 闸门会持续核对这件事：每个资产的来源都要有交代，不得出现带限制或传染性的协议，依赖里也不允许混进 GPL / AGPL / CC-BY-NC。
 
 ## 致谢
 
