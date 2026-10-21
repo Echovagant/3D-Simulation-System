@@ -25,7 +25,8 @@
     "verify:all": "npm run verify:clean && npm run verify:no-babylon && npm run verify:overview-contrast && npm run verify:docs && npm run verify:deps && npm run verify:tailwind && npm run verify:bundle-size && npm run verify:model-metadata && npm run verify:readme",
     "test": "vitest run",
     "test:watch": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "gen:models": "node scripts/generate-model-assets.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d": "^0.19.3",

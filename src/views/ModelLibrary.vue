@@ -236,6 +236,7 @@
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useModelStore } from '@/stores/modelStore';
+import { isPlaceholderModel } from '@/data/modelLibrary';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
 
 // ===================== 类型定义 =====================
@@ -413,7 +414,7 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
  * 占位条目没有可加载的文件，因此不报告任何文件属性。
  * 界面显示「—」而不是一组看起来很真的假数字。
  */
-const isPlaceholder = (model: Model): boolean => model.modelUrl === '#';
+const isPlaceholder = isPlaceholderModel;
 
 /** 会话上传的模型没有做几何分析，面数/材质/动画是未知的 */
 const statsPending = (model: Model): boolean => model.sessionOnly === true;

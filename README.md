@@ -11,7 +11,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="Vitest 28 files / 223 cases" src="https://img.shields.io/badge/test-28%20files%20%2F%20223%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="Vitest 28 files / 225 cases" src="https://img.shields.io/badge/test-28%20files%20%2F%20225%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="9 build gates" src="https://img.shields.io/badge/build%20gates-9%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -19,7 +19,7 @@
 <table>
   <tr>
     <td align="center"><b>250.48 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>223</b><br><sub>测试用例 · 28 个文件</sub></td>
+    <td align="center"><b>225</b><br><sub>测试用例 · 28 个文件</sub></td>
     <td align="center"><b>9</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>12</b><br><sub>运行时依赖 · 审计前 34</sub></td>
     <td align="center"><b>239</b><br><sub>死类名 · 审计前 757</sub></td>
@@ -67,7 +67,7 @@
 <tr>
 <td width="33%" valign="top" align="center">
 <b>📦 模型资源库</b><br><br>
-<sub>9 个内置条目，2 个可加载，文件属性由构建闸门逐项核对</sub>
+<sub>9 个内置条目<b>全部可加载</b>，其中 7 个是本仓库程序化生成的</sub>
 </td>
 <td width="33%" valign="top" align="center">
 <b>📚 系统文档</b><br><br>
@@ -128,9 +128,10 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | `type-check` + `vite build` + `npm test` + 9 道闸门 |
-| `npm test` | Vitest 全量用例（28 文件 / 223 例） |
+| `npm test` | Vitest 全量用例（28 文件 / 225 例） |
 | `npm run type-check` | `vue-tsc` 类型检查（零错误） |
 | `npm run verify:all` | 单独跑全部校验闸门 |
+| `npm run gen:models` | 重新生成程序化模型（几何配方在 `scripts/model-recipes.mjs`） |
 | `npm run gen:thumbnails` | 从真实模型文件重新渲染缩略图 |
 | `npm run format` | Prettier 格式化（只对 `src/` 下的非 `.vue` 文件安全） |
 
@@ -193,20 +194,20 @@ npm run preview    # 预览生产产物
 | `verify:deps` | 20 个零引用依赖不得复活 |
 | `verify:tailwind` | 死 Tailwind 类名不得超过 239 处 |
 | `verify:model-metadata` | 模型库的文件属性与缩略图必须与磁盘上的 GLB 一致 |
-| `npm test` | 28 个测试文件 / 223 个用例 |
+| `npm test` | 28 个测试文件 / 225 个用例 |
 
 **当前实测**
 
 | 指标 | 数值 |
 | --- | --- |
 | 入口 chunk | **250.48 KB**（上限 1536 KB） |
-| 产物体积 | 11.02 MB |
+| 产物体积 | 11.95 MB |
 | 运行时依赖 | 12 个（审计前 34 个） |
-| 测试 | 28 文件 / 223 例全绿 |
+| 测试 | 28 文件 / 225 例全绿 |
 | 类型检查 | 0 错误 |
 | 7 个页面 | 0 console error / 0 未捕获异常 / 0 网络失败 |
 | 死 Tailwind 类名 | 757 → **239** |
-| 可加载模型 | 2 个（其余 7 个是占位条目） |
+| 可加载模型 | 9 个（7 个程序化生成 + 2 个第三方 CC BY 4.0） |
 
 > 唯一的 console 输出是一条来自 **Rapier compat 包内部**的弃用警告
 > （`using deprecated parameters for the initialization function`）——
@@ -231,7 +232,7 @@ src/
 ├── utils/                # 固定步长累加器 / markdown 渲染 / 缩略图 …
 └── assets/styles/        # 主题令牌 + AI 面板工具层
 scripts/                  # 9 道构建闸门
-public/assets/models/     # 2 个可加载模型（CC BY 4.0，署名见 NOTICE）
+public/assets/models/     # 9 个模型（7 个程序化生成 + 2 个 CC BY 4.0，署名见 NOTICE）
 ```
 
 </details>

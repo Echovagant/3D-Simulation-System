@@ -22,8 +22,8 @@ import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
-const MODEL_DIR = join(repoRoot, 'public', 'assets', 'models', 'characters')
-const OUT_DIR = join(repoRoot, 'public', 'assets', 'models', 'thumbnails')
+const MODELS_ROOT = join(repoRoot, 'public', 'assets', 'models')
+const OUT_DIR = join(MODELS_ROOT, 'thumbnails')
 const W = 512
 const H = 384
 const PORT = 5281
@@ -54,16 +54,26 @@ const server = createServer(async (req, res) => {
 })
 await new Promise((r) => server.listen(PORT, '127.0.0.1', r))
 
-// ---- 待渲染的模型文件 ----
+// ---- 待渲染的模型文件：扫 models/ 下的每个分类目录 ----
 let files = []
 try {
-  files = (await readdir(MODEL_DIR)).filter((f) => f.toLowerCase().endsWith('.glb'))
-} catch {
-  console.error(`模型目录不存在: ${MODEL_DIR}`)
+  const categories = (await readdir(MODELS_ROOT, { withFileTypes: true }))
+    .filter((e) => e.isDirectory() && e.name !== 'thumbnails')
+    .map((e) => e.name)
+  for (const category of categories) {
+    const entries = await readdir(join(MODELS_ROOT, category))
+    for (const name of entries) {
+      if (name.toLowerCase().endsWith('.glb')) {
+        files.push({ category, name })
+      }
+    }
+  }
+} catch (err) {
+  console.error(`模型目录读取失败: ${MODELS_ROOT}（${err.message}）`)
   process.exit(1)
 }
 if (files.length === 0) {
-  console.error(`${MODEL_DIR} 下没有 .glb 文件`)
+  console.error(`${MODELS_ROOT} 下没有 .glb 文件`)
   process.exit(1)
 }
 await mkdir(OUT_DIR, { recursive: true })
@@ -281,8 +291,8 @@ await new Promise((r) => setTimeout(r, 2500))
 
 const results = []
 for (const file of files) {
-  const url = `/public/assets/models/characters/${file}`
-  const name = basename(file, extname(file))
+  const url = `/public/assets/models/${file.category}/${file.name}`
+  const name = basename(file.name, extname(file.name))
 
   const evaluated = await send('Runtime.evaluate', {
     expression: `window.renderModel(${JSON.stringify(url)})`,
@@ -307,9 +317,9 @@ for (const file of files) {
   const outFile = join(OUT_DIR, `${name}.png`)
   await writeFile(outFile, buf)
 
-  results.push({ name, ok: true, bytes: buf.length, ...stats })
+  results.push({ name, category: file.category, ok: true, bytes: buf.length, ...stats })
   console.log(
-    `✓ ${name.padEnd(18)} ${String(buf.length).padStart(7)} B  ` +
+    `✓ ${name.padEnd(24)} ${file.category.padEnd(13)} ${String(buf.length).padStart(7)} B  ` +
       `网格 ${stats.meshes} · 三角形 ${stats.triangles.toLocaleString()} · ` +
       `尺寸 ${stats.size.map((v) => v.toFixed(2)).join('×')}`,
   )

@@ -44,9 +44,28 @@ describe('createModelLibrary', () => {
     }
   })
 
-  it('modelUrl 为 # 的条目在清单里可数', () => {
+  it('每个条目都指向真实模型文件，没有占位条目', () => {
     const list = createModelLibrary()
-    expect(list.filter((m) => m.modelUrl === '#').length).toBeGreaterThan(0)
+    expect(list.filter((m) => m.modelUrl === '#')).toHaveLength(0)
+    expect(list.every((m) => m.modelUrl.startsWith('/assets/models/'))).toBe(true)
+  })
+
+  it('每个条目的缩略图都指向渲染图，不是占位图', () => {
+    for (const m of createModelLibrary()) {
+      expect(m.thumbnailUrl, `${m.name} 的缩略图应指向渲染图`).toMatch(
+        /^\/assets\/models\/thumbnails\/.+\.png$/,
+      )
+    }
+  })
+
+  it('真实模型不报告空的格式与零属性', () => {
+    // 占位条目才允许零属性；真实模型必须有真实属性
+    for (const m of createModelLibrary()) {
+      expect(m.format, `${m.name} 缺少格式`).not.toBe('')
+      expect(m.size, `${m.name} 缺少文件大小`).toBeGreaterThan(0)
+      expect(m.polyCount, `${m.name} 缺少多边形数`).toBeGreaterThan(0)
+      expect(m.materialCount, `${m.name} 缺少材质数`).toBeGreaterThan(0)
+    }
   })
 
   it('不同种子产生不同的 uploadDate', () => {
