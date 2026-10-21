@@ -8,20 +8,34 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/vue"><img alt="Vue 3.5.44" src="https://img.shields.io/badge/Vue-3.5.44-42b883?logo=vuedotjs&logoColor=35495e"></a>
   <a href="https://threejs.org/"><img alt="Three.js 0.180.0" src="https://img.shields.io/badge/Three.js-0.180.0-000000?logo=threedotjs&logoColor=000000"></a>
-  <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.0" src="https://img.shields.io/badge/Rapier3D-0.19.0-f47d21?logo=rust&logoColor=000000"></a>
+  <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="Vitest 27 files / 216 cases" src="https://img.shields.io/badge/test-27%20files%20%2F%20216%20cases-16a34a?logo=vitest&logoColor=fd9714">
-  <img alt="8 build gates" src="https://img.shields.io/badge/build%20gates-8%20passed-16a34a?logo=githubactions&logoColor=2088ff">
+  <img alt="Vitest 28 files / 222 cases" src="https://img.shields.io/badge/test-28%20files%20%2F%20222%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="9 build gates" src="https://img.shields.io/badge/build%20gates-9%20passed-16a34a?logo=githubactions&logoColor=2088ff">
+  <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
 
+<table>
+  <tr>
+    <td align="center"><b>250.48 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>222</b><br><sub>测试用例 · 28 个文件</sub></td>
+    <td align="center"><b>9</b><br><sub>构建闸门 · 全绿</sub></td>
+    <td align="center"><b>12</b><br><sub>运行时依赖 · 审计前 34</sub></td>
+    <td align="center"><b>239</b><br><sub>死类名 · 审计前 757</sub></td>
+    <td align="center"><b>0</b><br><sub>类型错误</sub></td>
+  </tr>
+</table>
+
 <p align="center">
+  <a href="#这是什么">这是什么</a> ·
   <a href="#核心能力">核心能力</a> ·
   <a href="#界面">界面</a> ·
   <a href="#快速开始">快速开始</a> ·
+  <a href="#技术栈">技术栈</a> ·
   <a href="#架构">架构</a> ·
   <a href="#质量保障">质量保障</a> ·
-  <a href="#文档">文档</a>
+  <a href="#许可证">许可证</a>
 </p>
 
 ---
@@ -30,17 +44,41 @@
 
 一个**工程化**的 3D 场景编辑与仿真平台：左边编辑场景，右边跑物理，中间能放规则式智能体。
 
-它不是一个"能跑就行"的 demo。这个仓库做过一次**完整的代码审计**——19 份实施计划、4 轮独立复核，审计报告与实施计划都在仓库外归档。审计前 `npm run build` 跑不过、物理循环启动就死、删个物体刚体还在场上碰撞、模型在生产环境 404。现在这些全部修掉，并且用 **8 道构建闸门**守住不回退。
+它不是一个「能跑就行」的 demo。这个仓库做过一次**完整的代码审计**——19 份实施计划、4 轮独立复核，审计报告与实施计划都在仓库外归档。审计前 `npm run build` 跑不过、物理循环启动就死、删个物体刚体还在场上碰撞、模型在生产环境 404、模型库展示的全是编出来的数字。现在这些全部修掉，并且用 **9 道构建闸门**守住不回退。
 
 ## 核心能力
 
 <div align="center">
-
-| | | |
-|:---:|:---:|:---:|
-| 🛠️ <b>场景编辑器</b><br>拖拽式放置基本体 / 模型，<br>属性面板实时改变换，<br>改完立刻写回刚体 | 🔬 <b>仿真实验室</b><br>固定步长刚体物理，<br>速度与帧率解耦，<br>预设场景一键切换 | 🤖 <b>AI 演武场</b><br>规则式智能体读真实感知、<br>绕开障碍物自主移动 |
-| 📦 <b>模型资源库</b><br>9 个内置条目，<br>本地渐变缩略图，<br>上传产生可用对象 URL | 📚 <b>系统文档</b><br>11 篇正文，<br>API / 指南 / 示例三类，<br>全部与源码逐词核对 | 🎨 <b>浅色科技网络</b><br>Canvas 2D 自绘背景，<br>零 Babylon 依赖，<br>全站靛紫单主色 |
-
+<table>
+<tr>
+<td width="33%" valign="top" align="center">
+<b>🛠️ 场景编辑器</b><br><br>
+<sub>拖拽式放置基本体与模型，属性面板实时改变换，改完立刻写回刚体与碰撞体</sub>
+</td>
+<td width="33%" valign="top" align="center">
+<b>🔬 仿真实验室</b><br><br>
+<sub>固定步长刚体物理，速度与帧率解耦，预设场景一键切换</sub>
+</td>
+<td width="33%" valign="top" align="center">
+<b>🤖 AI 演武场</b><br><br>
+<sub>规则式智能体读真实感知、绕开障碍物自主移动</sub>
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top" align="center">
+<b>📦 模型资源库</b><br><br>
+<sub>9 个内置条目，2 个可加载，文件属性由构建闸门逐项核对</sub>
+</td>
+<td width="33%" valign="top" align="center">
+<b>📚 系统文档</b><br><br>
+<sub>11 篇正文，API / 指南 / 示例三类，全部与源码逐词交叉核对</sub>
+</td>
+<td width="33%" valign="top" align="center">
+<b>🎨 浅色科技网络</b><br><br>
+<sub>Canvas 2D 自绘背景，零 Babylon 依赖，全站靛紫单主色</sub>
+</td>
+</tr>
+</table>
 </div>
 
 **它真正做对的几件事：**
@@ -49,24 +87,24 @@
 - **仿真速度与显示刷新率解耦。** 60Hz / 30Hz / 15Hz 屏上都是 **60.3~60.6 步/秒**——此前同一场景在 30Hz 屏上只跑 44% 速度。
 - **Vue 不再代理 three.js 对象。** `objects` 用 `shallowRef`、`threeObject` 打 `markRaw`，属性面板不再每帧遍历整棵场景图：每帧属性访问 **410.7 → 44.4（−89.2%）**，`ScriptDuration` **−92.4%**。
 - **改变换真的改到物理上。** 属性面板改位置 / 旋转 / 缩放 → 走 `update-transform` 事件写回刚体与碰撞体，缩放会同步重建碰撞体形状。
+- **界面不编数字。** 模型库的文件大小、面数、材质数、动画数取自 GLB 实测值；占位条目显示「—」；本次会话上传显示「待分析」。
 - **外部资源零运行时依赖。** 不再从海外 CDN 拉字体与随机图，全部本地化，并落 CSP。
 
 ## 界面
 
 <div align="center">
-
-| 总览 | 场景编辑器 | 仿真实验室 |
-|:---:|:---:|:---:|
-| <img src="docs/screenshots/overview.png" alt="总览页" width="100%"> | <img src="docs/screenshots/scene-editor.png" alt="场景编辑器" width="100%"> | <img src="docs/screenshots/simulation-lab.png" alt="仿真实验室" width="100%"> |
-
-</div>
-
-<div align="center">
-
-| AI 演武场 | 模型资源库 | 系统文档 |
-|:---:|:---:|:---:|
-| <img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"> | <img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"> | <img src="docs/screenshots/docs.png" alt="系统文档" width="100%"> |
-
+<table>
+<tr>
+<td width="33%" align="center"><img src="docs/screenshots/overview.png" alt="总览页" width="100%"><br><sub>总览页</sub></td>
+<td width="33%" align="center"><img src="docs/screenshots/scene-editor.png" alt="场景编辑器" width="100%"><br><sub>场景编辑器</sub></td>
+<td width="33%" align="center"><img src="docs/screenshots/simulation-lab.png" alt="仿真实验室" width="100%"><br><sub>仿真实验室</sub></td>
+</tr>
+<tr>
+<td width="33%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场</sub></td>
+<td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库</sub></td>
+<td width="33%" align="center"><img src="docs/screenshots/docs.png" alt="系统文档" width="100%"><br><sub>系统文档</sub></td>
+</tr>
+</table>
 </div>
 
 ## 快速开始
@@ -78,22 +116,22 @@ cd 3D-Simulation-System
 npm install
 
 npm run dev        # 开发服务器
-npm run build      # 类型检查 + 构建 + 测试 + 8 道闸门
+npm run build      # 类型检查 + 构建 + 测试 + 9 道闸门
 npm run preview    # 预览生产产物
 ```
 
-浏览器打开 `http://localhost:5173`。左侧是导航，依次是：总览 / 场景编辑器 / 仿真实验室 / 模型资源库 / AI 演武场 / 系统文档。
+浏览器打开 `http://localhost:5173`。左侧是导航，依次是：首页 / 总览 / 场景编辑器 / 仿真实验室 / 模型资源库 / AI 演武场 / 系统文档。
 
 **常用命令**
 
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 开发服务器 |
-| `npm run build` | `type-check` + `vite build` + `npm test` + 8 道闸门 |
-| `npm test` | Vitest 全量用例（27 文件 / 216 例） |
+| `npm run build` | `type-check` + `vite build` + `npm test` + 9 道闸门 |
+| `npm test` | Vitest 全量用例（28 文件 / 222 例） |
 | `npm run type-check` | `vue-tsc` 类型检查（零错误） |
 | `npm run verify:all` | 单独跑全部校验闸门 |
-| `npm run format` | Prettier 格式化 |
+| `npm run format` | Prettier 格式化（只对 `src/` 下的非 `.vue` 文件安全） |
 
 ## 技术栈
 
@@ -103,7 +141,7 @@ npm run preview    # 预览生产产物
 | 构建 | Vite + Vue Plugin | 6.4.4 / 6.0.1 |
 | 语言 | TypeScript | 5.8.3 |
 | 渲染 | Three.js | 0.180.0 |
-| 物理 | Rapier3D（WASM） | 0.19.0 |
+| 物理 | Rapier3D（WASM） | 0.19.3 |
 | 状态 | Pinia | 3.0.3 |
 | 路由 | Vue Router | 4.5.1 |
 | 文档渲染 | marked + DOMPurify | 16.3.0 / 3.4.17 |
@@ -153,23 +191,31 @@ npm run preview    # 预览生产产物
 | `verify:bundle-size` | 入口 chunk ≤ 1.5 MB |
 | `verify:deps` | 20 个零引用依赖不得复活 |
 | `verify:tailwind` | 死 Tailwind 类名不得超过 239 处 |
-| `npm test` | 27 个测试文件 / 216 个用例 |
+| `verify:model-metadata` | 模型库的文件属性必须与磁盘上的 GLB 一致 |
+| `npm test` | 28 个测试文件 / 222 个用例 |
 
 **当前实测**
 
 | 指标 | 数值 |
 | --- | --- |
-| 入口 chunk | **251.17 KB**（上限 1536 KB） |
-| 产物体积 | 25.83 MB |
+| 入口 chunk | **250.48 KB**（上限 1536 KB） |
+| 产物体积 | 10.45 MB |
 | 运行时依赖 | 12 个（审计前 34 个） |
-| 测试 | 27 文件 / 216 例全绿 |
+| 测试 | 28 文件 / 222 例全绿 |
 | 类型检查 | 0 错误 |
-| 7 条路由 | 0 console error / 0 page error / 0 网络失败 |
+| 7 个页面 | 0 console error / 0 未捕获异常 / 0 网络失败 |
 | 死 Tailwind 类名 | 757 → **239** |
+| 可加载模型 | 2 个（其余 7 个是占位条目） |
+
+> 唯一的 console 输出是一条来自 **Rapier compat 包内部**的弃用警告
+> （`using deprecated parameters for the initialization function`）——
+> 该包的公开签名就是无参 `init()`，内部却仍按旧参数格式调用 wasm-bindgen，
+> 从公开 API 侧无法规避，因此如实记录在此。
 
 **这仓库刚做完一次全面审计**——19 份实施计划、4 轮独立复核，发现的问题全部落地并用闸门守住。审计报告与实施计划归档在仓库外（含逐条处置记录与被驳回的误判）。
 
-## 项目结构
+<details>
+<summary><b>项目结构</b></summary>
 
 ```
 src/
@@ -183,8 +229,11 @@ src/
 ├── docs/                 # 11 篇文档正文（会被渲染进系统文档页）
 ├── utils/                # 固定步长累加器 / markdown 渲染 / 缩略图 …
 └── assets/styles/        # 主题令牌 + AI 面板工具层
-scripts/                  # 8 道构建闸门
+scripts/                  # 9 道构建闸门
+public/assets/models/     # 2 个可加载模型（CC BY 4.0，署名见 NOTICE）
 ```
+
+</details>
 
 ## 文档
 
@@ -196,12 +245,19 @@ scripts/                  # 8 道构建闸门
 
 ## 贡献
 
-欢迎提 Issue 与 PR。动手前请先读 [`DESIGN.md`](DESIGN.md)（设计令牌唯一真源）与本 README 的「质量保障」——**改完必须跑 `npm run build`**，8 道闸门全绿才算完成。
+欢迎提 Issue 与 PR。动手前请先读 [`DESIGN.md`](DESIGN.md)（设计令牌唯一真源）与本 README 的「质量保障」——**改完必须跑 `npm run build`**，9 道闸门全绿才算完成。
 
-## License
+## 许可证
 
-⚠️ **本仓库暂未附加 LICENSE 文件。** 代码版权归原作者所有；在补上许可证之前，默认保留所有权利。
-（需要开源授权的话，提 Issue 说明期望的协议即可。）
+本项目采用 **Apache License 2.0**，完整文本见 [`LICENSE`](LICENSE)。
+
+> **代码**适用 Apache-2.0。仓库内**随附的 3D 模型文件不适用该协议**——
+> 它们各自保留原始许可，署名见 [`NOTICE`](NOTICE)：
+
+| 文件 | 作者 | 协议 |
+| --- | --- | --- |
+| `DamagedHelmet.glb` | ctxwing (2018)，Khronos glTF 示例资产 | CC BY 4.0 |
+| `Fox.glb` | PixelMannen、@tomkranis、@AsoboStudio | CC BY 4.0 |
 
 ## 致谢
 
@@ -209,3 +265,4 @@ scripts/                  # 8 道构建闸门
 - [Rapier](https://rapier.rs/) — 刚体物理
 - [Vue](https://vuejs.org/) / [Vite](https://vite.dev/) / [Pinia](https://pinia.vuejs.org/) — 框架层
 - [Font Awesome Free](https://fontawesome.com/) — 图标
+- [Khronos glTF Sample Assets](https://github.com/KhronosGroup/glTF-Sample-Assets) — 示例模型
