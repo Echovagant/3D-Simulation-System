@@ -297,7 +297,7 @@ function decodeCssEscape(css, start) {
     if (i < css.length && /\s/.test(css[i])) i++ // 转义后的空白是终止符的一部分
     const code = Number.parseInt(hex, 16)
     if (!Number.isFinite(code) || code === 0 || code > 0x10ffff) {
-      return { text: '�', next: i }
+      return { text: '\uFFFD', next: i } // 非法转义：返回一个占位字符代替
     }
     return { text: String.fromCodePoint(code), next: i }
   }

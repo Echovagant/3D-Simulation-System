@@ -13,7 +13,7 @@
               <a href="#" class="nav-link" @click.prevent>
                 <div class="icon">
                   <div class="imageBox">
-                    <img src="./assets/images/logo  (1).png" alt="3D仿真系统" class="logo-img" />
+                    <img src="./assets/images/logo.png" alt="3D仿真系统" class="logo-img" />
                   </div>
                 </div>
                 <div class="text">3D仿真系统</div>
