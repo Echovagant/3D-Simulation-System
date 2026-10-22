@@ -12,6 +12,25 @@
       <span v-if="llm.configured" class="ai-t-blue">已配置</span>
       <span v-else class="ai-t-faint">未配置（只有规则式控制器可用）</span>
       <span class="ai-t-faint"> · {{ llm.provider.name }} · {{ llm.model }}</span>
+      <span v-if="llm.hostingMode === 'hosted'" class="ai-t-faint"> · 托管</span>
+    </div>
+
+    <!-- Key 来源 -->
+    <div class="ai-mb-3">
+      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-hosting-mode">Key 来源</label>
+      <select
+        id="llm-hosting-mode"
+        class="ai-w-full"
+        :value="llm.hostingMode"
+        @change="onHostingModeChange"
+      >
+        <option value="direct">自带 Key（浏览器直连厂商）</option>
+        <option value="hosted">托管（Key 存在服务端）</option>
+      </select>
+      <p class="ai-fs-xs ai-t-faint ai-mt-1">
+        自带 Key：key 只存在本页内存里，请求直接发到厂商。 托管：key
+        交给后端加密保管，请求走后端——配额、审计与故障转移由后端做。
+      </p>
     </div>
 
     <!-- 提供商 -->
@@ -45,8 +64,8 @@
       />
     </div>
 
-    <!-- 端点 -->
-    <div class="ai-mb-3">
+    <!-- 端点（自带 Key 模式：托管模式下端点由后端决定） -->
+    <div v-if="llm.hostingMode === 'direct'" class="ai-mb-3">
       <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-base-url">端点（base_url）</label>
       <input
         id="llm-base-url"
@@ -62,8 +81,8 @@
       </p>
     </div>
 
-    <!-- API Key -->
-    <div class="ai-mb-3">
+    <!-- API Key（自带 Key 模式：key 留在浏览器内存里） -->
+    <div v-if="llm.hostingMode === 'direct'" class="ai-mb-3">
       <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-api-key">API Key</label>
       <input
         id="llm-api-key"
@@ -96,6 +115,97 @@
           {{ testing ? '测试中' : '测试' }}
         </button>
       </div>
+    </div>
+
+    <!-- 托管模式：把 key 交给服务端保管 -->
+    <div v-else class="ai-mb-3">
+      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-hosted-key">
+        提交 {{ llm.provider.name }} 的 API Key
+      </label>
+      <input
+        id="llm-hosted-key"
+        v-model="hostedKeyInput"
+        type="password"
+        class="ai-w-full"
+        autocomplete="off"
+        spellcheck="false"
+        :placeholder="`粘贴 ${llm.provider.name} 的 API Key`"
+        @keyup.enter="submitHostedKey"
+      />
+      <label class="ai-fs-xs ai-t-muted ai-mb-1 ai-mt-2" for="llm-hosted-passphrase">
+        口令（后端没配主密钥时才需要）
+      </label>
+      <input
+        id="llm-hosted-passphrase"
+        v-model="hostedPassphrase"
+        type="password"
+        class="ai-w-full"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <p class="ai-fs-xs ai-t-faint ai-mt-1">
+        key 提交后由后端加密保管，前端不留存；页面只显示「已配置 / 未配置」。
+      </p>
+      <div class="ai-flex ai-gap-2 ai-mt-2">
+        <button
+          class="ai-flex-1 ai-py-15 ai-fs-sm ai-bg-amber ai-t-on-amber ai-r-sm"
+          :disabled="submitting"
+          @click="submitHostedKey"
+        >
+          {{ submitting ? '提交中…' : '存到服务端' }}
+        </button>
+        <button
+          class="ai-flex-1 ai-py-15 ai-fs-sm ai-bg-chip ai-r-sm"
+          :disabled="!llm.hostedAvailable"
+          @click="refreshHosted"
+        >
+          刷新
+        </button>
+        <button
+          class="ai-flex-1 ai-py-15 ai-fs-sm ai-bg-chip ai-r-sm"
+          :disabled="!llm.configured || testing"
+          @click="testConnection"
+        >
+          {{ testing ? '测试中' : '测试' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 托管模式：服务端密钥库的现状 -->
+    <div v-if="llm.hostingMode === 'hosted'" class="ai-mb-3">
+      <div class="ai-flex ai-justify-between ai-items-center ai-mb-1">
+        <span class="ai-fs-xs ai-t-amber">服务端密钥库</span>
+        <span v-if="llm.quota" class="ai-fs-xs ai-t-faint">
+          今日剩余 {{ llm.quota.remaining }} / {{ llm.quota.limit }}
+        </span>
+      </div>
+      <ul class="ai-space-y-1">
+        <li
+          v-for="item in hostedRows"
+          :key="item.id"
+          class="ai-flex ai-justify-between ai-items-center ai-fs-xs"
+        >
+          <span :class="item.configured ? 'ai-t-blue' : 'ai-t-faint'">
+            {{ item.name }}：{{ item.configured ? '已配置' : '未配置' }}
+          </span>
+          <button
+            v-if="item.configured"
+            class="ai-px-2 ai-py-05 ai-fs-xs ai-bg-chip ai-r-sm"
+            @click="removeHostedKey(item.id)"
+          >
+            删除
+          </button>
+        </li>
+      </ul>
+      <p v-if="!llm.hostedAvailable" class="ai-fs-xs ai-t-amber-soft ai-mt-1">
+        后端暂时连不上：托管功能已停用，其余功能照常。稍后再点「刷新」。
+      </p>
+      <p v-else-if="llm.hostedError" class="ai-fs-xs ai-t-red ai-mt-1">
+        {{ llm.hostedError }}
+      </p>
+      <p v-if="llm.lastHostedProvider" class="ai-fs-xs ai-t-faint ai-mt-1">
+        上次由 {{ llm.lastHostedProvider }} 应答。
+      </p>
     </div>
 
     <!-- 决策来源 -->
@@ -168,12 +278,22 @@ const props = defineProps<{
 
 const llm = useLlmStore()
 const keyInput = ref('')
+const hostedKeyInput = ref('')
+const hostedPassphrase = ref('')
+const submitting = ref(false)
 const testing = ref(false)
 const providers = llmProviders
 const maxCalls = llmConfig.maxCallsPerSession
 
-const canExplain = computed(
-  () => llm.configured && !llm.explaining && Boolean(props.agentId),
+const canExplain = computed(() => llm.configured && !llm.explaining && Boolean(props.agentId))
+
+/** 服务端密钥库里各家的配置状态（只有「配没配」，没有明文） */
+const hostedRows = computed(() =>
+  providers.map((provider) => ({
+    id: provider.id,
+    name: provider.name,
+    configured: llm.hostedKeys.some((item) => item.providerId === provider.id && item.configured),
+  })),
 )
 
 const onSelectProvider = (event: Event): void => {
@@ -190,6 +310,13 @@ const onBaseUrlInput = (event: Event): void => {
   llm.setBaseUrl((event.target as HTMLInputElement).value)
 }
 
+/** 切换 Key 来源：自带 Key ↔ 托管 */
+const onHostingModeChange = async (event: Event): Promise<void> => {
+  const target = event.target as HTMLSelectElement
+  await llm.setHostingMode(target.value === 'hosted' ? 'hosted' : 'direct')
+  if (llm.hostingMode === 'hosted') await llm.refreshQuota()
+}
+
 /** 应用 key：写进内存后立刻把输入框清空，不让 key 留在 DOM 里 */
 const applyKey = (): void => {
   llm.applyKey(keyInput.value)
@@ -199,6 +326,35 @@ const applyKey = (): void => {
 const clearKey = (): void => {
   llm.clearKey()
   keyInput.value = ''
+}
+
+/** 提交 key 到服务端：成功后立刻清空输入框，不让明文留在 DOM 里 */
+const submitHostedKey = async (): Promise<void> => {
+  submitting.value = true
+  try {
+    const ok = await llm.submitHostedKey(
+      llm.providerId,
+      hostedKeyInput.value,
+      hostedPassphrase.value,
+    )
+    if (ok) {
+      hostedKeyInput.value = ''
+      hostedPassphrase.value = ''
+    }
+  } finally {
+    submitting.value = false
+  }
+}
+
+/** 删掉服务端某个厂商的 key */
+const removeHostedKey = async (id: string): Promise<void> => {
+  await llm.removeHostedKey(id)
+}
+
+/** 重新拉取服务端的密钥库状态与配额 */
+const refreshHosted = async (): Promise<void> => {
+  await llm.refreshHostedKeys()
+  await llm.refreshQuota()
 }
 
 const testConnection = async (): Promise<void> => {

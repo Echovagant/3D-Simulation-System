@@ -37,6 +37,30 @@ const okResponse = (content: string) =>
     text: async () => '',
   }) as unknown as Response
 
+/** 后端用的 JSON 响应替身 */
+const jsonResponse = (body: unknown, status = 200): Response =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: 'OK',
+    headers: new Headers(),
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  }) as unknown as Response
+
+/** 后端用的 204 替身：真响应没有响应体，json() 必须不被调用 */
+const emptyResponse = (status = 204): Response =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: 'No Content',
+    headers: new Headers(),
+    json: async () => {
+      throw new SyntaxError('Unexpected end of JSON input')
+    },
+    text: async () => '',
+  }) as unknown as Response
+
 describe('LLM store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -319,5 +343,263 @@ describe('LLM store', () => {
     expect(calls).toBe(2)
     expect(text).toContain('冷却期过去了')
     expect(store.lastError).toBe('')
+  })
+})
+
+/**
+ * 托管模式：请求改走后端。
+ *
+ * ⚠️ 自带 Key 那条路的行为一个字都不能变——这些用例就是守着这条线的。
+ */
+describe('LLM store · 托管模式', () => {
+  /** 一个"长得像密钥"的假 key——仓库里不允许出现真密钥 */
+  const HOSTED_KEY = 'sk-hosted-secret-value' // secret-scan: allow
+
+  /** 抓下来的一次请求 */
+  interface Call {
+    url: string
+    method: string
+    headers: Headers
+    body: Record<string, unknown> | undefined
+  }
+
+  /**
+   * 后端替身：密钥库、提交、删除、完成各走各的分支。
+   *
+   * @param options.keys 密钥库里各家配没配
+   * @param options.complete 完成接口回什么
+   */
+  const backend = (options?: {
+    keys?: Array<{ providerId: string; configured: boolean }>
+    complete?: unknown
+  }) => {
+    const calls: Call[] = []
+    let keys = options?.keys ?? [{ providerId: 'minimax', configured: true }]
+    const mock = vi.fn(async (url: string, init?: RequestInit) => {
+      const target = String(url)
+      const method = init?.method ?? 'GET'
+      calls.push({
+        url: target,
+        method,
+        headers: new Headers(init?.headers),
+        body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined,
+      })
+      if (target.endsWith('/api/llm/keys')) {
+        if (method === 'POST') {
+          keys = [{ providerId: 'minimax', configured: true }]
+          return jsonResponse({ providerId: 'minimax', configured: true }, 201)
+        }
+        return jsonResponse(keys)
+      }
+      if (target.endsWith('/api/llm/keys/minimax') && method === 'DELETE') {
+        keys = []
+        return emptyResponse(204)
+      }
+      if (target.endsWith('/api/llm/complete')) {
+        return jsonResponse(
+          options?.complete ?? {
+            content: '{"action":"move","direction":[0,1],"speed":4}',
+            providerId: 'minimax',
+            model: 'MiniMax-M3.1-Flash',
+          },
+        )
+      }
+      return jsonResponse({}, 404)
+    })
+    return { calls, mock }
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  it('默认是自带 Key 模式，托管通道不接管请求', async () => {
+    const store = useLlmStore()
+    const { calls, mock } = backend()
+    vi.stubGlobal('fetch', mock)
+
+    expect(store.hostingMode).toBe('direct')
+
+    store.applyKey(FAKE_KEY)
+    await store.requestAction(snapshot)
+
+    // 直连厂商，不经过后端
+    expect(calls.every((call) => !call.url.includes('/api/llm/'))).toBe(true)
+  })
+
+  it('自带 Key 模式：请求直接打厂商，不走后端', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    const urls: string[] = []
+    vi.stubGlobal('fetch', async (url: string) => {
+      urls.push(String(url))
+      return okResponse('{"action":"move","direction":[0,1],"speed":4}')
+    })
+
+    const action = await store.requestAction(snapshot)
+
+    expect(action?.action).toBe('move')
+    expect(urls).toHaveLength(1)
+    expect(urls[0]).toBe('https://api.minimax.io/v1/chat/completions')
+    expect(urls[0]).not.toContain('/api/llm/')
+  })
+
+  it('托管模式：请求走后端，请求体是归一化形状', async () => {
+    const store = useLlmStore()
+    const { calls, mock } = backend()
+    vi.stubGlobal('fetch', mock)
+
+    await store.setHostingMode('hosted')
+    expect(store.hostingMode).toBe('hosted')
+    // 后端密钥库里 minimax 已配置 → 托管通道可用
+    expect(store.configured).toBe(true)
+
+    const action = await store.requestAction(snapshot)
+    expect(action?.action).toBe('move')
+
+    const complete = calls.find((call) => call.url.endsWith('/api/llm/complete'))
+    expect(complete).toBeDefined()
+    expect(complete?.method).toBe('POST')
+    // 软身份必须带上，否则后端回 401
+    expect(complete?.headers.get('X-Owner-Token')).toBe(store.ownerToken)
+    // 归一化：只有这几个字段，不按协议拼
+    expect(Object.keys(complete?.body ?? {}).sort()).toEqual([
+      'maxTokens',
+      'messages',
+      'model',
+      'providerId',
+    ])
+    expect(complete?.body?.providerId).toBe('minimax')
+    expect(complete?.body?.model).toBe('MiniMax-M3.1-Flash')
+    expect(complete?.body?.maxTokens).toBe(llmConfig.controllerMaxTokens)
+    expect(Array.isArray(complete?.body?.messages)).toBe(true)
+  })
+
+  it('托管模式：当前厂商没存 key 时不指定厂商，让后端自己挑', async () => {
+    const store = useLlmStore()
+    const { calls, mock } = backend({
+      keys: [{ providerId: 'deepseek', configured: true }],
+    })
+    vi.stubGlobal('fetch', mock)
+
+    await store.setHostingMode('hosted')
+    await store.requestAction(snapshot)
+
+    const complete = calls.find((call) => call.url.endsWith('/api/llm/complete'))
+    expect(complete?.body?.providerId).toBeUndefined()
+    expect(complete?.body?.model).toBeUndefined()
+  })
+
+  it('ownerToken 会存进 localStorage，重新打开页面还是同一个', () => {
+    const store = useLlmStore()
+    const token = store.ownerToken
+
+    expect(token).not.toBe('')
+    expect(token).toMatch(/^[0-9a-f-]{36}$/i)
+    expect(localStorage.getItem('llm-owner-token')).toBe(token)
+
+    // 模拟刷新页面：新的 pinia、新的 store 实例
+    setActivePinia(createPinia())
+    const reopened = useLlmStore()
+    expect(reopened.ownerToken).toBe(token)
+  })
+
+  it('托管模式：提交 key 后能查到配置状态，删掉后回到未配置', async () => {
+    const store = useLlmStore()
+    const { calls, mock } = backend({ keys: [] })
+    vi.stubGlobal('fetch', mock)
+
+    await store.setHostingMode('hosted')
+    expect(store.hostedProviderConfigured).toBe(false)
+
+    const ok = await store.submitHostedKey('minimax', HOSTED_KEY)
+    expect(ok).toBe(true)
+    expect(store.hostedProviderConfigured).toBe(true)
+    expect(store.configured).toBe(true)
+
+    const posted = calls.find((call) => call.method === 'POST')
+    expect(posted?.headers.get('X-Owner-Token')).toBe(store.ownerToken)
+    expect(posted?.body?.providerId).toBe('minimax')
+    expect(posted?.body?.apiKey).toBe(HOSTED_KEY)
+
+    const removed = await store.removeHostedKey('minimax')
+    expect(removed).toBe(true)
+    expect(store.hostedProviderConfigured).toBe(false)
+  })
+
+  it('托管模式：提交过的口令会跟着完成请求一起走（后端重启后能自愈）', async () => {
+    const store = useLlmStore()
+    const { calls, mock } = backend({ keys: [] })
+    vi.stubGlobal('fetch', mock)
+
+    await store.setHostingMode('hosted')
+    await store.submitHostedKey('minimax', HOSTED_KEY, 'my-passphrase')
+
+    const completed = await store.requestExplanation(snapshot)
+    expect(completed).toBeTruthy()
+
+    const call = calls.find((item) => item.url.endsWith('/api/llm/complete'))
+    expect(call?.body?.passphrase).toBe('my-passphrase')
+  })
+
+  it('托管模式：后端连不上时安静降级，不抛异常', async () => {
+    const store = useLlmStore()
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('Failed to fetch')
+    })
+
+    await store.setHostingMode('hosted')
+
+    expect(store.hostedAvailable).toBe(false)
+    expect(store.hostedError).not.toBe('')
+
+    const action = await store.requestAction(snapshot)
+    expect(action).toBeNull()
+    expect(store.configured).toBe(false)
+  })
+
+  it('托管模式：调用途中后端挂掉，降级但不抛异常', async () => {
+    const store = useLlmStore()
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (String(url).endsWith('/api/llm/keys')) {
+        return jsonResponse([{ providerId: 'minimax', configured: true }])
+      }
+      throw new TypeError('Failed to fetch')
+    })
+
+    await store.setHostingMode('hosted')
+    expect(store.configured).toBe(true)
+
+    const action = await store.requestAction(snapshot)
+    expect(action).toBeNull()
+    expect(store.hostedAvailable).toBe(false)
+    expect(store.lastError).not.toBe('')
+  })
+
+  it('托管模式：后端回了配额错误时如实显示错误码对应的文案', async () => {
+    const store = useLlmStore()
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (String(url).endsWith('/api/llm/keys')) {
+        return jsonResponse([{ providerId: 'minimax', configured: true }])
+      }
+      return jsonResponse(
+        { error: { code: 'llm_quota_exceeded', message: '今日调用次数已用完', detail: null } },
+        429,
+      )
+    })
+
+    await store.setHostingMode('hosted')
+    const action = await store.requestAction(snapshot)
+
+    expect(action).toBeNull()
+    expect(store.lastError).toContain('今日调用次数已用完')
+    // 配额用满是业务错误，不是后端缺席：托管通道仍算可用
+    expect(store.hostedAvailable).toBe(true)
   })
 })
