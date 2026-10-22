@@ -1,3 +1,5 @@
+from concurrent.futures import ThreadPoolExecutor
+
 from sqlalchemy import text
 
 from app.db import SessionLocal, engine, init_db
@@ -17,6 +19,22 @@ def test_session_factory_returns_working_session():
     init_db()
     with SessionLocal() as session:
         assert session.execute(text("SELECT 1")).scalar() == 1
+
+
+def test_memory_database_is_shared_across_threads():
+    """内存库必须跨线程共用同一个。
+
+    TestClient 在工作线程里发请求，fixture 在主线程里建表。
+    两边不是同一个库的话，请求侧就会报「no such table」。
+    """
+    init_db()
+
+    def count_scenes() -> int:
+        with engine.connect() as conn:
+            return conn.execute(text("SELECT count(*) FROM scenes")).scalar()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        assert pool.submit(count_scenes).result() == 0
 
 
 def test_engine_knows_its_tables():

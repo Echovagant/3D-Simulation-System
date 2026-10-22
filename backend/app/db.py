@@ -16,10 +16,13 @@ class Base(DeclarativeBase):
 def _is_memory_sqlite(url: str) -> bool:
     """判断是不是内存 SQLite。
 
-    SQLAlchemy 把 `:memory:` 归一化成 database=None，所以只看这一项就够。
+    SQLAlchemy 把 `:memory:` 原样留在 database 里（不是 None），空路径才是 None。
     """
     parsed = make_url(url)
-    return parsed.get_backend_name() == "sqlite" and not parsed.database
+    if parsed.get_backend_name() != "sqlite":
+        return False
+    db_file = parsed.database
+    return not db_file or db_file == ":memory:"
 
 
 def _prepare_sqlite_dir(url: str) -> None:

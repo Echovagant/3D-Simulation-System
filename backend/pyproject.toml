@@ -41,6 +41,19 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI 的依赖注入就是「把 Depends() 写在默认值里」，B008 得放行这些调用
+extend-immutable-calls = [
+  "fastapi.Depends",
+  "fastapi.Query",
+  "fastapi.Path",
+  "fastapi.Body",
+  "fastapi.Header",
+  "fastapi.Cookie",
+  "fastapi.File",
+  "fastapi.Form",
+]
+
 [tool.mypy]
 python_version = "3.12"
 warn_unused_ignores = true
