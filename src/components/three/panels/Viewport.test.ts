@@ -100,12 +100,7 @@ const mountViewport = async (
  */
 const buildPickScene = () => {
   const scene = new THREE.Scene()
-  const camera = new THREE.PerspectiveCamera(
-    75,
-    VIEWPORT_WIDTH / VIEWPORT_HEIGHT,
-    0.1,
-    1000,
-  )
+  const camera = new THREE.PerspectiveCamera(75, VIEWPORT_WIDTH / VIEWPORT_HEIGHT, 0.1, 1000)
   camera.position.set(0, 2, 6)
   camera.lookAt(0, 1, 0)
   camera.updateMatrixWorld(true)
@@ -159,7 +154,27 @@ describe('Viewport', () => {
   it('渲染时把渲染状态写回 store', async () => {
     await mountViewport()
 
-    expect(useSceneEditorStore().renderState.isRendering).toBe(true)
+    expect(useSceneEditorStore().renderState.isRenderLoopActive).toBe(true)
+  })
+
+  it('暂停模拟后，渲染循环不会把「已停止」的状态盖回去', async () => {
+    await mountViewport()
+    const store = useSceneEditorStore()
+
+    store.startSimulation()
+    expect(store.renderState.isSimulationRunning).toBe(true)
+
+    store.stopSimulation()
+    expect(store.renderState.isSimulationRunning).toBe(false)
+
+    // 让渲染循环再跑两帧：它曾经每帧把标志写回 true，
+    // 于是「已暂停」在下一帧就被盖掉，store 里的状态从此说谎。
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+
+    expect(store.renderState.isSimulationRunning).toBe(false)
+    // 但画面本身还在刷新——暂停模拟不该把画布冻住
+    expect(store.renderState.isRenderLoopActive).toBe(true)
   })
 
   it('物理更新抛错时记录到 store 而不是被吞掉', async () => {

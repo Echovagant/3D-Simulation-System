@@ -19,7 +19,20 @@ export type SimulationState = {
 export type WarningDetails = Record<string, unknown>
 
 export type RenderState = {
-  isRendering: boolean
+  /**
+   * store 的物理记账循环是否在跑。
+   *
+   * ⚠️ 它**不是**渲染器的开关：视口的渲染循环由 Viewport 组件自己管
+   * （挂载时启动、卸载时停止），「暂停模拟」不该停掉它——否则画面会冻住。
+   */
+  isSimulationRunning: boolean
+  /**
+   * 视口的渲染循环是否在跑（由 Viewport 组件写）。
+   *
+   * 与 isSimulationRunning 分开记：两者曾经共用一个 isRendering，
+   * 渲染循环每帧写一次，会把「已暂停」的状态下一帧就盖掉。
+   */
+  isRenderLoopActive: boolean
   needsUpdate: boolean
   fps: number
   lastFrameTime: number
@@ -107,7 +120,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
 
   // 分离状态：渲染状态
   const renderState = reactive<RenderState>({
-    isRendering: false,
+    isSimulationRunning: false,
+    isRenderLoopActive: false,
     needsUpdate: true,
     fps: 60,
     lastFrameTime: 0,
@@ -229,7 +243,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
 
   // 开始物理模拟 - 改进错误处理和状态管理
   //
-  // ⚠️ `renderState.isRendering` 在这里表示「store 的记账循环是否在跑」。
+  // ⚠️ `renderState.isSimulationRunning` 在这里表示「store 的记账循环是否在跑」。
   // 它**不是**渲染器的开关：视口的渲染循环由 Viewport 组件自己管
   // （挂载时启动、卸载时停止），「暂停模拟」不该停掉它——否则画面会冻住。
   const startSimulation = () => {
@@ -241,7 +255,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
         return
       }
 
-      renderState.isRendering = true
+      renderState.isSimulationRunning = true
       isLoopActive = true
       animationId.value = requestAnimationFrame(physicsUpdateLoop)
     } catch (error) {
@@ -261,7 +275,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
         cancelAnimationFrame(animationId.value)
         animationId.value = null
       }
-      renderState.isRendering = false
+      renderState.isSimulationRunning = false
     } catch (error) {
       addPhysicsError('物理模拟停止失败', error as Error)
     }

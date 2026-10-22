@@ -88,7 +88,7 @@
 | `objects` | 场景中所有物体的数组，元素为 `SceneObject` |
 | `selectedObjectUuid` / `selectedObject` | 当前选中物体的 uuid 与对象本身 |
 | `simulationState` | `isPlaying`、`isTransitioning`、`isPaused`、`speed`、`currentTime`、`frameCount`；后两者由固定步长累加器按物理步推进 |
-| `renderState` | `isRendering`、`needsUpdate`、`fps`、`lastFrameTime`、`performanceWarnings`、`physicsErrors` |
+| `renderState` | `isSimulationRunning`（store 的物理记账循环在跑）、`isRenderLoopActive`（视口的渲染循环在跑）、`needsUpdate`、`fps`、`lastFrameTime`、`performanceWarnings`、`physicsErrors` |
 
 ### 主要方法
 

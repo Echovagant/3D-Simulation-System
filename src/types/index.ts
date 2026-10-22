@@ -208,16 +208,6 @@ export interface SimulationState {
   frameCount: number
 }
 
-// 渲染状态类型
-export interface RenderState {
-  isRendering: boolean
-  needsUpdate: boolean
-  fps: number
-  lastFrameTime: number
-  performanceWarnings: Array<{message: string, timestamp: number, details?: Record<string, unknown>}>
-  physicsErrors: Array<{message: string, error: Error, timestamp: number}>
-}
-
 // 跨组件共享状态一律用 Pinia 的 useXxxStore()，其类型由 store 自动推导。
 // 不要在此手写 store 的类型接口——手写签名必然与真实 store 漂移。
 

@@ -296,7 +296,7 @@ describe('物理启停', () => {
     store.startSimulation()
 
     expect(raf).toHaveBeenCalled()
-    expect(store.renderState.isRendering).toBe(true)
+    expect(store.renderState.isSimulationRunning).toBe(true)
 
     // 让 isPlaying 的监听器跑完，避免它把状态留给下一个用例
     await nextTick()
@@ -323,7 +323,7 @@ describe('物理启停', () => {
     store.stopSimulation()
 
     expect(cancel).toHaveBeenCalled()
-    expect(store.renderState.isRendering).toBe(false)
+    expect(store.renderState.isSimulationRunning).toBe(false)
 
     await nextTick()
   })
@@ -362,7 +362,7 @@ describe('物理启停', () => {
     store.stopSimulation()
 
     expect(cancel).toHaveBeenCalled()
-    expect(store.renderState.isRendering).toBe(false)
+    expect(store.renderState.isSimulationRunning).toBe(false)
     expect(pending).toBeNull()
     expect(raf).toHaveBeenCalledTimes(2)
 
@@ -425,7 +425,7 @@ describe('物理启停', () => {
     expect(store.objects[0].physics?.isFalling).toBeUndefined()
 
     // 复位之后循环要重新拉起来，而不是就此死掉
-    expect(store.renderState.isRendering).toBe(true)
+    expect(store.renderState.isSimulationRunning).toBe(true)
     expect(raf).toHaveBeenCalledTimes(2)
 
     await nextTick()

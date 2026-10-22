@@ -143,9 +143,6 @@ const renderLoop = (timestamp?: number) => {
     return
   }
 
-  // 更新store中的渲染状态
-  sceneEditorStore.renderState.isRendering = true
-
   // 调用物理更新函数
   if (props.updatePhysics) {
     try {
@@ -193,6 +190,7 @@ const renderLoop = (timestamp?: number) => {
 const startRendering = () => {
   if (isRendering.value) return
   isRendering.value = true
+  sceneEditorStore.renderState.isRenderLoopActive = true
   renderLoop()
 }
 
@@ -201,12 +199,10 @@ const startRendering = () => {
  */
 const stopRendering = () => {
   isRendering.value = false
+  sceneEditorStore.renderState.isRenderLoopActive = false
   if (animationFrameId) {
     cancelAnimationFrame(animationFrameId)
   }
-
-  // 更新store中的渲染状态
-  sceneEditorStore.renderState.isRendering = false
 }
 
 /**
@@ -341,15 +337,15 @@ watch(
   },
 )
 
-// 监听store中的渲染状态变化
+// 监听 store 的仿真状态
 //
 // ⚠️ 这里**只能**启动渲染，不能因为标志变 false 就停：
-// `renderState.isRendering` 是「仿真/记账循环是否在跑」的标志，
+// `renderState.isSimulationRunning` 是「仿真/记账循环是否在跑」的标志，
 // 「暂停模拟」会把它置为 false。若把它当成渲染开关，暂停就会把整个画布冻住
 // （画面不再刷新、连相机都转不动）。
 // 渲染循环的生命周期归组件所有：挂载时启动，卸载时停止。
 watch(
-  () => sceneEditorStore.renderState.isRendering,
+  () => sceneEditorStore.renderState.isSimulationRunning,
   (newState) => {
     if (newState && !isRendering.value) {
       startRendering()
