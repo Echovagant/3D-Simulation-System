@@ -8,6 +8,7 @@ import { createModelLibrary } from '@/data/modelLibrary'
 import { useSceneEditorStore } from './sceneEditorStore'
 import { loadModel } from '@/utils/modelLoader'
 import { createThumbnail } from '@/utils/thumbnail'
+import { reportError } from '@/services/api/telemetry'
 
 // 定义模型类型
 export interface Model {
@@ -203,6 +204,8 @@ export const useModelStore = defineStore('model', () => {
         threeObject: threeObject,
       })
     } catch (error) {
+      console.warn('[modelStore] 模型加载失败，无法添加到场景', error)
+      reportError(error, '/scene-editor')
       alert('模型加载失败，无法添加到场景')
     }
   }

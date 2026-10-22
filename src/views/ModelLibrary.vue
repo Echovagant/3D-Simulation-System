@@ -252,6 +252,7 @@ import { useRouter } from 'vue-router';
 import { useModelStore } from '@/stores/modelStore';
 import { isPlaceholderModel } from '@/data/modelLibrary';
 import { resolveModelUrl } from '@/utils/modelLoader';
+import { reportError } from '@/services/api/telemetry';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
 
 // ===================== 类型定义 =====================
@@ -401,7 +402,8 @@ const handleUpload = async () => {
     selectedFileName.value = '';
     showUploadModal.value = false;
   } catch (error) {
-
+    console.warn('[ModelLibrary] 模型上传失败', error)
+    reportError(error, '/model-library')
     alert('模型上传失败，请重试');
   } finally {
     isUploading.value = false;

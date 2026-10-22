@@ -86,6 +86,7 @@ import { inject, computed, ref, watch } from 'vue';
 import { useSceneEditorStore } from '@/stores/sceneEditorStore';
 import { useRouter } from 'vue-router';
 import { useModelStore } from '@/stores/modelStore';
+import { reportError } from '@/services/api/telemetry';
 
 // 状态管理
 const store = useSceneEditorStore();
@@ -190,7 +191,8 @@ const handleSaveScene = async () => {
     const sceneId = await store.saveScene(sceneName);
     showTempMessage(`场景保存成功: ${sceneName}（ID: ${sceneId}，可在右侧「我的场景」中打开）`, 5000);
   } catch (error) {
-
+    console.warn('[Toolbar] 场景保存失败', error)
+    reportError(error, '/scene-editor')
     showTempMessage('场景保存失败', 3000);
   }
 };
@@ -208,6 +210,8 @@ const handleExportScene = () => {
     URL.revokeObjectURL(url);
     showTempMessage('场景已导出为 JSON', 3000);
   } catch (error) {
+    console.warn('[Toolbar] 导出场景失败', error)
+    reportError(error, '/scene-editor')
     showTempMessage('导出场景失败', 3000);
   }
 };

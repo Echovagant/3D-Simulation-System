@@ -214,6 +214,7 @@ import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import { useSimulationStore } from '@/stores/simulationStore'
 import { useModelStore } from '@/stores/modelStore'
 import { useRoute } from 'vue-router'
+import { reportError } from '@/services/api/telemetry'
 
 // 接收路由参数
 const props = defineProps<{
@@ -882,6 +883,8 @@ const loadSceneFromEditor = async () => {
     simulationTime.value = 0
     displayMessage(`已从场景编辑器加载: ${doc.name}`)
   } catch (error) {
+    console.warn('[SimulationLab] 加载场景失败', error)
+    reportError(error, '/simulation-lab')
     displayMessage('加载场景失败')
   }
 }
@@ -998,6 +1001,8 @@ const exportData = () => {
     URL.revokeObjectURL(url)
     displayMessage('数据已导出')
   } catch (error) {
+    console.warn('[SimulationLab] 导出数据失败', error)
+    reportError(error, '/simulation-lab')
     displayMessage('导出数据失败')
   }
 }

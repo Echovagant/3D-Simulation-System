@@ -58,6 +58,7 @@ import type { SceneIndexEntry } from '@/types'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import { useSceneSyncStore } from '@/stores/sceneSyncStore'
 import { getScene, type SceneSummary } from '@/services/api/scenes'
+import { reportError } from '@/services/api/telemetry'
 
 const store = useSceneEditorStore()
 const sync = useSceneSyncStore()
@@ -104,6 +105,8 @@ const openScene = async (sceneId: string) => {
 
     statusMessage.value = `已加载场景：${scene?.name ?? sceneId}`
   } catch (error) {
+    console.warn('[SceneList] 加载场景失败', error)
+    reportError(error, '/scene-editor')
     statusMessage.value = '加载场景失败'
   } finally {
     isLoading.value = false
@@ -145,6 +148,8 @@ const openRemoteScene = async (scene: SceneSummary) => {
       ? `已从云端加载场景：${detail.document.name}`
       : `云端场景加载失败：${scene.id}`
   } catch (error) {
+    console.warn('[SceneList] 云端场景加载失败', error)
+    reportError(error, '/scene-editor')
     statusMessage.value = '云端场景加载失败'
   } finally {
     isLoading.value = false
