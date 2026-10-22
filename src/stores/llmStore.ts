@@ -47,6 +47,10 @@ export const useLlmStore = defineStore('llm', () => {
 
   /** 冷却截止时间戳：失败后这段时间内不再重试 */
   let cooldownUntil = 0
+  /** 解释请求的序号：只有序号最新的那次请求才允许写状态 */
+  let explainSeq = 0
+  /** 在途的解释请求：并发调用共享它，不重复发请求 */
+  let explainPending: { promise: Promise<string>; seq: number } | null = null
 
   /** 当前提供商 */
   const provider = computed<LlmProvider>(
@@ -68,6 +72,8 @@ export const useLlmStore = defineStore('llm', () => {
   /** 切换提供商：换 key 槽位，也载入它自己的默认模型与端点 */
   const selectProvider = (id: string): void => {
     if (!findProvider(id)) return
+    // 换厂商了：在途的解释属于上一家，回来时不能再写进状态
+    invalidateExplanation()
     providerId.value = id
     syncConfigured()
     lastError.value = ''
@@ -112,10 +118,16 @@ export const useLlmStore = defineStore('llm', () => {
     return true
   }
 
-  /** 统一的发请求入口：记账、错误脱敏、失败进冷却 */
+  /**
+   * 统一的发请求入口：记账、错误脱敏、失败进冷却。
+   *
+   * `isCurrent` 是过期守卫：返回 false 时这次请求的结果不再写进共享状态
+   * （错误、冷却都不写），免得过期的失败把后来的状态盖掉。
+   */
   const invoke = async (
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     maxCompletionTokens: number,
+    isCurrent: () => boolean = () => true,
   ) => {
     if (!configured.value) {
       lastError.value = `未配置 ${provider.value.name} 的 API Key`
@@ -137,11 +149,14 @@ export const useLlmStore = defineStore('llm', () => {
       maxCompletionTokens,
     })
     if (!result.ok) {
-      lastError.value = result.error ?? '调用失败'
-      cooldownUntil = Date.now() + llmConfig.cooldownMs
-      return { ok: false as const, content: '', error: lastError.value }
+      const error = result.error ?? '调用失败'
+      if (isCurrent()) {
+        lastError.value = error
+        cooldownUntil = Date.now() + llmConfig.cooldownMs
+      }
+      return { ok: false as const, content: '', error }
     }
-    lastError.value = ''
+    if (isCurrent()) lastError.value = ''
     return { ok: true as const, content: result.content, error: '' }
   }
 
@@ -154,21 +169,50 @@ export const useLlmStore = defineStore('llm', () => {
     return result.ok
   }
 
-  /** 请求一次解释（按需触发，不自动调用） */
-  const requestExplanation = async (snapshot: AgentSnapshot): Promise<string> => {
-    if (explaining.value) return explanation.value
+  /**
+   * 让在途的解释请求作废。
+   *
+   * 换了提供商或重置了会话之后，在途请求的结果已经不对应当前的语境，
+   * 回来时必须丢掉——否则界面会显示上一家的解释。
+   */
+  const invalidateExplanation = (): void => {
+    if (!explainPending) return
+    explainSeq += 1
+    explainPending = null
+    explaining.value = false
+  }
+
+  /**
+   * 请求一次解释（按需触发，不自动调用）。
+   *
+   * 并发调用共享**同一次**请求：后来的调用等到的是这一次的网络结果，
+   * 不是上一次遗留的旧文本；已经在途的请求也不会被重复发出。
+   */
+  const requestExplanation = (snapshot: AgentSnapshot): Promise<string> => {
+    if (explainPending) return explainPending.promise
+    const seq = ++explainSeq
     explaining.value = true
-    try {
-      const result = await invoke(buildExplainMessages(snapshot), llmConfig.explainMaxTokens)
+    const request = (async (): Promise<string> => {
+      const result = await invoke(
+        buildExplainMessages(snapshot),
+        llmConfig.explainMaxTokens,
+        () => seq === explainSeq,
+      )
+      // 过期结果直接丢弃：不写解释、不覆盖错误
+      if (seq !== explainSeq) return ''
       if (!result.ok) {
         explanation.value = ''
         return ''
       }
       explanation.value = result.content
       return result.content
-    } finally {
-      explaining.value = false
-    }
+    })()
+    const tracked = request.finally(() => {
+      if (explainPending?.seq === seq) explainPending = null
+      if (seq === explainSeq) explaining.value = false
+    })
+    explainPending = { promise: tracked, seq }
+    return tracked
   }
 
   /**
@@ -184,6 +228,9 @@ export const useLlmStore = defineStore('llm', () => {
     if (!canCall()) {
       if (callCount.value >= llmConfig.maxCallsPerSession) {
         lastError.value = `已达本次会话的调用上限（${llmConfig.maxCallsPerSession} 次），控制器已回落到规则式`
+      } else if (Date.now() < cooldownUntil) {
+        const remain = Math.ceil((cooldownUntil - Date.now()) / 1000)
+        lastError.value = `上一次调用失败后仍在冷却期（还需 ${remain} 秒），控制器已回落到规则式`
       }
       return null
     }
@@ -216,6 +263,8 @@ export const useLlmStore = defineStore('llm', () => {
 
   /** 重置本次会话的计数 */
   const resetSession = (): void => {
+    // 会话重置了：在途的解释属于上一段会话，回来时不能再写进状态
+    invalidateExplanation()
     callCount.value = 0
     lastCallAt.value = 0
     cooldownUntil = 0

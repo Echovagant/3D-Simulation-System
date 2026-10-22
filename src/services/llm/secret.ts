@@ -44,11 +44,24 @@ export const clearAllApiKeys = (): void => {
  *
  * 服务端的报错偶尔会把请求头原样回显——那里面就有我们的 key。
  * 所有要显示给用户或写进日志的文本都要先过这一道。
+ *
+ * ⚠️ 规则按识别度从高到低排列：带厂商特有前缀的形态（`AIza` / `xai-`）先匹配，
+ * 否则会被后面的通用规则先截掉、只留下可辨认的半截。
  */
 export const redactSecrets = (text: string): string => {
   if (!text) return ''
   return text
+    // Google Gemini：AIza + 35 位
+    .replace(/\bAIza[0-9A-Za-z_-]{20,}/g, 'AIza***')
+    // xAI Grok：xai- + 一长串
+    .replace(/\bxai-[A-Za-z0-9_-]{20,}/g, 'xai-***')
+    // OpenAI / Anthropic / DeepSeek / Qwen 等：sk- 前缀
     .replace(/sk-[A-Za-z0-9_-]{8,}/g, 'sk-***')
+    // MiniMax 等：JWT 形态
     .replace(/eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{4,}/g, 'eyJ***')
+    // 通用鉴权头
     .replace(/(Bearer\s+)[A-Za-z0-9._-]{8,}/gi, '$1***')
+    // 智谱 GLM：两段十六进制（id.secret）。
+    // 长度下限取得比真实 key（各 32 位）更保守，免得把版本号、时间戳、哈希误伤。
+    .replace(/\b[0-9a-f]{24,}\.[0-9a-f]{24,}\b/gi, '***')
 }

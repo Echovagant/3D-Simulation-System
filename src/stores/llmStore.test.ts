@@ -177,4 +177,80 @@ describe('LLM store', () => {
     expect(store.explanation).toContain('箱子')
     expect(store.explaining).toBe(false)
   })
+
+  it('并发的解释请求共享同一次请求，不会拿到上一次的旧解释', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return okResponse('这一次的新解释')
+    })
+
+    const first = store.requestExplanation(snapshot)
+    const second = store.requestExplanation(snapshot)
+    const [a, b] = await Promise.all([first, second])
+
+    expect(calls).toBe(1)
+    expect(a).toContain('这一次的新解释')
+    expect(b).toContain('这一次的新解释')
+    expect(store.explanation).toContain('这一次的新解释')
+    expect(store.explaining).toBe(false)
+  })
+
+  it('换了提供商之后，在途解释的结果不会再写进状态', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    vi.stubGlobal('fetch', async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return okResponse('上一家厂商的解释')
+    })
+
+    const pending = store.requestExplanation(snapshot)
+    store.selectProvider('deepseek')
+    const text = await pending
+
+    expect(text).toBe('')
+    expect(store.explanation).toBe('')
+    expect(store.explaining).toBe(false)
+  })
+
+  it('换了提供商之后，在途解释的失败不会覆盖 lastError', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    vi.stubGlobal('fetch', async () => {
+      throw new Error('network down')
+    })
+
+    const pending = store.requestExplanation(snapshot)
+    store.selectProvider('deepseek')
+    store.setError('当前提供商这边的问题')
+    await pending
+
+    expect(store.lastError).toBe('当前提供商这边的问题')
+  })
+
+  it('冷却期内回落到规则式时，会说清还在冷却期', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      throw new Error('network down')
+    })
+
+    const first = await store.requestAction(snapshot)
+    expect(first).toBeNull()
+    expect(store.lastError).toContain('请求失败')
+    expect(calls).toBe(1)
+
+    // 失败后进入冷却期：这一次必须给出原因，而不是静默回落
+    const second = await store.requestAction(snapshot)
+    expect(second).toBeNull()
+    expect(calls).toBe(1)
+    expect(store.lastError).toContain('冷却期')
+    expect(store.lastError).toContain('规则式')
+    expect(store.lastError).toMatch(/还需 \d+ 秒/)
+  })
 })
