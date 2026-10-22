@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="Vitest 39 files / 344 cases" src="https://img.shields.io/badge/test-39%20files%20%2F%20344%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="Vitest 40 files / 366 cases" src="https://img.shields.io/badge/test-40%20files%20%2F%20366%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>256.35 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>344</b><br><sub>测试用例 · 39 个文件</sub></td>
+    <td align="center"><b>366</b><br><sub>测试用例 · 40 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -152,7 +152,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 11 道闸门 |
-| `npm test` | Vitest 全量用例（39 个测试文件 / 344 个用例） |
+| `npm test` | Vitest 全量用例（40 个测试文件 / 366 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -166,10 +166,14 @@ npm run preview    # 预览生产产物
 本项目默认是**纯前端**应用：`npm run build` 出来的产物可以直接扔到任何静态托管上。
 
 仓库里另带一个 Python 后端（`backend/`），用来做浏览器天生做不到的事：
-**跨设备场景库**——在 A 设备保存的场景，B 设备打开就能看到。
+
+- **跨设备场景库**——在 A 设备保存的场景，B 设备打开就能看到；
+- **LLM 托管**——不想自己填 Key 的人，把 Key 交给服务端加密保管，
+  请求走后端，由后端做**配额、调用审计与故障转移**（一家厂商不通会自动换下一家）；
+- **错误上报**——前端的错误现场收进后端，不只是控制台里滚过去就没了。
 
 **后端缺席时前端功能完全不受影响**：场景仍然存在浏览器本地，
-错误仍然能在控制台看到，界面不会多出任何提示以外的打扰。
+Key 仍然只留在本页内存里，错误仍然能在控制台看到，界面不会多出任何提示以外的打扰。
 
 ```bash
 cd backend
@@ -187,7 +191,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
 
 ```bash
 cd backend
-uv run pytest        # 27 个用例
+uv run pytest        # 63 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 

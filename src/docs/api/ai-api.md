@@ -147,7 +147,7 @@
 - `src/components/three/ai/AiEnvironmentPanel.vue`：环境配置面板。场景类型、难度、障碍物密度、时间限制、胜利条件都绑定在一份本地副本上；改动会**立即**通过 `updateEnvironmentSettings` 写回仓库（障碍物密度按 150 毫秒防抖，因为它会重建场地），点“应用设置”则一次性提交全部字段。场景类型下拉只列 `selectableScenarioOptions`（当前只有“导航挑战”），胜利条件是固定选项“到达目标点”。
 - `src/components/three/ai/AiController.vue`：智能体面板。“添加代理”会创建一个名为“AI代理 N”、类型为 `basic` 的智能体；选中智能体后可调移动速度、反应时间、感知范围、避障（`basic` 与 `advanced` 适用）。高级型的“启用学习”“记忆保留”已从界面移除——系统没有学习与记忆机制。
 - `src/components/three/ai/AiDebugPanel.vue`：调试面板。提供“开始 / 暂停”“重置”“清空日志”三个按钮，并按时间顺序汇总所有智能体的日志，可按类型过滤。
-- `src/components/three/ai/LlmPanel.vue`：LLM 面板。选服务商、填 Key、改模型与端点、切决策来源、触发解释；状态来自 `useLlmStore`。
+- `src/components/three/ai/LlmPanel.vue`：LLM 面板。选服务商、填 Key、改模型与端点、切决策来源、触发解释；状态来自 `useLlmStore`。Key 的来源有两种：**自带**（key 只在本页内存里）与**托管**（key 加密存在服务端，请求走后端）。
 - `src/views/AIPlayground.vue`：页面外壳。页脚的状态文案绑定 `aiStore.simulationActive` 与 `llmStore.degraded`（运行中 / 已暂停 / LLM 已降级）；右上角的按键指示器画的就是真正响应的键（W/S/A/D/Q/E 平移相机、R 复位），按下时高亮。
 
 ## LLM 接入（可选）
@@ -161,7 +161,8 @@
 | `src/services/llm/secret.ts` | API key 的**唯一**存放点：模块作用域，按服务商分槽，不进响应式、不落盘；另有 `redactSecrets` 负责把密钥样式的片段从错误信息里抹掉 |
 | `src/services/llm/client.ts` | `callLlm(options)`：按协议分派请求。**永不抛异常**，失败也返回 `{ ok: false, error }` |
 | `src/services/llm/prompts.ts` | 提示词构造（`buildDecisionMessages` / `buildExplainMessages`）与动作解析（`parseLlmAction`） |
-| `src/stores/llmStore.ts` | 对外的状态与动作：服务商选择、模型与端点覆盖、`configured` / `mode` / `explanation` / `degraded` / `callCount` |
+| `src/stores/llmStore.ts` | 对外的状态与动作：服务商选择、模型与端点覆盖、`configured` / `mode` / `explanation` / `degraded` / `callCount`；另有 `hostingMode` 决定 Key 来自浏览器还是服务端 |
+| `src/services/api/llm.ts` | 托管模式的六个端点（密钥库、提交、删除、完成、配额、审计）。复用 `src/services/api/client.ts` 的 `apiRequest`，**不再按协议拼请求**——归一化的形状发给后端，协议差别由后端处理 |
 
 ### 三种协议
 
