@@ -45,7 +45,7 @@
                 min="0.1"
                 max="5"
                 step="0.1"
-                v-model="simulationSpeed"
+                v-model.number="simulationSpeed"
                 @change="setSimulationSpeed"
               />
               <span>{{ simulationSpeed }}x</span>
@@ -252,9 +252,25 @@ const message = ref('')
 const messageTimeout = ref<number | null>(null)
 const selectedObject = ref<Object3D | null>(null)
 const fps = ref(0)
-const lastFrameTime = ref(0)
-const frameCount = ref(0)
-const originalMaterials = new Map<Object3D, THREE.Material | THREE.Material[]>()
+
+/**
+ * FPS 统计窗口。
+ *
+ * 用固定帧数的窗口求平均：单帧耗时的倒数在快帧时会飙到 1000+，界面上的 FPS
+ * 完全不可信。窗口没攒满之前不更新显示值。
+ */
+const FPS_WINDOW_FRAMES = 30
+let fpsWindowStart = 0
+let fpsWindowFrames = 0
+
+/**
+ * 选中高亮走物体自己材质的 emissive 通道。
+ *
+ * ⚠️ 材质不能共享：共用一份材质时改 emissive，会让所有同材质物体一起变黄
+ * （约定见 useSceneEditor.ts）。也不为每次选中新建材质——那份材质没人释放，
+ * 反复点选会一直漏显存。
+ */
+const HIGHLIGHT_COLOR = 0xffff00
 
 // 数据记录
 const recordedData = ref<
@@ -267,7 +283,14 @@ const lastSampleTime = ref(0)
 const selectedPreset = ref('')
 
 // 物理世界
-const { world, initPhysics, stepPhysics, updatePhysicsParameters, ready } = usePhysics()
+const {
+  world,
+  initPhysics,
+  stepPhysics,
+  updatePhysicsParameters,
+  removeRigidBody,
+  ready,
+} = usePhysics()
 
 /**
  * 固定步长累加器：与场景编辑器共用同一套步长定义。
@@ -385,16 +408,21 @@ const render = () => {
     orbitControls.update()
   }
 
-  // 计算 FPS
+  // 计算 FPS：固定帧数窗口的平均值（单帧耗时的倒数在快帧时会飙到 1000+）
   const now = performance.now()
-  if (lastFrameTime.value > 0) {
-    frameCount.value++
-    if (frameCount.value >= 30) {
-      fps.value = Math.round(1000 / (now - lastFrameTime.value))
-      frameCount.value = 0
+  if (fpsWindowStart === 0) {
+    fpsWindowStart = now
+  } else {
+    fpsWindowFrames++
+    if (fpsWindowFrames >= FPS_WINDOW_FRAMES) {
+      const elapsed = now - fpsWindowStart
+      if (elapsed > 0) {
+        fps.value = Math.round((1000 * fpsWindowFrames) / elapsed)
+      }
+      fpsWindowStart = now
+      fpsWindowFrames = 0
     }
   }
-  lastFrameTime.value = now
 
   // 物理更新：固定步长 + 累加器（仿真速度与显示刷新率无关）
   const frameDelta = lastPhysicsTimestamp === 0 ? 0 : (now - lastPhysicsTimestamp) / 1000
@@ -520,6 +548,44 @@ const alignBodiesToMeshes = () => {
   })
 }
 
+/**
+ * 切换选中高亮。
+ *
+ * 走物体自己材质的 emissive 通道，不换材质——换材质就得新建一份永不释放的
+ * 材质，共享材质又会让同材质物体一起变黄。
+ */
+const setHighlight = (object: Object3D | null, highlighted: boolean) => {
+  if (!object) return
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    materials.forEach((material) => {
+      const emissive = (material as THREE.MeshStandardMaterial).emissive
+      if (!emissive) return
+      emissive.set(highlighted ? HIGHLIGHT_COLOR : 0x000000)
+    })
+  })
+}
+
+/**
+ * 释放物体持有的 GPU 资源（几何体与材质）。
+ *
+ * 物体是逐个 new 出几何体与材质的，只从场景里摘掉不释放，反复加载预设/场景
+ * 会把显存吃光。模型是单独 load 出来的实例，材质同样是各自独立的，释放安全。
+ */
+const disposeObjectResources = (object: Object3D) => {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    child.geometry?.dispose()
+    const material = child.material
+    if (Array.isArray(material)) {
+      material.forEach((item) => item.dispose())
+    } else {
+      material?.dispose()
+    }
+  })
+}
+
 /** 清掉场景里现有的物理物体 */
 const clearPhysicsObjects = () => {
   const objectsToRemove: Object3D[] = []
@@ -528,7 +594,10 @@ const clearPhysicsObjects = () => {
       objectsToRemove.push(child)
     }
   })
-  objectsToRemove.forEach((obj) => scene.remove(obj))
+  objectsToRemove.forEach((obj) => {
+    scene.remove(obj)
+    disposeObjectResources(obj)
+  })
   sceneRevision.value += 1
 }
 
@@ -556,11 +625,7 @@ const handleMouseClick = (event: MouseEvent) => {
 
   // 清除之前的选中状态
   if (selectedObject.value) {
-    // 恢复原始材质
-    if (originalMaterials.has(selectedObject.value)) {
-      ;(selectedObject.value as THREE.Mesh).material = originalMaterials.get(selectedObject.value)!
-      originalMaterials.delete(selectedObject.value)
-    }
+    setHighlight(selectedObject.value, false)
     selectedObject.value = null
   }
 
@@ -577,12 +642,8 @@ const handleMouseClick = (event: MouseEvent) => {
     if (physicsObject.userData?.isPhysicsObject) {
       selectedObject.value = physicsObject as THREE.Object3D
 
-      // 保存原始材质
-      if (physicsObject instanceof THREE.Mesh) {
-        originalMaterials.set(physicsObject, physicsObject.material)
-        // 应用高亮材质
-        physicsObject.material = new THREE.MeshStandardMaterial({ color: 0xffff00 })
-      }
+      // 高亮选中物体
+      setHighlight(selectedObject.value, true)
     }
   }
 }
@@ -605,10 +666,7 @@ const resetSimulation = async () => {
 
   // 清除选中状态
   if (selectedObject.value) {
-    if (originalMaterials.has(selectedObject.value)) {
-      ;(selectedObject.value as THREE.Mesh).material = originalMaterials.get(selectedObject.value)!
-      originalMaterials.delete(selectedObject.value)
-    }
+    setHighlight(selectedObject.value, false)
     selectedObject.value = null
   }
 
@@ -618,6 +676,7 @@ const resetSimulation = async () => {
   // 重新初始化物理世界
   await initPhysics(scene)
   alignBodiesToMeshes()
+  applyPhysicsParameters()
 
   // 重新加载当前场景
   if (selectedPreset.value) {
@@ -626,41 +685,62 @@ const resetSimulation = async () => {
     createDemoScene()
     await initPhysics(scene)
     alignBodiesToMeshes()
+    applyPhysicsParameters()
   }
 }
 
 // 删除选中物体
 const deleteSelectedObject = () => {
-  if (selectedObject.value) {
-    // 恢复原始材质
-    if (originalMaterials.has(selectedObject.value)) {
-      ;(selectedObject.value as THREE.Mesh).material = originalMaterials.get(selectedObject.value)!
-      originalMaterials.delete(selectedObject.value)
-    }
+  const object = selectedObject.value
+  if (!object) return
 
-    // 移除物体
-    scene.remove(selectedObject.value)
-    selectedObject.value = null
-    displayMessage('物体已删除')
-  }
+  // 取消高亮
+  setHighlight(object, false)
+
+  // 先摘掉刚体：只把网格从场景里移除的话，刚体还在物理世界里参与碰撞，
+  // 会变成看不见却挡路的障碍
+  removeRigidBody(object)
+
+  // 移除物体
+  scene.remove(object)
+  disposeObjectResources(object)
+  selectedObject.value = null
+
+  // 物体数量是 computed 缓存的，改动场景后必须让版本号 +1 才会重新统计
+  sceneRevision.value += 1
+  displayMessage('物体已删除')
 }
 
 const setSimulationSpeed = () => {
   displayMessage(`仿真速度已设置为 ${simulationSpeed.value}x`)
 }
 
+/**
+ * 把界面上的物理参数同步给物理世界。
+ *
+ * ⚠️ initPhysics 会用物理引擎的默认重力重建世界，所以每次重建之后都要再调
+ * 一次，否则用户改过的重力会被默认值覆盖回去。
+ */
+const applyPhysicsParameters = () => {
+  updatePhysicsParameters({
+    gravity: new Vector3(0, gravity.value, 0),
+    friction: friction.value,
+    restitution: restitution.value,
+  })
+}
+
 const updateGravity = () => {
-  updatePhysicsParameters({ gravity: new Vector3(0, gravity.value, 0) })
+  applyPhysicsParameters()
   displayMessage(`重力已设置为 ${gravity.value}`)
 }
 
 const updateFriction = () => {
-  updatePhysicsParameters({ friction: friction.value })
+  applyPhysicsParameters()
   displayMessage(`摩擦力已设置为 ${friction.value}`)
 }
 
 const updateRestitution = () => {
-  updatePhysicsParameters({ restitution: restitution.value })
+  applyPhysicsParameters()
   displayMessage(`弹性系数已设置为 ${restitution.value}`)
 }
 
@@ -691,6 +771,7 @@ const loadPreset = async (presetId: string) => {
   // 初始化物理
   await initPhysics(scene)
   alignBodiesToMeshes()
+  applyPhysicsParameters()
 
   simulationTime.value = 0
   selectedPreset.value = presetId
@@ -780,6 +861,7 @@ const loadSceneFromEditor = async () => {
     // 初始化物理
     await initPhysics(scene)
     alignBodiesToMeshes()
+    applyPhysicsParameters()
 
     simulationTime.value = 0
     displayMessage(`已从场景编辑器加载: ${doc.name}`)
@@ -816,8 +898,20 @@ const createDemoScene = () => {
   })
 }
 
+/** 实验配置在 localStorage 里的键名 */
+const EXPERIMENT_CONFIG_KEY = 'experimentConfig'
+
+interface ExperimentConfig {
+  gravity: number
+  friction: number
+  restitution: number
+  simulationSpeed: number
+  recordData: boolean
+  samplingInterval: number
+}
+
 const saveExperiment = () => {
-  const experimentConfig = {
+  const experimentConfig: ExperimentConfig = {
     gravity: gravity.value,
     friction: friction.value,
     restitution: restitution.value,
@@ -825,8 +919,47 @@ const saveExperiment = () => {
     recordData: recordData.value,
     samplingInterval: samplingInterval.value,
   }
-  localStorage.setItem('experimentConfig', JSON.stringify(experimentConfig))
+  localStorage.setItem(EXPERIMENT_CONFIG_KEY, JSON.stringify(experimentConfig))
   displayMessage('实验配置已保存')
+}
+
+/**
+ * 回填上次保存的实验配置。
+ *
+ * 读回路径必须存在：保存接口把配置写进 localStorage 之后没人读，
+ * 「保存实验配置」就只是个安慰剂。数据损坏（坏 JSON / 字段类型不对）时
+ * 保持默认值，不让页面崩。
+ */
+const restoreExperimentConfig = () => {
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(EXPERIMENT_CONFIG_KEY)
+  } catch (error) {
+    // 隐私模式等场景下 localStorage 可能直接抛错
+    console.warn('[SimulationLab] 读取实验配置失败，已忽略', error)
+    return
+  }
+  if (!raw) return
+
+  let parsed: Partial<ExperimentConfig>
+  try {
+    parsed = JSON.parse(raw) as Partial<ExperimentConfig>
+  } catch (error) {
+    console.warn('[SimulationLab] 实验配置解析失败，已忽略', error)
+    return
+  }
+  if (!parsed || typeof parsed !== 'object') return
+
+  const numberOr = (value: unknown, fallback: number): number =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+
+  gravity.value = numberOr(parsed.gravity, gravity.value)
+  friction.value = numberOr(parsed.friction, friction.value)
+  restitution.value = numberOr(parsed.restitution, restitution.value)
+  simulationSpeed.value = numberOr(parsed.simulationSpeed, simulationSpeed.value)
+  recordData.value =
+    typeof parsed.recordData === 'boolean' ? parsed.recordData : recordData.value
+  samplingInterval.value = numberOr(parsed.samplingInterval, samplingInterval.value)
 }
 
 const exportData = () => {
@@ -865,6 +998,9 @@ onMounted(async () => {
     renderer.domElement.addEventListener('click', handleMouseClick)
   }
 
+  // 回填上次保存的实验配置（物理参数等物理世界建好后再同步）
+  restoreExperimentConfig()
+
   // 等待物理引擎初始化
   await ready()
 
@@ -875,6 +1011,7 @@ onMounted(async () => {
   createDemoScene()
   await initPhysics(scene)
   alignBodiesToMeshes()
+  applyPhysicsParameters()
 
   // 场景编辑器里保存过的场景（「从编辑器加载」用）
   refreshSavedScenes()
@@ -913,6 +1050,14 @@ onUnmounted(() => {
   // 停止渲染循环
   if (animationId) {
     cancelAnimationFrame(animationId)
+  }
+
+  // 移除窗口缩放监听：不解绑的话，页面来回切换会越挂越多份
+  window.removeEventListener('resize', handleResize)
+
+  // 释放场景里的几何体与材质
+  if (scene) {
+    clearPhysicsObjects()
   }
 
   // 清理渲染器
