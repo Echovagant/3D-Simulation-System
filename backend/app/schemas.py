@@ -64,3 +64,22 @@ class SceneUpsert(ApiModel):
 class HealthResponse(ApiModel):
     status: str
     version: str
+
+
+class TelemetryEventIn(ApiModel):
+    """一条待上报的事件。"""
+
+    kind: str = Field(pattern="^(error|event)$")
+    path: str = Field(default="", max_length=200)
+    message: str = Field(default="", max_length=2000)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class TelemetryBatch(ApiModel):
+    """一次上报的批次。空批次没有意义，直接拒掉。"""
+
+    events: list[TelemetryEventIn] = Field(min_length=1)
+
+
+class TelemetryAccepted(ApiModel):
+    accepted: int
