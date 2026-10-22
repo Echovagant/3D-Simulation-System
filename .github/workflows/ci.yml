@@ -85,3 +85,39 @@ jobs:
 
       - name: 跑 Python 闸门（ruff / 格式 / mypy / pytest）
         run: node scripts/check-python-gates.mjs
+
+  contract:
+    name: API 契约一致性
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: 准备 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 准备 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 安装前端依赖
+        run: npm ci
+
+      - name: 安装后端依赖
+        run: uv sync --frozen
+        working-directory: backend
+
+      # 契约文档是生成物：改了后端接口却没重新生成，这里直接红
+      - name: 校验契约文档与代码一致
+        run: npm run verify:api-contract

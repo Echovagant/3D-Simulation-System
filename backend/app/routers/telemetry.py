@@ -10,7 +10,12 @@ from app.services import telemetry_service
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 
-@router.post("", response_model=TelemetryAccepted, status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "",
+    response_model=TelemetryAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="上报一批遥测事件",
+)
 def ingest(payload: TelemetryBatch, session: Session = Depends(get_session)) -> TelemetryAccepted:
     """收下一批遥测事件。
 

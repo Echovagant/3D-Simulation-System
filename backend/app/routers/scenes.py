@@ -9,12 +9,14 @@ from app.services import scene_service
 router = APIRouter(prefix="/scenes", tags=["scenes"])
 
 
-@router.get("", response_model=list[SceneSummary])
+@router.get("", response_model=list[SceneSummary], summary="列出场景摘要")
 def list_scenes(session: Session = Depends(get_session)) -> list[SceneSummary]:
     return scene_service.list_scenes(session)
 
 
-@router.post("", response_model=SceneSummary, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=SceneSummary, status_code=status.HTTP_201_CREATED, summary="新建场景"
+)
 def create_scene(payload: SceneUpsert, session: Session = Depends(get_session)) -> SceneSummary:
     scene = scene_service.create_scene(session, payload)
     if scene is None:
@@ -27,7 +29,7 @@ def create_scene(payload: SceneUpsert, session: Session = Depends(get_session)) 
     return scene_service.to_summary(scene)
 
 
-@router.get("/{scene_id}", response_model=SceneDetail)
+@router.get("/{scene_id}", response_model=SceneDetail, summary="读取场景详情")
 def get_scene(scene_id: str, session: Session = Depends(get_session)) -> SceneDetail:
     scene = scene_service.get_scene(session, scene_id)
     if scene is None:
@@ -43,7 +45,7 @@ def get_scene(scene_id: str, session: Session = Depends(get_session)) -> SceneDe
     )
 
 
-@router.put("/{scene_id}", response_model=SceneSummary)
+@router.put("/{scene_id}", response_model=SceneSummary, summary="更新场景")
 def update_scene(
     scene_id: str, payload: SceneUpsert, session: Session = Depends(get_session)
 ) -> SceneSummary:
@@ -66,7 +68,7 @@ def update_scene(
     return scene_service.to_summary(scene)
 
 
-@router.delete("/{scene_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{scene_id}", status_code=status.HTTP_204_NO_CONTENT, summary="删除场景")
 def delete_scene(scene_id: str, session: Session = Depends(get_session)) -> None:
     scene = scene_service.get_scene(session, scene_id)
     if scene is None:

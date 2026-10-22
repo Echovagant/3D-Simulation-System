@@ -155,6 +155,8 @@ npm run preview    # 预览生产产物
 | `npm test` | Vitest 全量用例（38 个测试文件 / 328 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
+| `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
+| `npm run gen:api-contract` | 从后端代码重新生成 API 契约文档 |
 | `npm run build:all` | 前后端一起跑（前端构建 + 后端闸门） |
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
 | `npm run gen:docs` | 重新生成封面与页面截图 |
@@ -185,9 +187,12 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
 
 ```bash
 cd backend
-uv run pytest        # 19 个用例
+uv run pytest        # 27 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
+
+后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md) 是**生成物**：
+它由后端代码生成，改了接口却没重新生成，CI 会直接红。
 
 ## 技术栈
 

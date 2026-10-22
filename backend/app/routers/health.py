@@ -3,7 +3,7 @@ from fastapi import APIRouter
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health")
+@router.get("/health", summary="存活探针")
 def health() -> dict[str, str]:
     """存活探针。
 
