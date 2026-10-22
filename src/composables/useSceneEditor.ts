@@ -291,7 +291,11 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     scene.add(groundMesh)
 
     // 创建地面刚体
-    const groundBodyDesc = rapier.RigidBodyDesc.fixed()
+    //
+    // ⚠️ 刚体要往下挪 0.1：上面的地面**网格**是 PlaneGeometry，平面就在 y=0；
+    // 而 cuboid(5, 0.1, 5) 建在原点时顶面在 y=+0.1，物体就会停在半空中悬着 10 厘米。
+    // 刚体下移 0.1 之后，碰撞体顶面与可见地面齐平（y=0）。
+    const groundBodyDesc = rapier.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0)
     groundRigidBody = physicsWorld.createRigidBody(groundBodyDesc)
 
     // 创建碰撞体
