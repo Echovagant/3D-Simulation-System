@@ -111,10 +111,21 @@ const expectWithin = (label, actual, pattern, tolerance, { group = 1 } = {}) => 
 // 运行时依赖
 expect('运行时依赖数', Object.keys(pkg.dependencies).length, /运行时依赖 \| (\d+) 个/)
 
-// 构建闸门数：verify:* 的脚本数，排除汇总入口 verify:all（它不是又一道闸门）
-const gateCount = Object.keys(pkg.scripts).filter((s) => s.startsWith('verify:') && s !== 'verify:all').length
+// 构建闸门数：数 build 链里**真正调用**的 verify:* 闸门。
+// 不能数全部 verify:* 脚本——后端闸门（verify:backend）是 Python 侧的另一套，
+// 不在 build 链里，算进来「11 道构建闸门」就不诚实了。
+const buildChainGates = [
+  ...new Set([...pkg.scripts.build.matchAll(/npm run (verify:[a-z0-9-]+)/g)].map((m) => m[1])),
+].filter((s) => s !== 'verify:all')
+const gateCount = buildChainGates.length
 expect('构建闸门数（指标表）', gateCount, /<b>(\d+)<\/b><br><sub>构建闸门/)
 expect('构建闸门数（正文）', gateCount, /用 \*\*(\d+) 道构建闸门\*\*/)
+
+// 后端闸门数：清单是唯一真相源，README 的数字必须与它一致
+const backendGateCount = JSON.parse(
+  readFileSync(join(repoRoot, 'scripts', 'backend-gates.json'), 'utf8'),
+).gates.length
+expect('后端闸门数', backendGateCount, /<b>(\d+)<\/b><br><sub>后端闸门/)
 
 // Rapier 版本（运行时依赖官方包；compat 只是测试环境的别名目标）
 expect(

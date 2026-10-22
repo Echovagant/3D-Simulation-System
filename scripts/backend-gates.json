@@ -1,0 +1,8 @@
+{
+  "gates": [
+    { "name": "ruff check", "args": ["run", "ruff", "check", "."] },
+    { "name": "ruff format --check", "args": ["run", "ruff", "format", "--check", "."] },
+    { "name": "mypy", "args": ["run", "mypy", "app"] },
+    { "name": "pytest", "args": ["run", "pytest", "-q"] }
+  ]
+}

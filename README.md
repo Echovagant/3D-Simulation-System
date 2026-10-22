@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="Vitest 32 files / 267 cases" src="https://img.shields.io/badge/test-32%20files%20%2F%20267%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="Vitest 37 files / 322 cases" src="https://img.shields.io/badge/test-37%20files%20%2F%20322%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -26,6 +26,7 @@
     <td align="center"><b>252.08 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>322</b><br><sub>测试用例 · 37 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
+    <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
 </table>
 
@@ -153,8 +154,40 @@ npm run preview    # 预览生产产物
 | `npm run build` | 类型检查 + 构建 + 测试 + 11 道闸门 |
 | `npm test` | Vitest 全量用例（37 个测试文件 / 322 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
+| `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
+| `npm run build:all` | 前后端一起跑（前端构建 + 后端闸门） |
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
 | `npm run gen:docs` | 重新生成封面与页面截图 |
+
+## 后端（可选）
+
+本项目默认是**纯前端**应用：`npm run build` 出来的产物可以直接扔到任何静态托管上。
+
+仓库里另带一个 Python 后端（`backend/`），用来做浏览器天生做不到的事：
+**跨设备场景库**——在 A 设备保存的场景，B 设备打开就能看到。
+
+**后端缺席时前端功能完全不受影响**：场景仍然存在浏览器本地，
+错误仍然能在控制台看到，界面不会多出任何提示以外的打扰。
+
+```bash
+cd backend
+uv sync
+uv run uvicorn app.main:app --port 8000
+```
+
+前端要连后端时，开发服务器会把 `/api` 代理过去（用 `VITE_API_PROXY_TARGET` 指定后端地址）：
+
+```bash
+VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
+```
+
+后端自己的测试与质量检查：
+
+```bash
+cd backend
+uv run pytest        # 19 个用例
+npm run verify:backend   # ruff + 格式 + mypy + pytest
+```
 
 ## 技术栈
 
@@ -200,6 +233,10 @@ flowchart LR
 | 可加载模型 | 9 个（全部程序化生成） |
 | 类型检查 | 0 错误 |
 | 页面体检 | 7 个页面 0 console error / 0 未捕获异常 / 0 网络失败 |
+
+后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**。
+CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
+`requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 
 ## 文档
 

@@ -56,11 +56,13 @@ const ALLOW_MARKER = 'secret-scan: allow'
  *
  * - `sk-...`：OpenAI 风格的前缀
  * - `eyJ...`：JWT 风格（MiniMax 的 key 就是这一类）
+ * - `AIza...`：Google / Gemini 风格
  * - `MINIMAX_API_KEY=...` / `api_key: "..."`：赋值形式
  */
 const PATTERNS = [
   { name: 'sk- 前缀', regex: /sk-[A-Za-z0-9_-]{16,}/g },
   { name: 'JWT 风格', regex: /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g },
+  { name: 'AIza 前缀', regex: /AIza[0-9A-Za-z_-]{30,}/g },
   {
     name: 'API key 赋值',
     regex: /(?:MINIMAX_API_KEY|api[_-]?key|apiKey)\s*[:=]\s*["']?[A-Za-z0-9._-]{16,}/gi,
@@ -104,7 +106,14 @@ for (const file of walk(repoRoot)) {
   } catch {
     continue
   }
-  if (!text.includes('sk-') && !text.includes('eyJ') && !/api[_-]?key/i.test(text)) continue
+  if (
+    !text.includes('sk-') &&
+    !text.includes('eyJ') &&
+    !text.includes('AIza') &&
+    !/api[_-]?key/i.test(text)
+  ) {
+    continue
+  }
   scanned += 1
 
   const lines = text.split(/\r?\n/)

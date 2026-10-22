@@ -45,3 +45,43 @@ jobs:
 
       - name: 构建并执行全部门禁（npm run build）
         run: npm run build
+
+  backend:
+    name: 后端闸门 · Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 下限真的被验证过：3.12 是 requires-python 声明的下限，3.14 是实测过的最新版本。
+        python-version: ['3.12', '3.13', '3.14']
+    env:
+      # ⚠️ 必须显式钉住：backend/.python-version 写的是 3.12，
+      # 不钉的话 uv 会照着它走，三个矩阵项实际全跑 3.12 —— 矩阵就成了摆设。
+      UV_PYTHON: ${{ matrix.python-version }}
+      PYTHONUTF8: '1'
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+
+      - name: 准备 Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: 准备 Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: 安装依赖（uv sync --frozen）
+        run: uv sync --frozen
+        working-directory: backend
+
+      - name: 跑 Python 闸门（ruff / 格式 / mypy / pytest）
+        run: node scripts/check-python-gates.mjs
