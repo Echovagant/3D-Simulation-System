@@ -94,24 +94,21 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router' // 引入RouterLink类型
 
-// 标签云数据 - 展示系统相关技术和特性
+// 标签云数据 —— 只列系统**真的具备**的能力，每一项都能指到具体实现
 const tags = ref([
   'Three.js',
-  '物理引擎',
   'WebGL',
   '实时渲染',
-  '3D建模',
+  'Rapier 物理引擎',
   '碰撞检测',
-  '人工智能',
-  '机器学习',
-  '粒子系统',
-  '光影追踪',
-  'VR支持',
-  '材质系统',
-  '动画曲线',
-  '流体模拟',
   '刚体动力学',
-  '场景优化',
+  '固定步长仿真',
+  '场景编辑',
+  '模型导入',
+  'AI 智能体',
+  '规则式决策',
+  '可选 LLM 决策',
+  '数据导出',
 ])
 
 const handleScrollDown = () => {

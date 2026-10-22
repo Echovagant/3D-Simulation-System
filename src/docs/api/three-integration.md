@@ -44,7 +44,7 @@
 
 因此仿真速度与显示刷新率**无关**：60Hz 屏每秒推进 60 个物理步，30Hz 屏同样是 60 个（低帧率时一帧多推几步）。单帧最多推进 `maxSubSteps`（5）步，剩余积压会被丢弃，避免低帧率机器陷入“追帧→更卡→更少帧”的死循环。
 
-`store.simulationState.speed` 的语义是“每秒执行多少个固定步”：1× 就是每秒 60 步，速度调大不会改变步长的大小。
+`store.simulationState.speed` 是**倍率**：1× 表示仿真时间与真实时间同步，2× 表示每秒推进 2 倍的仿真时间；**物理步长恒为 1/60 秒**，倍率只改变每秒推进多少个步，不改变步长本身（1× 时是每秒 60 步）。
 
 ### 刚体映射表
 
@@ -111,7 +111,7 @@
 
 场景编辑器的工具栏通过 `provide` / `inject` 取得 `addCube`、`addSphere`、`importModel`、`getIsSceneInitialized` 四个方法。这批方法由 `src/components/three/core/ThreeScene.vue` 在初始化完成后经 `expose-methods` 事件上抛，再由场景编辑器页面转交。
 
-“导入模型”按钮并不直接加载文件，而是跳转到 `/model-library` 并带上 `returnUrl` 查询参数；在模型库中选定模型后返回，工具栏监听路由变化并调用 `importModel(modelId)` 完成导入。
+“导入模型”按钮并不直接加载文件，而是跳转到 `/model-library` 并带上 `returnUrl` 查询参数。模型库那边把选中的模型 id 记进 `modelStore.selectedModelId` 并跳回场景编辑器；**工具栏监听的是这个 id，而不是路由**——场景编辑器可能是在模型库之后才挂载的，那时路由早已切换完，路由监听器永远不会触发。工具栏取出这个 id 调用 `importModel(modelId)` 完成导入，导入结束（无论成功与否）即把这个 id 清空，因此同一个模型不会被重复导入。
 
 模型文件由 `src/utils/modelLoader.ts` 的 `loadModel` 加载：按扩展名选择 GLTFLoader、FBXLoader 或 OBJLoader；URL 为 `#` 或空字符串时直接抛出“无效的模型URL”，扩展名不受支持时抛出“不支持的模型格式”。站内绝对路径会拼上 `import.meta.env.BASE_URL`，以支持子路径部署。
 
@@ -120,4 +120,4 @@
 - 仓库中**没有** `src/config/three.ts` 这样的集中配置文件——该路径在版本库里只是一个 0 字节的空文件，工作区中已不存在。Three.js 的初始化参数分散在 `useSceneEditor` 与各个 `use*` 组合式函数内部。
 - `src/config/simulation.ts` 导出的 `simulationConfig` 常量**已经被接线**：`physics.fixedTimeStep`（1/60 秒）与 `physics.maxSubSteps`（5）由固定步长累加器消费，场景编辑器与仿真实验室共用同一套步长定义。改动这两个值会直接改变仿真行为。
 - `getScreenshot` 与 `togglePause` 已在仓库中实现，但当前没有任何界面元素调用它们。
-- `loadScene` 只会重建类型为 `model` 且带 `modelId` 的物体，其余类型在源码中留有“处理其他类型物体”的占位注释，实际不会被还原。
+- `loadScene` 会重建**全部**类型的物体：模型按 `modelId` 重新加载；立方体、球体等基本体通过界面层注册进来的工厂（`registerPrimitiveFactory`）重新创建，因此**连刚体与碰撞体一起还原**。没有注册工厂时（例如在测试里调用）会退回到“只有 mesh、没有物理”的基本体。已知限制：基本体是重新创建的，uuid 会变。

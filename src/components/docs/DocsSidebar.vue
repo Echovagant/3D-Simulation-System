@@ -5,7 +5,7 @@
       <ul class="space-y-2">
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'introduction'}"
+            :class="{'text-primary font-medium': currentSection === 'guide/introduction'}"
             @click="$emit('change-section', 'guide/introduction')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -14,7 +14,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'scene-editor'}"
+            :class="{'text-primary font-medium': currentSection === 'guide/scene-editor'}"
             @click="$emit('change-section', 'guide/scene-editor')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -23,7 +23,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'simulation-lab'}"
+            :class="{'text-primary font-medium': currentSection === 'guide/simulation-lab'}"
             @click="$emit('change-section', 'guide/simulation-lab')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -32,7 +32,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'model-library'}"
+            :class="{'text-primary font-medium': currentSection === 'guide/model-library'}"
             @click="$emit('change-section', 'guide/model-library')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -41,7 +41,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'ai-playground'}"
+            :class="{'text-primary font-medium': currentSection === 'guide/ai-playground'}"
             @click="$emit('change-section', 'guide/ai-playground')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -56,7 +56,7 @@
       <ul class="space-y-2">
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'three-integration'}"
+            :class="{'text-primary font-medium': currentSection === 'api/three-integration'}"
             @click="$emit('change-section', 'api/three-integration')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -65,7 +65,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'physics-engine'}"
+            :class="{'text-primary font-medium': currentSection === 'api/physics-engine'}"
             @click="$emit('change-section', 'api/physics-engine')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -74,7 +74,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'ai-api'}"
+            :class="{'text-primary font-medium': currentSection === 'api/ai-api'}"
             @click="$emit('change-section', 'api/ai-api')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -89,7 +89,7 @@
       <ul class="space-y-2">
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'basic-scene'}"
+            :class="{'text-primary font-medium': currentSection === 'examples/basic-scene'}"
             @click="$emit('change-section', 'examples/basic-scene')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -98,7 +98,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'physics-simulation'}"
+            :class="{'text-primary font-medium': currentSection === 'examples/physics-simulation'}"
             @click="$emit('change-section', 'examples/physics-simulation')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
@@ -107,7 +107,7 @@
         </li>
         <li>
           <a
-            :class="{'text-primary font-medium': currentSection === 'ai-interaction'}"
+            :class="{'text-primary font-medium': currentSection === 'examples/ai-interaction'}"
             @click="$emit('change-section', 'examples/ai-interaction')"
             class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
           >
