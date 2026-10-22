@@ -119,7 +119,7 @@
 - `src/components/three/ai/AiEnvironmentPanel.vue`：环境配置面板。场景类型、难度、障碍物密度、时间限制、胜利条件都绑定在一份本地副本上，只有点击“应用设置”才会通过 `updateEnvironmentSettings` 写回仓库；其余输入框的即时更新回调目前是空函数。
 - `src/components/three/ai/AiController.vue`：智能体面板。“添加代理”会创建一个名为“AI代理 N”、类型为 `basic` 的智能体；选中智能体后可调移动速度、反应时间、感知范围、避障（`basic` 适用）以及启用学习、记忆保留（`advanced` 适用）。
 - `src/components/three/ai/AiDebugPanel.vue`：调试面板。提供“开始 / 暂停”“重置”“清空日志”三个按钮，并按时间顺序汇总所有智能体的日志，可按类型过滤。
-- `src/components/three/ai/LlmPanel.vue`：LLM 面板。填 Key、切决策来源、触发解释；状态来自 `useLlmStore`。
+- `src/components/three/ai/LlmPanel.vue`：LLM 面板。选服务商、填 Key、改模型与端点、切决策来源、触发解释；状态来自 `useLlmStore`。
 
 ## LLM 接入（可选）
 
@@ -127,23 +127,42 @@
 
 | 模块 | 职责 |
 | --- | --- |
-| `src/config/llm.ts` | base_url、模型、超时、输出上限、调用上限等常量（默认值对着官方文档核过，可用 `VITE_MINIMAX_BASE_URL` / `VITE_MINIMAX_MODEL` 覆盖） |
-| `src/services/llm/secret.ts` | API key 的**唯一**存放点：模块作用域，不进响应式、不落盘；另有 `redactSecrets` 负责把密钥样式的片段从错误信息里抹掉 |
-| `src/services/llm/client.ts` | `callLlm(options)`：发一次 chat/completions。**永不抛异常**，失败也返回 `{ ok: false, error }` |
+| `src/config/llmProviders.ts` | 服务商清单：id、名称、**协议**、默认 base_url、默认模型、官方文档地址。每家的默认值都对着官方文档核过 |
+| `src/config/llm.ts` | 与提供商无关的公共配置：超时、输出上限、调用频次与额度 |
+| `src/services/llm/secret.ts` | API key 的**唯一**存放点：模块作用域，按服务商分槽，不进响应式、不落盘；另有 `redactSecrets` 负责把密钥样式的片段从错误信息里抹掉 |
+| `src/services/llm/client.ts` | `callLlm(options)`：按协议分派请求。**永不抛异常**，失败也返回 `{ ok: false, error }` |
 | `src/services/llm/prompts.ts` | 提示词构造（`buildDecisionMessages` / `buildExplainMessages`）与动作解析（`parseLlmAction`） |
-| `src/stores/llmStore.ts` | 对外的状态与动作：`configured` / `mode` / `explanation` / `degraded` / `callCount` |
+| `src/stores/llmStore.ts` | 对外的状态与动作：服务商选择、模型与端点覆盖、`configured` / `mode` / `explanation` / `degraded` / `callCount` |
+
+### 三种协议
+
+客户端按 `provider.protocol` 分派，三族的差别都在请求与响应的形状上：
+
+| 协议 | 端点 | 鉴权 | 请求体 | 响应 |
+| --- | --- | --- | --- | --- |
+| `openai` | `POST {base}/chat/completions` | `Authorization: Bearer` | `messages` / `max_completion_tokens`（+ 可选 `reasoning_effort`） | `choices[0].message.content` |
+| `anthropic` | `POST {base}/messages` | `x-api-key` + `anthropic-version` | `system` 顶层字段 / `max_tokens` | `content[].text` |
+| `gemini` | `POST {base}/interactions` | `x-goog-api-key` | `system_instruction` / `input` / `generation_config.thinking_level` | `output_text` |
+
+`reasoning_effort` **只发给官方文档明确写了它的服务商**（清单里的 `reasoningEffort` 字段）——
+往不认识的接口上乱发会被判成非法参数。
 
 ### `useLlmStore`
 
 | 成员 | 说明 |
 | --- | --- |
-| `configured` | 是否已配置 API key（**store 里没有 key 字段**，只有这个布尔值） |
+| `providerId` / `provider` | 当前选中的服务商 id 与它的定义 |
+| `model` / `baseUrl` | 当前实际使用的模型与端点（默认值取自清单，可被覆盖） |
+| `modelOverrides` / `baseUrlOverrides` | 按提供商分别记的覆盖值 |
+| `configured` | 当前提供商是否已配置 API key（**store 里没有 key 字段**，只有这个布尔值） |
 | `mode` | `'rule'`（默认，规则式）或 `'llm'` |
 | `explanation` / `explaining` | 最近一次解释与"模型思考中"标记 |
 | `degraded` | LLM 控制器是否已降级回规则式 |
 | `callCount` | 本次会话已发出的调用次数（上限见 `llmConfig.maxCallsPerSession`） |
 | `lastError` | 最近一次错误（已脱敏） |
-| `applyKey(value)` / `clearKey()` | 写入 / 清除 key（只在内存里） |
+| `selectProvider(id)` | 换服务商：换 key 槽位，载入它自己的默认模型与端点 |
+| `setModel(value)` / `setBaseUrl(value)` | 覆盖当前提供商的模型 / 端点 |
+| `applyKey(value)` / `clearKey()` | 写入 / 清除 key（只在内存里，按提供商分槽） |
 | `testConnection()` | 发一个极短请求做连通性测试 |
 | `requestExplanation(snapshot)` | 请求一次解释，成功后写进 `explanation` |
 | `requestAction(snapshot)` | 请求一个动作；返回 `null` 表示"这次没有可用动作"，调用方必须回落规则式 |

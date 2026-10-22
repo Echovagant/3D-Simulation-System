@@ -7,7 +7,7 @@ AI 演武场（路由 `/ai-playground`）是系统里用于配置智能体、启
 
 这一页是**规则式智能体**的演示场，有三处必须如实说明：
 
-1. **默认不调用任何外部模型，也不做训练。** 智能体的行为来自一组写在代码里的规则（读感知 → 有障碍就转向 → 否则朝目标点走），系统没有导入训练模型的功能。右侧「LLM 增强」面板可以**由使用者自行**填入 API Key 来开启两项可选能力（见下文「接入 LLM」），默认是关的。
+1. **默认不调用任何外部模型，也不做训练。** 智能体的行为来自一组写在代码里的规则（读感知 → 有障碍就转向 → 否则朝目标点走），系统没有导入训练模型的功能。右侧「LLM 增强」面板可以**由使用者自行**选择服务商并填入 API Key，来开启两项可选能力（见下文「接入 LLM」），默认是关的。
 2. **物理是 Rapier 刚体物理。** 智能体与障碍物都是真实的刚体：有质量、摩擦与弹性，撞上障碍物会被接触求解器挡下并沿着箱体滑开。感知（视野内障碍物数量、最近距离）也来自物理引擎的形状计算，不是手算的包围盒。
 3. **环境配置只有一项真正接入了仿真**：障碍物密度（改它会真的重建场地里的障碍物）。场景类型、难度、时间限制、胜利条件目前仍然只是配置，不影响智能体行为。
 
@@ -22,7 +22,8 @@ AI 演武场（路由 `/ai-playground`）是系统里用于配置智能体、启
 | 左上 | 环境配置 | 场景类型、难度、障碍物密度、时间限制、胜利条件 |
 | 左下 | AI控制器 | 代理列表、参数设置、添加与移除代理 |
 | 中间 | 3D环境视图 | **真实渲染**的场地：地面网格、障碍物、智能体 |
-| 右侧 | 调试信息 | 仿真控制、状态摘要、代理日志 |
+| 右上 | 调试信息 | 仿真控制、状态摘要、代理日志 |
+| 右下 | LLM 增强 | 服务商与 Key、决策来源、旁路解释（默认全关） |
 
 页面顶部还有一段装饰性的动态 SVG 背景。中间视图区在初始化时会显示“加载3D环境...”的提示，约 0.6 秒后消失。
 
@@ -159,28 +160,49 @@ AI 演武场（路由 `/ai-playground`）是系统里用于配置智能体、启
 
 ### 怎么填 Key
 
-面板里的输入框是 `type="password"`，填的是 MiniMax 开放平台的 API Key。
+面板里先选**服务商**，再填那家的 API Key。输入框是 `type="password"`。
 
 **Key 只存在当前页面的内存里**：点「应用」之后输入框会被清空，Key 写在
 `src/services/llm/secret.ts` 的模块作用域——它不进 Vue 响应式（否则 DevTools 会把它整个列出来），
 不写 localStorage、不写磁盘、不进仓库，刷新页面即失效。
+Key 按服务商分槽存放，换一家不用重新粘贴另一家的。
 仓库里还有第 11 道闸门 `verify:no-secrets` 盯着，任何"看起来像密钥"的字符串进仓库都会让构建失败。
 
-模型与端点对着官方文档核过（`platform.minimax.io/docs/guides/text-generation`）：
+### 支持哪些服务商
 
-| 项 | 值 |
-| --- | --- |
-| base_url | `https://api.minimax.io/v1`（OpenAI 兼容） |
-| 端点 | `POST /v1/chat/completions` |
-| 模型 | `MiniMax-M3.1-Flash` |
-| 鉴权 | `Authorization: Bearer <key>` |
-| 输出上限字段 | `max_completion_tokens` |
+清单在 `src/config/llmProviders.ts`，**每一家的 base_url 与模型 id 都对着官方文档核过**：
 
-> ⚠️ `MiniMax-M3.1-Flash` **不允许关闭思考**：发 `thinking: { type: "disabled" }` 会直接 400
-> （`requires adaptive thinking`）。想更快只能把 `reasoning_effort` 调低——本项目默认就是 `low`。
+| 服务商 | 协议 | 默认 base_url | 默认模型 |
+| --- | --- | --- | --- |
+| MiniMax | OpenAI 兼容 | `api.minimax.io/v1` | `MiniMax-M3.1-Flash` |
+| DeepSeek | OpenAI 兼容 | `api.deepseek.com` | `deepseek-v4-pro` |
+| 智谱 GLM | OpenAI 兼容 | `open.bigmodel.cn/api/paas/v4` | `glm-5.3` |
+| 智谱 GLM（编码套餐） | OpenAI 兼容 | `open.bigmodel.cn/api/coding/paas/v4` | `glm-5.2` |
+| 通义千问 Qwen | OpenAI 兼容 | `dashscope.aliyuncs.com/compatible-mode/v1` | `qwen3.8-max` |
+| 火山方舟 | OpenAI 兼容 | `ark.cn-beijing.volces.com/api/v3` | `doubao-seed-2-1-pro` |
+| 火山方舟（编码套餐） | OpenAI 兼容 | `ark.cn-beijing.volces.com/api/coding/v3` | `Doubao-Seed-Code` |
+| OpenAI | OpenAI 兼容 | `api.openai.com/v1` | `gpt-5.4` |
+| Anthropic Claude | Anthropic Messages | `api.anthropic.com/v1` | `claude-opus-5` |
+| Google Gemini | Gemini Interactions | `generativelanguage.googleapis.com/v1beta` | `gemini-3.8-flash` |
+| xAI Grok | OpenAI 兼容 | `api.x.ai/v1` | `grok-4.7` |
 
-base_url 与模型可以用环境变量 `VITE_MINIMAX_BASE_URL` / `VITE_MINIMAX_MODEL` 覆盖。
-注意改 base_url 还要同步改 `index.html` 里的 CSP `connect-src`（默认放行 MiniMax 官方三个域名）。
+**模型与端点都可以在面板上直接改**：模型 id 迭代很快，而且常常与账号绑定
+（火山方舟给的是"接入点" id，智谱的编码套餐与通用套餐模型名也不同）。
+改端点后要同步改 `index.html` 里的 CSP `connect-src`——那串域名与本清单一一对应，
+少一个浏览器就会直接拦掉请求。
+
+三种协议的差别（客户端 `src/services/llm/client.ts` 里按协议分派）：
+
+| 协议 | 端点 | 鉴权 | 特点 |
+| --- | --- | --- | --- |
+| OpenAI 兼容 | `POST {base}/chat/completions` | `Authorization: Bearer` | 输出上限字段 `max_completion_tokens` |
+| Anthropic Messages | `POST {base}/messages` | `x-api-key` + `anthropic-version` | system 是**顶层字段**，输出上限用 `max_tokens` |
+| Gemini Interactions | `POST {base}/interactions` | `x-goog-api-key` | system 是 `system_instruction`，思考深度用 `thinking_level` |
+
+> ⚠️ 部分模型**不允许关闭思考**：例如 `MiniMax-M3.1-Flash` 发 `thinking: { type: "disabled" }`
+> 会直接 400（`requires adaptive thinking`）。所以客户端只在官方文档明确写了
+> `reasoning_effort` 的服务商上带这个参数，其余的一律不发——往不认识的接口上乱发
+> 会被判成非法参数。
 
 ### 旁路解释（不碰仿真）
 
