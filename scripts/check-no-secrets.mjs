@@ -7,6 +7,7 @@
  * 而 GitHub 上已推送的历史要改起来非常麻烦。所以要有这道闸门守着。
  *
  * 扫描范围：仓库内除 node_modules / dist / .git 之外的全部文本文件。
+ * Python 后端（backend/）的源码同样在扫描范围内。
  * 豁免方式：某一行写上 `secret-scan: allow` 即可跳过（测试夹具用它）。
  *
  * 退出码：0 = 干净；1 = 发现疑似密钥。
@@ -18,9 +19,32 @@ import { fileURLToPath } from 'node:url'
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 
 /** 不扫的目录 */
-const SKIP_DIRS = new Set(['node_modules', 'dist', '.git', '.idea', 'coverage', '.vite'])
+const SKIP_DIRS = new Set([
+  'node_modules',
+  'dist',
+  '.git',
+  '.idea',
+  'coverage',
+  '.vite',
+  // Python 后端：虚拟环境与工具缓存里全是第三方源码，扫它们只会产出假阳性
+  '.venv',
+  '__pycache__',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.ruff_cache',
+  'backend_data',
+])
 /** 不扫的文件（锁文件里有大量 base64 摘要，误报率太高） */
-const SKIP_FILES = new Set(['package-lock.json'])
+const SKIP_FILES = new Set(['package-lock.json', 'uv.lock'])
+
+/**
+ * `.env` 系列不扫。
+ *
+ * 它们被 gitignore 排除，本来就不在仓库里，而里面装的就是真 key——
+ * 扫它只可能报出「真阳性」，把本地 `npm run build` 弄红，却不可能发现新的问题。
+ * 仓库里的 Python 源码照常扫：那里粘错一个 key 才是真正要拦的事故。
+ */
+const isEnvFile = (name) => name === '.env' || name.startsWith('.env.')
 /** 二进制/大文件不扫 */
 const MAX_SIZE = 2 * 1024 * 1024
 
@@ -53,6 +77,7 @@ function walk(dir) {
       continue
     }
     if (SKIP_FILES.has(entry.name)) continue
+    if (isEnvFile(entry.name)) continue
     const full = join(dir, entry.name)
     try {
       if (statSync(full).size > MAX_SIZE) continue
