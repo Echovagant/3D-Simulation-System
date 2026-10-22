@@ -272,6 +272,16 @@ let fpsWindowFrames = 0
  */
 const HIGHLIGHT_COLOR = 0xffff00
 
+/**
+ * 面板的摩擦力/弹性系数是否已经覆盖了物体自身的设置。
+ *
+ * 只有用户真的动过这两个输入框、或恢复了已保存的配置时才覆盖——面板的默认值
+ * 不该一进页面就把预设里逐个物体的参数抹掉。覆盖一旦生效，物理世界重建后
+ * 必须重新下发，否则加载预设时会被物体的默认值盖回去。
+ */
+let frictionOverride: number | null = null
+let restitutionOverride: number | null = null
+
 // 数据记录
 const recordedData = ref<
   Array<{
@@ -720,13 +730,17 @@ const setSimulationSpeed = () => {
  *
  * ⚠️ initPhysics 会用物理引擎的默认重力重建世界，所以每次重建之后都要再调
  * 一次，否则用户改过的重力会被默认值覆盖回去。
+ *
+ * 重力是全局量，始终以面板为准；摩擦力/弹性系数只在被覆盖过时才整体下发，
+ * 免得把预设里逐个物体的参数抹平。
  */
 const applyPhysicsParameters = () => {
-  updatePhysicsParameters({
+  const params: { gravity?: Vector3; friction?: number; restitution?: number } = {
     gravity: new Vector3(0, gravity.value, 0),
-    friction: friction.value,
-    restitution: restitution.value,
-  })
+  }
+  if (frictionOverride !== null) params.friction = frictionOverride
+  if (restitutionOverride !== null) params.restitution = restitutionOverride
+  updatePhysicsParameters(params)
 }
 
 const updateGravity = () => {
@@ -735,11 +749,13 @@ const updateGravity = () => {
 }
 
 const updateFriction = () => {
+  frictionOverride = friction.value
   applyPhysicsParameters()
   displayMessage(`摩擦力已设置为 ${friction.value}`)
 }
 
 const updateRestitution = () => {
+  restitutionOverride = restitution.value
   applyPhysicsParameters()
   displayMessage(`弹性系数已设置为 ${restitution.value}`)
 }
@@ -954,12 +970,20 @@ const restoreExperimentConfig = () => {
     typeof value === 'number' && Number.isFinite(value) ? value : fallback
 
   gravity.value = numberOr(parsed.gravity, gravity.value)
-  friction.value = numberOr(parsed.friction, friction.value)
-  restitution.value = numberOr(parsed.restitution, restitution.value)
   simulationSpeed.value = numberOr(parsed.simulationSpeed, simulationSpeed.value)
   recordData.value =
     typeof parsed.recordData === 'boolean' ? parsed.recordData : recordData.value
   samplingInterval.value = numberOr(parsed.samplingInterval, samplingInterval.value)
+
+  // 恢复出来的摩擦力/弹性系数成为全局覆盖：物理世界重建后要重新下发
+  if (typeof parsed.friction === 'number' && Number.isFinite(parsed.friction)) {
+    friction.value = parsed.friction
+    frictionOverride = parsed.friction
+  }
+  if (typeof parsed.restitution === 'number' && Number.isFinite(parsed.restitution)) {
+    restitution.value = parsed.restitution
+    restitutionOverride = parsed.restitution
+  }
 }
 
 const exportData = () => {
