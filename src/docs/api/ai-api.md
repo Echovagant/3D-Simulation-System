@@ -20,7 +20,7 @@
 
 `AiDecision.action` 的取值只有四种：`'move'`、`'rotate'`、`'interact'`、`'wait'`。其中 `'interact'` 在当前实现中**从未被生成过**。
 
-`src/stores/aiStore.ts` 另有两个类型：`AiAgentType`（`'basic'` / `'advanced'` / `'custom'`）与 `AiEnvironmentSettings`（`scenario`、`difficulty`、`timeLimit`、`winCondition`、`obstaclesDensity`），它们通过 `src/types/index.ts` 末尾的再导出对外提供。
+`src/stores/aiStore.ts` 另有两个类型：`AiAgentType`（`'basic'` / `'advanced'` / `'custom'`）与 `AiEnvironmentSettings`（`scenario`、`difficulty`、`timeLimit`、`winCondition`、`obstaclesDensity`），它们通过 `src/types/index.ts` 末尾的再导出对外提供。`winCondition` 的类型是字面量类型 `AiWinCondition`（`'到达目标点'`）——自由文本无法判定，因此不开放。
 
 ## 状态仓库 useAiStore
 
@@ -35,19 +35,31 @@
 | `simulationActive` | 仿真是否处于运行状态 |
 | `simulationTime` | 已运行的仿真秒数 |
 | `selectedAgentId` | 当前选中的智能体 ID |
+| `resetToken` | 重置令牌，每次 `resetSimulation` 自增；物理层靠它把智能体送回出生点 |
 | `activeAgents` | 计算属性，`active` 为真的智能体 |
 | `selectedAgent` | 计算属性，当前选中的智能体 |
-| `scenarioOptions` | 计算属性，场景类型选项：`navigation`（导航挑战）、`interaction`（物体交互）、`combat`（对抗模拟）、`custom`（自定义场景） |
+| `scenarioOptions` | 计算属性，场景类型清单：`navigation`（导航挑战）、`interaction`（物体交互）、`combat`（对抗模拟）、`custom`（自定义场景）。每项带 `available` 字段，标出系统**真的实现了**这个场景吗 |
+| `selectableScenarioOptions` | 计算属性，`scenarioOptions` 里 `available` 为真的那些项。目前只有 `navigation` |
+
+### 环境设置字段
+
+| 字段 | 取值 | 作用在哪里 |
+| --- | --- | --- |
+| `scenario` | `'navigation'` / `'interaction'` / `'combat'` / `'custom'` | 只有 `navigation` 被实现了，界面上也只列它 |
+| `difficulty` | `'easy'` / `'medium'` / `'hard'` | 智能体速度与感知范围的系数：easy 0.7 / 0.8，medium 1 / 1，hard 1.3 / 1.2 |
+| `timeLimit` | 秒数，0 表示不限制 | 超过后停止决策，智能体置为 `paused` 并记一条“时间到”的日志 |
+| `winCondition` | `'到达目标点'` | 智能体抵达当前目标点时记一条“胜利条件达成”的日志，快照状态标为 `goal_reached` |
+| `obstaclesDensity` | 0~1 | 按新密度重建场地里的障碍物 |
 
 ### 方法
 
 | 方法 | 签名 | 说明 |
 | --- | --- | --- |
-| `createAgent` | `(name: string, type?: AiAgentType) => AiAgent` | 新建智能体，ID 形如 `agent-<时间戳>`，默认类型 `basic`，`active` 为真、`status` 为 `idle`。它是列表中第一个智能体时会被自动选中 |
+| `createAgent` | `(name: string, type?: AiAgentType) => AiAgent` | 新建智能体，ID 形如 `agent-<时间戳>-<序号>`（序号单调递增，同一毫秒内创建也不会撞 ID），默认类型 `basic`，`active` 为真。`status` 继承当前运行态：仿真进行中建的就是 `running`，否则 `idle`。它是列表中第一个智能体时会被自动选中 |
 | `removeAgent` | `(id: string) => void` | 删除智能体；若删掉的正是当前选中项，则自动改选列表第一项，列表为空时清空选中 |
 | `startSimulation` | `() => void` | 置 `simulationActive` 为真，仿真时间归零，把所有智能体状态改为 `running` 并写入一条“仿真开始”日志 |
 | `pauseSimulation` | `() => void` | 置 `simulationActive` 为假，把处于 `running` 的智能体改为 `paused` 并写入“仿真暂停”日志 |
-| `resetSimulation` | `() => void` | 停止仿真、时间归零、所有智能体状态改为 `idle` 并写入“仿真重置”日志 |
+| `resetSimulation` | `() => void` | 停止仿真、时间归零、所有智能体状态改为 `idle` 并写入“仿真重置”日志，同时递增 `resetToken`——物理层据此把刚体送回出生点、清零速度、复位目标点与期望速度 |
 | `updateAgentParameters` | `(id: string, parameters: Record<string, number \| string \| boolean>) => void` | 合并式更新参数，并写入“参数已更新”日志 |
 | `addAgentLog` | `(id: string, message: string, type?: 'info' \| 'warning' \| 'error') => void` | 追加一条日志。单个智能体的日志上限为 100 条，超出后丢弃最早一条 |
 | `updateEnvironmentSettings` | `(settings: Partial<AiEnvironmentSettings>) => void` | 合并式更新环境配置 |
@@ -67,7 +79,7 @@
 
 | 成员 | 签名 | 说明 |
 | --- | --- | --- |
-| `decisionQueue` | `Ref<AiDecision[]>` | 决策队列。仿真运行时每 100 毫秒为每个运行中的智能体生成一条决策并入队；队列长度超过 100 时只保留最后 50 条 |
+| `decisionQueue` | `Ref<AiDecision[]>` | 决策队列。仿真运行时决策回路每 100 毫秒检查一次，**每个智能体按自己的 `reactionTime` 决定多久重新决策一次**（首次决策立即发生）；队列长度超过 100 时只保留最后 50 条 |
 | `generateAgentDecision` | `(agentId: string) => AiDecision \| null` | 为指定智能体生成一条决策，同时向该智能体写一条“决定: …”日志 |
 | `executeAgentDecision` | `(decision: AiDecision) => void` | **执行决策**：把 `move` / `rotate` 的结果写成该智能体的期望速度 |
 | `getAgentCurrentState` | `(agentId: string) => AiAgentState` | 返回该智能体在**场景里的真实状态**快照 |
@@ -92,6 +104,16 @@
 
 置信度 `confidence` 落在 0.5 到 1.0 之间，由“前方有多空”算出（前方越空越接近 1）。
 
+### 环境设置如何作用在决策上
+
+| 设置 | 作用点 |
+| --- | --- |
+| `difficulty` | 读取参数时给速度与感知范围乘一个系数（easy 0.7 / 0.8，medium 1 / 1，hard 1.3 / 1.2）。规则式决策、`getAgentCurrentState` 与 `buildSnapshot` 读到的都是缩放后的值；LLM 给出的速度同样乘速度系数（上限 `LLM_MAX_SPEED`） |
+| `reactionTime` | 每个智能体按它决定多久重新决策一次：决策回路每 100 毫秒检查一次，未到间隔就沿用上一次的期望速度。首次决策立即发生 |
+| `timeLimit` | 仿真时间超过它（且大于 0）就停止决策：智能体置为 `paused`、写入一条“时间到”的日志，仿真开关回到暂停 |
+| `winCondition` | 智能体抵达当前目标点时写入一条“胜利条件达成”的日志，并把运行时状态标为 `goal_reached`（会反映在 `getAgentCurrentState` 的 `status` 里）。智能体随后继续前往下一个目标点 |
+| `obstaclesDensity` | 变化时按新密度重建场地里的障碍物 |
+
 ### 状态快照的来源
 
 `getAgentCurrentState` 读的是**真实场景对象**：位置、旋转来自智能体网格本身
@@ -99,7 +121,8 @@
 `sensors` 里的 `proximity` 来自**物理引擎的查询**——
 视野内障碍物数量用 `world.intersectionsWithShape` 做球形形状查询，
 最近距离用 `world.projectPoint` 把智能体所在点投影到最近的障碍物碰撞体上。
-真的撞上障碍物时（窄相位接触流形里接触点数 > 0），`status` 会是 `collided`。
+真的撞上障碍物时（窄相位接触流形里接触点数 > 0），`status` 会是 `collided`；
+智能体抵达过目标点（胜利条件达成）且当前没有碰撞时，`status` 是 `goal_reached`。
 
 ### 执行入口
 
@@ -116,10 +139,11 @@
 
 ## 界面层如何使用这些接口
 
-- `src/components/three/ai/AiEnvironmentPanel.vue`：环境配置面板。场景类型、难度、障碍物密度、时间限制、胜利条件都绑定在一份本地副本上，只有点击“应用设置”才会通过 `updateEnvironmentSettings` 写回仓库；其余输入框的即时更新回调目前是空函数。
-- `src/components/three/ai/AiController.vue`：智能体面板。“添加代理”会创建一个名为“AI代理 N”、类型为 `basic` 的智能体；选中智能体后可调移动速度、反应时间、感知范围、避障（`basic` 适用）以及启用学习、记忆保留（`advanced` 适用）。
+- `src/components/three/ai/AiEnvironmentPanel.vue`：环境配置面板。场景类型、难度、障碍物密度、时间限制、胜利条件都绑定在一份本地副本上；改动会**立即**通过 `updateEnvironmentSettings` 写回仓库（障碍物密度按 150 毫秒防抖，因为它会重建场地），点“应用设置”则一次性提交全部字段。场景类型下拉只列 `selectableScenarioOptions`（当前只有“导航挑战”），胜利条件是固定选项“到达目标点”。
+- `src/components/three/ai/AiController.vue`：智能体面板。“添加代理”会创建一个名为“AI代理 N”、类型为 `basic` 的智能体；选中智能体后可调移动速度、反应时间、感知范围、避障（`basic` 与 `advanced` 适用）。高级型的“启用学习”“记忆保留”已从界面移除——系统没有学习与记忆机制。
 - `src/components/three/ai/AiDebugPanel.vue`：调试面板。提供“开始 / 暂停”“重置”“清空日志”三个按钮，并按时间顺序汇总所有智能体的日志，可按类型过滤。
 - `src/components/three/ai/LlmPanel.vue`：LLM 面板。选服务商、填 Key、改模型与端点、切决策来源、触发解释；状态来自 `useLlmStore`。
+- `src/views/AIPlayground.vue`：页面外壳。页脚的状态文案绑定 `aiStore.simulationActive` 与 `llmStore.degraded`（运行中 / 已暂停 / LLM 已降级）；右上角的按键指示器画的就是真正响应的键（W/S/A/D/Q/E 平移相机、R 复位），按下时高亮。
 
 ## LLM 接入（可选）
 
@@ -192,4 +216,5 @@
 - `decisionQueue` 虽然在持续填充，但当前界面并没有展示这个队列；能看到的是写入智能体日志的“决定: …”条目。
 - `AiDecision.action` 中的 `'interact'` 分支从未被生成。
 - `AiSimulationState` 与 `SimulatedObjectState` 两个类型在 `src/types/index.ts` 中定义，但目前没有在运行时被实际使用。
-- `AiAgentState.status` 的取值集合（`'normal'` / `'collided'` / `'goal_reached'` / `'failed'`）与仓库中智能体实际使用的状态（`'idle'` / `'running'` / `'paused'` / `'error'`）并不是同一套：快照里的 `status` 由**真实碰撞情况**推导（上一帧被挡住就是 `'collided'`，否则 `'normal'`），`'goal_reached'` 与 `'failed'` 从未被产生，仓库状态与快照状态之间也没有映射。
+- `AiAgentState.status` 的取值集合（`'normal'` / `'collided'` / `'goal_reached'` / `'failed'`）与仓库中智能体实际使用的状态（`'idle'` / `'running'` / `'paused'` / `'error'`）并不是同一套：快照里的 `status` 由**真实碰撞情况**推导（上一帧被挡住就是 `'collided'`），智能体抵达过目标点（胜利条件达成）时是 `'goal_reached'`，`'failed'` 从未被产生，仓库状态与快照状态之间也没有映射。
+- 场景类型只实现了 `'navigation'`；`'interaction'` / `'combat'` / `'custom'` 需要的机制不存在，因此不出现在界面可选项里。

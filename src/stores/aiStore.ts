@@ -4,6 +4,18 @@ import { ref, computed } from 'vue'
 // AI代理类型
 export type AiAgentType = 'basic' | 'advanced' | 'custom'
 
+/**
+ * 智能体 id 的序号。
+ *
+ * ⚠️ 毫秒时间戳在**同一毫秒内**会重复——连点两次「添加代理」就会撞 id，
+ * 于是 selectedAgentId 只指向其中一个、removeAgent 一次删掉两个。
+ * 序号在模块作用域里单调递增，保证 id 全局唯一。
+ */
+let agentSequence = 0
+
+/** 胜利条件——当前只实现了一种，用字面量类型挡住无法判定的自由文本 */
+export type AiWinCondition = '到达目标点'
+
 // AI代理状态
 export interface AiAgent {
   id: string
@@ -20,8 +32,16 @@ export interface AiEnvironmentSettings {
   scenario: 'navigation' | 'interaction' | 'combat' | 'custom'
   difficulty: 'easy' | 'medium' | 'hard'
   timeLimit: number // 以秒为单位，0表示无限制
-  winCondition: string
+  winCondition: AiWinCondition
   obstaclesDensity: number // 0-1之间
+}
+
+/** 场景类型选项 */
+export interface ScenarioOption {
+  value: AiEnvironmentSettings['scenario']
+  label: string
+  /** 系统**真的实现了**这个场景吗——没实现的不会出现在界面下拉里 */
+  available: boolean
 }
 
 /**
@@ -71,29 +91,49 @@ export const useAiStore = defineStore('ai', () => {
   const simulationActive = ref(false)
   const simulationTime = ref(0) // 以秒为单位
   const selectedAgentId = ref<string | null>(null)
+  /**
+   * 重置令牌：每次 resetSimulation 自增。
+   *
+   * 物理层（刚体位置、目标点、期望速度）不在 store 里，
+   * 靠这个令牌通知 useAI 把智能体真的送回出生点——只清标志不算重置。
+   */
+  const resetToken = ref(0)
 
   // 计算属性
   const activeAgents = computed(() => agents.value.filter(agent => agent.active))
   const selectedAgent = computed(() =>
     selectedAgentId.value ? agents.value.find(agent => agent.id === selectedAgentId.value) : null
   )
-  const scenarioOptions = computed(() => [
-    { value: 'navigation', label: '导航挑战' },
-    { value: 'interaction', label: '物体交互' },
-    { value: 'combat', label: '对抗模拟' },
-    { value: 'custom', label: '自定义场景' }
+  /**
+   * 场景类型清单。
+   *
+   * `available` 标出系统**真的实现了**的场景：目前只有导航挑战。
+   * 物体交互与对抗模拟需要的机制（智能体间交互、对抗）并不存在，
+   * 因此它们不会出现在界面下拉里——留着能选却不生效的选项比没有更糟。
+   */
+  const scenarioOptions = computed<ScenarioOption[]>(() => [
+    { value: 'navigation', label: '导航挑战', available: true },
+    { value: 'interaction', label: '物体交互', available: false },
+    { value: 'combat', label: '对抗模拟', available: false },
+    { value: 'custom', label: '自定义场景', available: false }
   ])
+  /** 界面上可以真的选到的场景类型 */
+  const selectableScenarioOptions = computed(() =>
+    scenarioOptions.value.filter(option => option.available)
+  )
 
   // 方法
   // 创建新AI代理
   const createAgent = (name: string, type: AiAgentType = 'basic'): AiAgent => {
     const newAgent: AiAgent = {
-      id: `agent-${Date.now()}`,
+      id: `agent-${Date.now()}-${agentSequence++}`,
       name,
       type,
       active: true,
       parameters: getDefaultParametersForType(type),
-      status: 'idle',
+      // 仿真进行中新建的代理直接进入运行态——否则它永远停在原地，
+      // 而界面上没有单个代理的启动开关。
+      status: simulationActive.value ? 'running' : 'idle',
       logs: []
     }
 
@@ -151,6 +191,8 @@ export const useAiStore = defineStore('ai', () => {
   const resetSimulation = () => {
     simulationActive.value = false
     simulationTime.value = 0
+    // 通知物理层把智能体送回出生点
+    resetToken.value += 1
 
     agents.value.forEach(agent => {
       agent.status = 'idle'
@@ -210,9 +252,11 @@ export const useAiStore = defineStore('ai', () => {
     simulationActive,
     simulationTime,
     selectedAgentId,
+    resetToken,
     activeAgents,
     selectedAgent,
     scenarioOptions,
+    selectableScenarioOptions,
     createAgent,
     removeAgent,
     startSimulation,

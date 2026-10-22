@@ -212,15 +212,54 @@
               视角控制
             </div>
             <div class="ai-keygrid">
-              <div class="ai-key">W</div>
-              <div class="ai-key ai-key-active">↑</div>
-              <div class="ai-key">R</div>
-              <div class="ai-key ai-key-active">←</div>
-              <div class="ai-key ai-key-active">↓</div>
-              <div class="ai-key ai-key-active">→</div>
-              <div class="ai-key">Q</div>
-              <div class="ai-key">S</div>
-              <div class="ai-key">E</div>
+              <div class="ai-key ai-key-blank"></div>
+              <div
+                class="ai-key"
+                :class="{ 'ai-key-active': isKeyDown('w') }"
+              >
+                W
+              </div>
+              <div class="ai-key ai-key-blank"></div>
+
+              <div
+                class="ai-key"
+                :class="{ 'ai-key-active': isKeyDown('a') }"
+              >
+                A
+              </div>
+              <div
+                class="ai-key"
+                :class="{ 'ai-key-active': isKeyDown('s') }"
+              >
+                S
+              </div>
+              <div
+                class="ai-key"
+                :class="{ 'ai-key-active': isKeyDown('d') }"
+              >
+                D
+              </div>
+
+              <div
+                class="ai-key"
+                :class="{ 'ai-key-active': isKeyDown('q') }"
+              >
+                Q
+              </div>
+              <div
+                class="ai-key"
+                :class="{ 'ai-key-active': isKeyDown('e') }"
+              >
+                E
+              </div>
+              <div class="ai-key ai-key-blank"></div>
+
+              <div
+                class="ai-key ai-key-wide"
+                :class="{ 'ai-key-active': isKeyDown('r') }"
+              >
+                R 复位
+              </div>
             </div>
             <p class="ai-camera-hint">
               W/S 前后 · A/D 左右 · Q/E 升降 · R 复位
@@ -288,10 +327,11 @@
         <span class="ai-dot-sep"></span>
         <span class="ai-panel-title">
           <span
-            class="ai-dot ai-dot-green ai-dot-inline"
+            class="ai-dot ai-dot-inline"
+            :class="footerDotClass"
             style="animation-delay: 0.4s"
           ></span>
-          系统运行中
+          {{ footerStatusText }}
         </span>
       </p>
     </div>
@@ -299,7 +339,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import { useThree } from '@/composables/useThree'
 import { useCamera } from '@/composables/useCamera'
@@ -308,6 +348,7 @@ import { useRenderer } from '@/composables/useRenderer'
 import { useControls } from '@/composables/useControls'
 import { useAI } from '@/composables/useAI'
 import { useAiStore } from '@/stores/aiStore'
+import { useLlmStore } from '@/stores/llmStore'
 import AiController from '@/components/three/ai/AiController.vue'
 import AiDebugPanel from '@/components/three/ai/AiDebugPanel.vue'
 import AiEnvironmentPanel from '@/components/three/ai/AiEnvironmentPanel.vue'
@@ -325,6 +366,16 @@ const renderer = useRenderer()
 const controls = useControls()
 const ai = useAI()
 const aiStore = useAiStore()
+const llmStore = useLlmStore()
+
+/** 页脚状态——真实反映仿真与 LLM 控制器的状态 */
+const footerStatusText = computed(() => {
+  if (llmStore.degraded) return 'LLM 已降级'
+  return aiStore.simulationActive ? '系统运行中' : '已暂停'
+})
+const footerDotClass = computed(() =>
+  llmStore.degraded ? 'ai-dot-red' : aiStore.simulationActive ? 'ai-dot-green' : 'ai-dot-amber'
+)
 
 /** 旁路解释针对哪个智能体：优先选中的，否则第一个 */
 const explainTargetId = computed<string | null>(
@@ -335,6 +386,8 @@ const explainTargetId = computed<string | null>(
 const getSnapshot = (agentId: string) => ai.buildSnapshot(agentId)
 
 let animationId: number | null = null
+/** 页面是否已经卸载——异步初始化期间用它挡住"卸载后仍启动动画循环" */
+let isUnmounted = false
 const clock = new THREE.Clock()
 
 /** 相机初始机位（也是 R 键的复位目标） */
@@ -342,7 +395,14 @@ const DEFAULT_CAMERA_POSITION = { x: 14, y: 11, z: 14 }
 /** 键盘移动相机的速度（米/秒） */
 const CAMERA_KEY_SPEED = 14
 
-const pressedKeys = new Set<string>()
+/**
+ * 当前按下的键——用 reactive 的 Set，按键指示器靠它高亮。
+ *
+ * ⚠️ 指示器画的就是这里真正响应的键：W/S/A/D/Q/E 平移相机，R 复位视角。
+ * 方向键没有被绑定，所以不画。
+ */
+const pressedKeys = reactive(new Set<string>())
+const isKeyDown = (key: string) => pressedKeys.has(key)
 
 const isTypingTarget = (target: EventTarget | null): boolean =>
   target instanceof HTMLInputElement ||
@@ -353,6 +413,7 @@ const handleKeyDown = (event: KeyboardEvent) => {
   if (isTypingTarget(event.target)) return
   const key = event.key.toLowerCase()
   if (key === 'r') {
+    pressedKeys.add(key)
     camera.setCameraPosition(
       DEFAULT_CAMERA_POSITION.x,
       DEFAULT_CAMERA_POSITION.y,
@@ -412,6 +473,13 @@ const initializeScene = async () => {
     // ⚠️ 必须 await——Rapier 是按需加载的 WASM，没就绪之前刚体还不存在。
     await ai.initPhysics()
 
+    // ⚠️ 初始化期间用户可能已经离开了页面：这时启动动画循环就等于开一个
+    // 永远停不下来的 rAF（卸载时 animationId 还是 null，取消不掉）。
+    if (isUnmounted) {
+      cleanup()
+      return
+    }
+
     startAnimationLoop()
   } catch (error) {
     console.error('[AIPlayground] 3D 场景初始化失败', error)
@@ -461,7 +529,10 @@ onMounted(() => {
   onUnmounted(() => window.removeEventListener('keyup', handleKeyUp))
 })
 
-onUnmounted(() => cleanup())
+onUnmounted(() => {
+  isUnmounted = true
+  cleanup()
+})
 </script>
 
 <style scoped>
@@ -1031,6 +1102,16 @@ onUnmounted(() => cleanup())
   border-radius: 0.375rem;
   background: #111827;
   color: #e5e7eb;
+}
+
+/* 键位图里的占位格：留白，不画成一个假按键 */
+.ai-key-blank {
+  background: transparent;
+}
+
+/* R 键横跨整行——它是复位，不是方向键的一部分 */
+.ai-key-wide {
+  grid-column: span 3;
 }
 
 .ai-key-active {

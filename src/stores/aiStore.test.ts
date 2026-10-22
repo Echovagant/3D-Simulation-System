@@ -132,4 +132,34 @@ describe('useAiStore', () => {
       'custom',
     ])
   })
+
+  it('createAgent 在同一毫秒内创建的代理 id 互不相同', () => {
+    const store = useAiStore()
+    const ids = new Set<string>()
+
+    for (let i = 0; i < 5; i += 1) {
+      ids.add(store.createAgent(`代理 ${i}`, 'basic').id)
+    }
+
+    expect(ids.size).toBe(5)
+    expect(store.agents.map((agent) => agent.id)).toHaveLength(5)
+  })
+
+  it('仿真运行中新建的代理直接进入运行态', () => {
+    const store = useAiStore()
+    store.startSimulation()
+
+    const agent = store.createAgent('中途加入', 'basic')
+
+    expect(agent.status).toBe('running')
+  })
+
+  it('resetSimulation 会递增重置令牌', () => {
+    const store = useAiStore()
+    const before = store.resetToken
+
+    store.resetSimulation()
+
+    expect(store.resetToken).toBe(before + 1)
+  })
 })

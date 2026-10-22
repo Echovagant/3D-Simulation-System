@@ -2,7 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import type * as RapierModule from '@dimforge/rapier3d'
-import { useAiStore, type AiAgent } from '@/stores/aiStore'
+import { useAiStore, type AiAgent, type AiEnvironmentSettings } from '@/stores/aiStore'
 import { useLlmStore } from '@/stores/llmStore'
 import { useThree } from './useThree'
 import { usePhysics } from './usePhysics'
@@ -62,6 +62,23 @@ const AGENT_COLORS: Record<string, number> = {
   custom: 0xa78bfa,
 }
 
+/**
+ * 难度系数：按档位缩放智能体的速度与感知范围。
+ *
+ * ⚠️ 难度必须作用在**真实行为**上——否则它只是个装饰性的单选项。
+ */
+const DIFFICULTY_FACTORS: Record<
+  AiEnvironmentSettings['difficulty'],
+  { speed: number; awareness: number }
+> = {
+  easy: { speed: 0.7, awareness: 0.8 },
+  medium: { speed: 1, awareness: 1 },
+  hard: { speed: 1.3, awareness: 1.2 }
+}
+
+/** 智能体在物理世界里的初始反应时间（秒）——界面上滑块的最小值 */
+const DEFAULT_REACTION_TIME = 0.1
+
 /** 单个智能体的运行时状态 */
 interface AgentRuntime {
   /** 当前朝向（弧度，0 指向 +Z） */
@@ -74,6 +91,14 @@ interface AgentRuntime {
   velocity: THREE.Vector3
   /** 目标点序号 */
   goalIndex: number
+  /** 出生点——重置时把刚体送回这里 */
+  spawn: THREE.Vector3
+  /** 出生时的目标点序号——重置时目标点也要回到这里 */
+  spawnGoalIndex: number
+  /** 是否已经抵达过目标点（胜利条件达成过） */
+  goalReached: boolean
+  /** 最近一次做决策的时刻（毫秒）；null 表示还没做过决策 */
+  lastDecisionAt: number | null
   /** 最近一次感知时是否真的撞上了障碍物（来自物理引擎的接触流形） */
   blocked: boolean
   /** 上一次执行的动作（喂给 LLM 当上下文） */
@@ -154,6 +179,16 @@ const goalPosition = (index: number): THREE.Vector3 => {
   return new THREE.Vector3(Math.cos(angle) * radius, AGENT_HEIGHT, Math.sin(angle) * radius)
 }
 
+/**
+ * 第 index 个智能体的出生点（半径 5 的环上，黄金角分布）。
+ *
+ * ⚠️ 建场与重置必须用**同一个**出生点，否则重置后智能体会落在别的地方。
+ */
+const agentSpawnPosition = (index: number): THREE.Vector3 => {
+  const angle = index * 2.399963 + 0.4
+  return new THREE.Vector3(Math.cos(angle) * 5, AGENT_HEIGHT, Math.sin(angle) * 5)
+}
+
 export function useAI() {
   const aiStore = useAiStore()
   const llm = useLlmStore()
@@ -175,6 +210,25 @@ export function useAI() {
     simulationConfig.physics.maxSubSteps,
     simulationConfig.physics.maxFrameDelta,
   )
+
+  /** 当前难度的系数（配置缺失时按中等算） */
+  const difficultyFactors = () =>
+    DIFFICULTY_FACTORS[aiStore.environmentSettings.difficulty] ?? DIFFICULTY_FACTORS.medium
+
+  /**
+   * 读取智能体的**有效**参数——难度系数在这里生效。
+   *
+   * ⚠️ 界面上的速度与感知范围是基础值，实际生效的是它们乘上难度系数的结果。
+   */
+  const readAgentParams = (agent: AiAgent) => {
+    const factors = difficultyFactors()
+    return {
+      speed: (Number(agent.parameters.speed) || 5) * factors.speed,
+      awareness: (Number(agent.parameters.awarenessRange) || 10) * factors.awareness,
+      avoidObstacles: agent.parameters.avoidObstacles !== false,
+      reactionTime: Number(agent.parameters.reactionTime) || DEFAULT_REACTION_TIME
+    }
+  }
 
   /**
    * 感知：视野内的障碍物数量与最近距离。
@@ -250,8 +304,7 @@ export function useAI() {
     // 用「单位立方体 + 缩放」而不是直接建 0.8 的立方体：
     // 碰撞盒的半尺寸与质量密度都从 scale 推算，缩放写法两者天然一致。
     mesh.scale.setScalar(AGENT_SIZE)
-    const angle = index * 2.399963 + 0.4
-    mesh.position.set(Math.cos(angle) * 5, AGENT_HEIGHT, Math.sin(angle) * 5)
+    mesh.position.copy(agentSpawnPosition(index))
     mesh.name = `ai-agent-${agent.id}`
     mesh.userData.agentId = agent.id
     mesh.userData.physics = {
@@ -417,14 +470,19 @@ export function useAI() {
     aiStore.agents.forEach((agent, index) => {
       if (agentObjects.has(agent.id)) return
       const object = createAgentObject(agent, index)
+      const spawn = agentSpawnPosition(index)
       currentScene.add(object)
       agentObjects.set(agent.id, object)
       agentRuntimes.set(agent.id, {
-        heading: Math.atan2(-object.position.x, -object.position.z),
+        heading: Math.atan2(-spawn.x, -spawn.z),
         goal: goalPosition(index + 1),
         desiredVelocity: new THREE.Vector3(),
         velocity: new THREE.Vector3(),
         goalIndex: index + 1,
+        spawn,
+        spawnGoalIndex: index + 1,
+        goalReached: false,
+        lastDecisionAt: null,
         blocked: false,
         body: null,
         collider: null,
@@ -517,6 +575,14 @@ export function useAI() {
       if (toGoal.length() < 1.2) {
         runtime.goalIndex += 1
         runtime.goal.copy(goalPosition(runtime.goalIndex))
+
+        // 胜利条件（目前只有「到达目标点」一种）达成：记一笔日志，
+        // 并给状态快照打上 goal_reached 标记——智能体接着去下一个目标点。
+        const agent = aiStore.agents.find((item) => item.id === agentId)
+        if (agent?.status === 'running') {
+          runtime.goalReached = true
+          aiStore.addAgentLog(agentId, '胜利条件达成：到达目标点', 'info')
+        }
       }
 
       // 朝向：让网格的 +Z 轴指向当前速度方向
@@ -561,7 +627,8 @@ export function useAI() {
       position: [position.x, position.y, position.z],
       rotation: [rotation.x, rotation.y, rotation.z],
       velocity: [velocity.x, velocity.y, velocity.z],
-      status: blocked ? 'collided' : 'normal',
+      // 碰撞优先；没有碰撞时看胜利条件有没有达成过
+      status: blocked ? 'collided' : runtime?.goalReached ? 'goal_reached' : 'normal',
       sensors: {
         proximity: {
           type: 'proximity',
@@ -576,7 +643,7 @@ export function useAI() {
     const object = agentObjects.get(agentId)
     const runtime = agentRuntimes.get(agentId)
     const agent = aiStore.agents.find((item) => item.id === agentId)
-    const awareness = Number(agent?.parameters.awarenessRange) || 10
+    const awareness = agent ? readAgentParams(agent).awareness : 10
 
     const position = object ? object.position : new THREE.Vector3()
     const sense = senseObstacles(position, awareness)
@@ -625,9 +692,7 @@ export function useAI() {
     const runtime = agentRuntimes.get(agentId)
     if (!agent || !object || !runtime) return null
 
-    const awareness = Number(agent.parameters.awarenessRange) || 10
-    const speed = Number(agent.parameters.speed) || 5
-    const avoidObstacles = agent.parameters.avoidObstacles !== false
+    const { awareness, speed, avoidObstacles } = readAgentParams(agent)
     const avoidRadius = Math.min(awareness, AVOID_DISTANCE)
 
     const sense = senseObstacles(object.position, awareness)
@@ -651,7 +716,9 @@ export function useAI() {
 
     const confidence = clamp(1 - (sense.distance / Math.max(avoidRadius, 1)) * 0.5, 0.5, 1)
     aiStore.addAgentLog(agentId, `决定: ${action} ${JSON.stringify(parameters)}`, 'info')
-    return { agentId, action, parameters, confidence, timestamp: Date.now() }
+    // 记下这次决策的时刻——反应时间靠它算出下一次该什么时候重新决策
+    runtime.lastDecisionAt = Date.now()
+    return { agentId, action, parameters, confidence, timestamp: runtime.lastDecisionAt }
   }
 
   /**
@@ -738,7 +805,7 @@ export function useAI() {
     const agent = aiStore.agents.find((item) => item.id === agentId)
     if (!object || !runtime || !agent) return null
 
-    const awareness = Number(agent.parameters.awarenessRange) || 10
+    const awareness = agent ? readAgentParams(agent).awareness : 10
     const sense = senseObstacles(object.position, awareness)
 
     const toGoal = runtime.goal.clone().sub(object.position)
@@ -769,12 +836,14 @@ export function useAI() {
   const toAiDecision = (agentId: string, action: LlmAction): AiDecision => {
     const base = { agentId, confidence: 0.8, timestamp: Date.now() }
     if (action.action === 'move' && action.direction) {
+      // 难度同样作用在模型给的速度上（但不许超过系统的速度上限）
+      const speed = Math.min((action.speed ?? 5) * difficultyFactors().speed, LLM_MAX_SPEED)
       return {
         ...base,
         action: 'move',
         parameters: {
           direction: [action.direction[0], 0, action.direction[1]],
-          speed: action.speed ?? 5,
+          speed,
         },
       }
     }
@@ -839,6 +908,21 @@ export function useAI() {
     return true
   }
 
+  /**
+   * 时间到：停止决策。
+   *
+   * 智能体被置为非运行态（停下），并留下一条「时间到」的日志。
+   */
+  const stopByTimeLimit = (timeLimit: number): void => {
+    aiStore.activeAgents.forEach((agent) => {
+      if (agent.status !== 'running') return
+      agent.status = 'paused'
+      aiStore.addAgentLog(agent.id, `时间到：已达 ${timeLimit} 秒上限，仿真停止`, 'warning')
+    })
+    // 整个仿真停下来——仿真开关回到「暂停」，界面与页脚状态才对得上
+    aiStore.simulationActive = false
+  }
+
   const startSimulationLoop = (): void => {
     stopSimulationLoop()
     let lastTime = Date.now()
@@ -849,12 +933,27 @@ export function useAI() {
       lastTime = now
       aiStore.simulationTime += deltaTime
 
+      // 时间限制：到点就停止决策（0 表示不限制）
+      const timeLimit = Number(aiStore.environmentSettings.timeLimit) || 0
+      if (timeLimit > 0 && aiStore.simulationTime >= timeLimit) {
+        stopByTimeLimit(timeLimit)
+        return
+      }
+
       aiStore.activeAgents.forEach((agent) => {
         if (agent.status !== 'running') return
 
         // LLM 控制器模式：只有用户显式切过去、且确实配了 key 才走这条路
         if (llm.mode === 'llm' && llm.configured) {
           if (handleLlmDecision(agent.id)) return
+        }
+
+        // 反应时间：每个智能体按自己的反应时间决定下一次重新决策的时刻。
+        // 还没到点就沿用上一次的期望速度继续走。
+        const runtime = agentRuntimes.get(agent.id)
+        if (runtime && runtime.lastDecisionAt !== null) {
+          const reactionMs = readAgentParams(agent).reactionTime * 1000
+          if (now - runtime.lastDecisionAt < reactionMs) return
         }
 
         const decision = generateAgentDecision(agent.id)
@@ -884,6 +983,36 @@ export function useAI() {
   const initializeAiSystem = (): void => {
     aiStore.initializeDefaultAgents()
     syncScene()
+  }
+
+  /**
+   * 把所有智能体送回出生点。
+   *
+   * ⚠️ 重置必须真的复位物理状态——只把标志清掉的话，智能体会站在原地不动，
+   * 看起来像"重置坏了"。位置、速度、目标点、期望速度、决策时刻一起复位。
+   */
+  const resetAgentsToSpawn = (): void => {
+    for (const [agentId, runtime] of agentRuntimes) {
+      const object = agentObjects.get(agentId)
+      const body = runtime.body
+      if (!object || !body) continue
+
+      body.setTranslation({ x: runtime.spawn.x, y: runtime.spawn.y, z: runtime.spawn.z }, true)
+      body.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      body.setAngvel({ x: 0, y: 0, z: 0 }, true)
+      object.position.copy(runtime.spawn)
+
+      runtime.velocity.set(0, 0, 0)
+      runtime.desiredVelocity.set(0, 0, 0)
+      runtime.heading = Math.atan2(-runtime.spawn.x, -runtime.spawn.z)
+      runtime.goalIndex = runtime.spawnGoalIndex
+      runtime.goal.copy(goalPosition(runtime.goalIndex))
+      runtime.goalReached = false
+      runtime.blocked = false
+      runtime.lastDecisionAt = null
+      runtime.lastAction = undefined
+      runtime.lastParameters = undefined
+    }
   }
 
   const cleanup = (): void => {
@@ -925,6 +1054,11 @@ export function useAI() {
   watch(
     () => aiStore.environmentSettings.obstaclesDensity,
     () => rebuildObstacles(true),
+  )
+  // 重置令牌变化 → 把智能体送回出生点
+  watch(
+    () => aiStore.resetToken,
+    () => resetAgentsToSpawn(),
   )
   // 场景就绪 → 补建智能体与障碍物
   watch(three.scene, (current) => {

@@ -79,6 +79,7 @@
             class="ai-w-full accent-yellow-500"
           >
           <span class="ai-t-amber">{{ selectedAgent.parameters.reactionTime }}</span>
+          <p class="ai-fs-xs ai-t-muted ai-mt-1">两次决策之间的间隔</p>
         </div>
 
         <div v-if="selectedAgent.type === 'basic' || selectedAgent.type === 'advanced'">
@@ -110,34 +111,11 @@
           </div>
         </div>
 
-        <div v-if="selectedAgent.type === 'advanced'">
-          <label class="ai-t block ai-mb-1">启用学习</label>
-          <div class="ai-flex ai-items-center ai-mt-1">
-            <label class="inline-flex ai-items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="selectedAgent.parameters.learningEnabled"
-                @change="updateAgentParameters"
-                class="sr-only peer"
-              >
-              <div class="ai-relative ai-w-9 ai-h-5 ai-bg-raised peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-yellow-500 ai-r-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-yellow-600"></div>
-            </label>
-          </div>
-        </div>
-
-        <div v-if="selectedAgent.type === 'advanced'">
-          <label class="ai-t block ai-mb-1">记忆保留 (s)</label>
-          <input
-            type="range"
-            min="10"
-            max="300"
-            step="10"
-            v-model.number="selectedAgent.parameters.memoryRetention"
-            @change="updateAgentParameters"
-            class="ai-w-full accent-yellow-500"
-          >
-          <span class="ai-t-amber">{{ selectedAgent.parameters.memoryRetention }}</span>
-        </div>
+        <!--
+          「启用学习」与「记忆保留」已从界面移除：
+          系统不训练、不微调、也没有跨决策的记忆机制，这两个开关推上去不会有任何行为变化。
+          留着它们就是能拖却不生效的假控件——等学习机制真的做出来再加回来。
+        -->
       </div>
 
       <div class="ai-mt-3 ai-flex ai-justify-end">
