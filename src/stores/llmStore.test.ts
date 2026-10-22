@@ -45,6 +45,7 @@ describe('LLM store', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 
   it('key 只进内存，不出现在 store 的状态里', () => {
@@ -252,5 +253,71 @@ describe('LLM store', () => {
     expect(store.lastError).toContain('冷却期')
     expect(store.lastError).toContain('规则式')
     expect(store.lastError).toMatch(/还需 \d+ 秒/)
+  })
+
+  it('冷却期内请求解释不会出网（烧钱的旁路必须被同一个闸门拦住）', async () => {
+    vi.useFakeTimers()
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      throw new Error('network down')
+    })
+
+    // 先制造一次失败：失败即进入冷却期
+    await store.requestExplanation(snapshot)
+    expect(calls).toBe(1)
+    expect(store.lastError).toContain('请求失败')
+
+    // 冷却期内再点「解释」：必须拦下来，不许真的出网
+    const text = await store.requestExplanation(snapshot)
+    expect(calls).toBe(1)
+    expect(text).toBe('')
+    expect(store.explanation).toBe('')
+    expect(store.lastError).toContain('冷却期')
+    // 被拦下的请求不算一次调用
+    expect(store.callCount).toBe(1)
+  })
+
+  it('冷却期内点「测试连接」也不会出网', async () => {
+    vi.useFakeTimers()
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      throw new Error('network down')
+    })
+
+    expect(await store.testConnection()).toBe(false)
+    expect(calls).toBe(1)
+
+    // 冷却期内的连通性测试同样是重试：拦下来
+    expect(await store.testConnection()).toBe(false)
+    expect(calls).toBe(1)
+    expect(store.lastError).toContain('冷却期')
+  })
+
+  it('冷却期过后恢复出网', async () => {
+    vi.useFakeTimers()
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      if (calls === 1) throw new Error('network down')
+      return okResponse('冷却期过去了')
+    })
+
+    await store.requestExplanation(snapshot)
+    expect(calls).toBe(1)
+
+    await vi.advanceTimersByTimeAsync(llmConfig.cooldownMs + 100)
+    const text = await store.requestExplanation(snapshot)
+
+    expect(calls).toBe(2)
+    expect(text).toContain('冷却期过去了')
+    expect(store.lastError).toBe('')
   })
 })

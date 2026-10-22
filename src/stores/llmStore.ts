@@ -111,15 +111,18 @@ export const useLlmStore = defineStore('llm', () => {
   }
 
   /** 还能不能发请求：没配 key、超了次数上限、还在冷却里，都不行 */
-  const canCall = (respectCooldown = true): boolean => {
+  const canCall = (): boolean => {
     if (!configured.value) return false
     if (callCount.value >= llmConfig.maxCallsPerSession) return false
-    if (respectCooldown && Date.now() < cooldownUntil) return false
+    if (Date.now() < cooldownUntil) return false
     return true
   }
 
   /**
    * 统一的发请求入口：记账、错误脱敏、失败进冷却。
+   *
+   * 这是**唯一的出网口**，冷却期必须拦在这里——
+   * 只在调用方（requestAction）检查的话，"解释"与"测试连接"这些旁路会绕过它直接发出去。
    *
    * `isCurrent` 是过期守卫：返回 false 时这次请求的结果不再写进共享状态
    * （错误、冷却都不写），免得过期的失败把后来的状态盖掉。
@@ -136,6 +139,13 @@ export const useLlmStore = defineStore('llm', () => {
     if (callCount.value >= llmConfig.maxCallsPerSession) {
       lastError.value = `已达本次会话的调用上限（${llmConfig.maxCallsPerSession} 次）`
       return { ok: false as const, content: '', error: lastError.value }
+    }
+    // 冷却期：失败后这段时间内一律不再出网（被拦下的请求也不计数）
+    if (Date.now() < cooldownUntil) {
+      const remain = Math.ceil((cooldownUntil - Date.now()) / 1000)
+      const error = `上一次调用失败后仍在冷却期（还需 ${remain} 秒）`
+      if (isCurrent()) lastError.value = error
+      return { ok: false as const, content: '', error }
     }
 
     callCount.value += 1
