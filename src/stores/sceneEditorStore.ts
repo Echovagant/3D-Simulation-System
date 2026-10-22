@@ -3,6 +3,7 @@ import { ref, computed, watch, reactive, shallowRef, markRaw } from 'vue'
 import * as THREE from 'three'
 import type { SceneDocument, SceneDocumentObject, SceneIndexEntry, SceneObject } from '@/types'
 import { useModelStore } from './modelStore'
+import { useSceneSyncStore } from './sceneSyncStore'
 import { createPrimitiveMesh, isPrimitiveType } from '@/utils/primitiveFactory'
 
 // 类型定义补充
@@ -471,13 +472,12 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   /**
-   * 保存场景。
+   * 把一份场景文档收进本地库。
    *
-   * 写两处：`scene-<id>` 存文档、`scene-index` 存索引。
-   * 返回场景 id——界面层要拿它把场景找回来（列表、深链接都靠它）。
+   * 云端拉来的场景先落到本地再打开：这样它会出现在「我的场景」里，
+   * 之后后端不在了也照样打得开——本地是缓存，不是副本。
    */
-  const saveScene = async (sceneName: string): Promise<string> => {
-    const doc = buildSceneDocument(sceneName)
+  const importSceneDocument = (doc: SceneDocument): string => {
     localStorage.setItem(sceneKey(doc.id), JSON.stringify(doc))
 
     const index = readSceneIndex().filter((entry) => entry.id !== doc.id)
@@ -488,6 +488,29 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       objectCount: doc.objects.length,
     })
     writeSceneIndex(index)
+
+    return doc.id
+  }
+
+  /**
+   * 保存场景。
+   *
+   * 写两处：`scene-<id>` 存文档、`scene-index` 存索引。
+   * 返回场景 id——界面层要拿它把场景找回来（列表、深链接都靠它）。
+   */
+  const saveScene = async (sceneName: string): Promise<string> => {
+    const doc = buildSceneDocument(sceneName)
+    importSceneDocument(doc)
+
+    // 本地写完之后**顺手**推一份到后端。
+    // 推送失败不打扰用户：后端缺席时场景照样存在本地。
+    const sync = useSceneSyncStore()
+    void sync.pushScene(doc).then((ok) => {
+      if (!ok && sync.state === 'error') {
+        // 只有「真错误」才记日志；「后端不在」是正常状态，不打扰
+        console.warn('[sceneSync] 场景同步到后端失败', sync.lastError)
+      }
+    })
 
     return doc.id
   }
@@ -546,8 +569,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     const factory = primitiveFactory.value
     if (factory) {
       const before = objects.value.length
-      const created =
-        objData.type === 'sphere' ? factory.createSphere() : factory.createCube()
+      const created = objData.type === 'sphere' ? factory.createSphere() : factory.createCube()
 
       const restored = created ? objects.value[before] : undefined
       if (restored) {
@@ -904,6 +926,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     listScenes,
     getSceneDocument,
     deleteScene,
+    importSceneDocument,
     buildSceneDocument,
     registerPrimitiveFactory,
     sceneIndexVersion,
