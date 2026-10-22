@@ -6,13 +6,13 @@
  * | 提供商 | 协议 | base_url | 模型 |
  * | --- | --- | --- | --- |
  * | MiniMax | OpenAI 兼容 | api.minimax.io/v1 | MiniMax-M3.1-Flash |
- * | DeepSeek | OpenAI 兼容 | api.deepseek.com | deepseek-v4-pro |
+ * | DeepSeek | OpenAI 兼容 | api.deepseek.com | deepseek-flash |
  * | 智谱 GLM | OpenAI 兼容 | open.bigmodel.cn/api/paas/v4 | glm-5.3 |
  * | 智谱 GLM 编码套餐 | OpenAI 兼容 | open.bigmodel.cn/api/coding/paas/v4 | glm-5.2 |
  * | 通义千问 Qwen | OpenAI 兼容 | dashscope.aliyuncs.com/compatible-mode/v1 | qwen3.8-max |
- * | 火山方舟 | OpenAI 兼容 | ark.cn-beijing.volces.com/api/v3 | doubao-seed-2-1-pro |
+ * | 火山方舟 | OpenAI 兼容 | ark.cn-beijing.volces.com/api/v3 | doubao-seed-2.1-pro |
  * | 火山方舟编码套餐 | OpenAI 兼容 | ark.cn-beijing.volces.com/api/coding/v3 | Doubao-Seed-Code |
- * | OpenAI | OpenAI 兼容 | api.openai.com/v1 | gpt-5.4 |
+ * | OpenAI | OpenAI 兼容 | api.openai.com/v1 | gpt-5.6-terra |
  * | Anthropic Claude | Anthropic Messages | api.anthropic.com/v1 | claude-opus-5 |
  * | Google Gemini | Gemini Interactions | generativelanguage.googleapis.com/v1beta | gemini-3.8-flash |
  * | xAI Grok | OpenAI 兼容 | api.x.ai/v1 | grok-4.7 |
@@ -65,10 +65,10 @@ export const llmProviders: LlmProvider[] = [
     name: 'DeepSeek',
     protocol: 'openai',
     baseUrl: 'https://api.deepseek.com',
-    model: 'deepseek-v4-pro',
-    docsUrl: 'https://api-docs.deepseek.com/',
+    model: 'deepseek-flash',
+    docsUrl: 'https://api-docs.deepseek.com/quick_start/pricing',
     reasoningEffort: 'high',
-    note: '旧的 deepseek-chat / deepseek-reasoner 已被官方标记为将下线。',
+    note: 'deepseek-flash 对应 DeepSeek-V4.1-Flash-1017；同代还有 deepseek-v4-pro（V4-Pro-0813）。旧的 deepseek-v4-flash 已退役。',
   },
   {
     id: 'zhipu',
@@ -102,9 +102,9 @@ export const llmProviders: LlmProvider[] = [
     name: '火山方舟',
     protocol: 'openai',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
-    model: 'doubao-seed-2-1-pro',
-    docsUrl: 'https://www.volcengine.com/docs/82379',
-    note: '模型 id 以控制台给出的接入点为准，可直接在下面改。',
+    model: 'doubao-seed-2.1-pro',
+    docsUrl: 'https://www.volcengine.com/docs/82379/1099320',
+    note: '同系列还有 doubao-seed-2.1-lite / 2.1-turbo 与 2.0-code；模型 id 以控制台给出的接入点为准，可直接在下面改。',
   },
   {
     id: 'ark-coding',
@@ -120,10 +120,10 @@ export const llmProviders: LlmProvider[] = [
     name: 'OpenAI',
     protocol: 'openai',
     baseUrl: 'https://api.openai.com/v1',
-    model: 'gpt-5.4',
+    model: 'gpt-5.6-terra',
     docsUrl: 'https://platform.openai.com/docs/models',
     reasoningEffort: 'low',
-    note: '更新的型号（如 gpt-6-astra）以 Responses API 为主，这里走的是 chat/completions。',
+    note: 'Chat Completions 支持 gpt-6-astra 与 gpt-5.6-terra；旗舰 gpt-6-astra 更贵，工具调用则必须走 Responses API。',
   },
   {
     id: 'anthropic',

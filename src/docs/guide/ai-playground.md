@@ -175,13 +175,13 @@ Key 按服务商分槽存放，换一家不用重新粘贴另一家的。
 | 服务商 | 协议 | 默认 base_url | 默认模型 |
 | --- | --- | --- | --- |
 | MiniMax | OpenAI 兼容 | `api.minimax.io/v1` | `MiniMax-M3.1-Flash` |
-| DeepSeek | OpenAI 兼容 | `api.deepseek.com` | `deepseek-v4-pro` |
+| DeepSeek | OpenAI 兼容 | `api.deepseek.com` | `deepseek-flash` |
 | 智谱 GLM | OpenAI 兼容 | `open.bigmodel.cn/api/paas/v4` | `glm-5.3` |
 | 智谱 GLM（编码套餐） | OpenAI 兼容 | `open.bigmodel.cn/api/coding/paas/v4` | `glm-5.2` |
 | 通义千问 Qwen | OpenAI 兼容 | `dashscope.aliyuncs.com/compatible-mode/v1` | `qwen3.8-max` |
-| 火山方舟 | OpenAI 兼容 | `ark.cn-beijing.volces.com/api/v3` | `doubao-seed-2-1-pro` |
+| 火山方舟 | OpenAI 兼容 | `ark.cn-beijing.volces.com/api/v3` | `doubao-seed-2.1-pro` |
 | 火山方舟（编码套餐） | OpenAI 兼容 | `ark.cn-beijing.volces.com/api/coding/v3` | `Doubao-Seed-Code` |
-| OpenAI | OpenAI 兼容 | `api.openai.com/v1` | `gpt-5.4` |
+| OpenAI | OpenAI 兼容 | `api.openai.com/v1` | `gpt-5.6-terra` |
 | Anthropic Claude | Anthropic Messages | `api.anthropic.com/v1` | `claude-opus-5` |
 | Google Gemini | Gemini Interactions | `generativelanguage.googleapis.com/v1beta` | `gemini-3.8-flash` |
 | xAI Grok | OpenAI 兼容 | `api.x.ai/v1` | `grok-4.7` |

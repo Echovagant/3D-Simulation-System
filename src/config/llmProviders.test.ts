@@ -64,4 +64,20 @@ describe('LLM 提供商清单', () => {
     expect(withEffort).not.toContain('zhipu')
     expect(withEffort).not.toContain('ark')
   })
+
+  it('清单里不出现已退役 / 已下线的模型 id', () => {
+    const models = llmProviders.map((provider) => provider.model)
+    // DeepSeek 官方定价页写明：deepseek-chat / deepseek-reasoner 将下线，
+    // 旧的 deepseek-v4-flash 已被 V4.1-Flash 接管并退役
+    for (const retired of [
+      'deepseek-chat',
+      'deepseek-reasoner',
+      'deepseek-v4-flash',
+      'deepseek-v4-flash-vision-exp',
+    ]) {
+      expect(models).not.toContain(retired)
+    }
+    // 现在的 DeepSeek 主力是 deepseek-flash（对应 DeepSeek-V4.1-Flash-1017）
+    expect(models).toContain('deepseek-flash')
+  })
 })

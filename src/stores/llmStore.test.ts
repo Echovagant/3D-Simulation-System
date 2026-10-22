@@ -67,7 +67,7 @@ describe('LLM store', () => {
 
     store.selectProvider('deepseek')
     expect(store.configured).toBe(false)
-    expect(store.model).toBe('deepseek-v4-pro')
+    expect(store.model).toBe('deepseek-flash')
     expect(store.baseUrl).toBe('https://api.deepseek.com')
 
     // 上一家的 key 还在槽位里，切回来还能用
@@ -84,7 +84,7 @@ describe('LLM store', () => {
     expect(store.baseUrl).toBe('https://proxy.example.com/v1')
 
     store.selectProvider('deepseek')
-    expect(store.model).toBe('deepseek-v4-pro')
+    expect(store.model).toBe('deepseek-flash')
     store.selectProvider('minimax')
     expect(store.model).toBe('my-model')
   })
