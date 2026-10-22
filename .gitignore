@@ -35,3 +35,13 @@ src/**/*.vue.js
 
 # 审计与实施计划（流程文档，不入库；存档在仓库外的 _audit-archive/）
 /plans/
+
+# Python 后端
+backend/.venv/
+backend/.env
+backend/backend_data/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
