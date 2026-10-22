@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>252.08 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>295</b><br><sub>测试用例 · 34 个文件</sub></td>
+    <td align="center"><b>322</b><br><sub>测试用例 · 37 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
   </tr>
 </table>
@@ -151,7 +151,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 11 道闸门 |
-| `npm test` | Vitest 全量用例（34 个测试文件 / 295 个用例） |
+| `npm test` | Vitest 全量用例（37 个测试文件 / 322 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
 | `npm run gen:docs` | 重新生成封面与页面截图 |
