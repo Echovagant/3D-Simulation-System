@@ -79,6 +79,11 @@ jobs:
         with:
           node-version: '22'
 
+      # 锁文件是后端可复现性的契约：改了依赖清单却没重锁，这里直接红
+      - name: 校验依赖锁文件与清单一致（uv lock --check）
+        run: uv lock --check
+        working-directory: backend
+
       - name: 安装依赖（uv sync --frozen）
         run: uv sync --frozen
         working-directory: backend
