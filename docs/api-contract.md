@@ -4,7 +4,7 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：13
+后端版本：0.1.0　端点总数：17
 
 ## 端点
 
@@ -22,6 +22,10 @@
 | `DELETE` | `/api/scenes/{scene_id}` | `delete_scene_api_scenes__scene_id__delete` | 删除场景 |
 | `GET` | `/api/scenes/{scene_id}` | `get_scene_api_scenes__scene_id__get` | 读取场景详情 |
 | `PUT` | `/api/scenes/{scene_id}` | `update_scene_api_scenes__scene_id__put` | 更新场景 |
+| `GET` | `/api/simulations` | `list_simulations_api_simulations_get` | 列出最近的批量仿真 |
+| `POST` | `/api/simulations` | `create_simulation_api_simulations_post` | 提交一次批量仿真 |
+| `GET` | `/api/simulations/{jobId}` | `get_simulation_api_simulations__jobId__get` | 读取一个批量仿真任务的状态 |
+| `GET` | `/api/simulations/{jobId}/results` | `get_simulation_results_api_simulations__jobId__results_get` | 读取一个批量仿真的全部结果 |
 | `POST` | `/api/telemetry` | `ingest_api_telemetry_post` | 上报一批遥测事件 |
 
 ## 统一错误形状

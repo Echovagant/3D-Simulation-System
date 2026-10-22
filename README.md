@@ -23,8 +23,8 @@
 
 <table>
   <tr>
-    <td align="center"><b>256.35 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>366</b><br><sub>测试用例 · 40 个文件</sub></td>
+    <td align="center"><b>256.36 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>380</b><br><sub>测试用例 · 42 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -152,7 +152,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 11 道闸门 |
-| `npm test` | Vitest 全量用例（40 个测试文件 / 366 个用例） |
+| `npm test` | Vitest 全量用例（42 个测试文件 / 380 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -170,6 +170,8 @@ npm run preview    # 预览生产产物
 - **跨设备场景库**——在 A 设备保存的场景，B 设备打开就能看到；
 - **LLM 托管**——不想自己填 Key 的人，把 Key 交给服务端加密保管，
   请求走后端，由后端做**配额、调用审计与故障转移**（一家厂商不通会自动换下一家）；
+- **批量仿真**——同一个场景按参数网格批量跑，产出可对比的结果；
+  后端用**与前端同一个物理引擎**（Rapier），结果与浏览器逐位对得上；
 - **错误上报**——前端的错误现场收进后端，不只是控制台里滚过去就没了。
 
 **后端缺席时前端功能完全不受影响**：场景仍然存在浏览器本地，
@@ -181,6 +183,16 @@ uv sync
 uv run uvicorn app.main:app --port 8000
 ```
 
+批量仿真走 Redis 队列，要多起一个 worker 进程：
+
+```bash
+cd backend
+uv run arq app.workers.simulation.WorkerSettings
+```
+
+Redis 连不上时 `POST /api/simulations` 直接返回 503 `simulation_queue_unavailable`——
+队列不通就说队列不通，不会假装排队成功。
+
 前端要连后端时，开发服务器会把 `/api` 代理过去（用 `VITE_API_PROXY_TARGET` 指定后端地址）：
 
 ```bash
@@ -191,7 +203,7 @@ VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
 
 ```bash
 cd backend
-uv run pytest        # 63 个用例
+uv run pytest        # 100 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
@@ -237,7 +249,7 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 5.55 MB |
+| 产物体积 | 5.57 MB |
 | 运行时依赖 | 11 个 |
 | 可加载模型 | 9 个（全部程序化生成） |
 | 类型检查 | 0 错误 |
