@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useLlmStore } from './llmStore'
-import { clearApiKey, getApiKey, hasApiKey, setApiKey } from '@/services/llm/secret'
+import { clearApiKey, hasApiKey } from '@/services/llm/secret'
 import { llmConfig } from '@/config/llm'
 import type { AgentSnapshot } from '@/services/llm/prompts'
 
@@ -33,14 +33,14 @@ const okResponse = (content: string) =>
     status: 200,
     statusText: 'OK',
     headers: { get: () => null },
-    json: async () => ({ id: 'r1', choices: [{ message: { content } }] }),
+    json: async () => ({ choices: [{ message: { content } }] }),
     text: async () => '',
   }) as unknown as Response
 
 describe('LLM store', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    clearApiKey()
+    for (const id of ['minimax', 'deepseek', 'anthropic']) clearApiKey(id)
   })
 
   afterEach(() => {
@@ -54,10 +54,39 @@ describe('LLM store', () => {
     store.applyKey(FAKE_KEY)
 
     expect(store.configured).toBe(true)
-    expect(hasApiKey()).toBe(true)
+    expect(hasApiKey(store.providerId)).toBe(true)
     // ⚠️ 整个状态序列化一遍都不该出现 key——它不在响应式里
     expect(JSON.stringify(store.$state)).not.toContain(FAKE_KEY)
     expect(Object.keys(store.$state)).not.toContain('apiKey')
+  })
+
+  it('切换提供商：换 key 槽位，也载入它自己的默认模型与端点', () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    expect(store.model).toBe('MiniMax-M3.1-Flash')
+
+    store.selectProvider('deepseek')
+    expect(store.configured).toBe(false)
+    expect(store.model).toBe('deepseek-v4-pro')
+    expect(store.baseUrl).toBe('https://api.deepseek.com')
+
+    // 上一家的 key 还在槽位里，切回来还能用
+    store.selectProvider('minimax')
+    expect(store.configured).toBe(true)
+  })
+
+  it('模型与端点可以按提供商分别覆盖', () => {
+    const store = useLlmStore()
+    store.setModel('my-model')
+    store.setBaseUrl('https://proxy.example.com/v1/')
+
+    expect(store.model).toBe('my-model')
+    expect(store.baseUrl).toBe('https://proxy.example.com/v1')
+
+    store.selectProvider('deepseek')
+    expect(store.model).toBe('deepseek-v4-pro')
+    store.selectProvider('minimax')
+    expect(store.model).toBe('my-model')
   })
 
   it('清除 key 后状态回到未配置', () => {
@@ -65,7 +94,7 @@ describe('LLM store', () => {
     store.applyKey(FAKE_KEY)
     store.clearKey()
     expect(store.configured).toBe(false)
-    expect(hasApiKey()).toBe(false)
+    expect(hasApiKey(store.providerId)).toBe(false)
   })
 
   it('没配 key 时请求动作直接失败，不会出网', async () => {
@@ -84,10 +113,8 @@ describe('LLM store', () => {
 
   it('模型返回可用动作时能解析出来', async () => {
     const store = useLlmStore()
-    store.applyKey('test-key')
-    vi.stubGlobal('fetch', async () =>
-      okResponse('{"action":"move","direction":[0,1],"speed":4}'),
-    )
+    store.applyKey(FAKE_KEY)
+    vi.stubGlobal('fetch', async () => okResponse('{"action":"move","direction":[0,1],"speed":4}'))
 
     const action = await store.requestAction(snapshot)
     expect(action?.action).toBe('move')
@@ -98,7 +125,7 @@ describe('LLM store', () => {
 
   it('模型返回无法解析的内容时返回 null（调用方回落规则式）', async () => {
     const store = useLlmStore()
-    store.applyKey('test-key')
+    store.applyKey(FAKE_KEY)
     vi.stubGlobal('fetch', async () => okResponse('我想让它往前走。'))
 
     const action = await store.requestAction(snapshot)
@@ -108,7 +135,7 @@ describe('LLM store', () => {
 
   it('超过调用上限后不再发请求', async () => {
     const store = useLlmStore()
-    store.applyKey('test-key')
+    store.applyKey(FAKE_KEY)
     let calls = 0
     vi.stubGlobal('fetch', async () => {
       calls += 1
@@ -128,7 +155,7 @@ describe('LLM store', () => {
 
   it('调用失败会记下错误并进入降级状态', async () => {
     const store = useLlmStore()
-    store.applyKey('test-key')
+    store.applyKey(FAKE_KEY)
     vi.stubGlobal('fetch', async () => {
       throw new Error('network down')
     })
@@ -142,19 +169,12 @@ describe('LLM store', () => {
 
   it('解释请求成功时把文本放进 explanation', async () => {
     const store = useLlmStore()
-    store.applyKey('test-key')
+    store.applyKey(FAKE_KEY)
     vi.stubGlobal('fetch', async () => okResponse('因为前方有箱子挡路，所以它往右绕。'))
 
     const text = await store.requestExplanation(snapshot)
     expect(text).toContain('箱子')
     expect(store.explanation).toContain('箱子')
     expect(store.explaining).toBe(false)
-  })
-
-  it('key 的读取入口在 secret 模块，不经过 store', () => {
-    setApiKey('another-secret')
-    expect(getApiKey()).toBe('another-secret')
-    clearApiKey()
-    expect(getApiKey()).toBe('')
   })
 })

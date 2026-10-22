@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { llmConfig } from '@/config/llm'
+import { findProvider, llmProviders, type LlmProvider } from '@/config/llmProviders'
 import { callLlm } from '@/services/llm/client'
 import {
   buildDecisionMessages,
@@ -17,14 +18,19 @@ export type LlmControllerMode = 'rule' | 'llm'
 /**
  * LLM 接入状态。
  *
- * ⚠️ 这里**没有** API key 这个字段：key 放在 `services/llm/secret.ts` 的模块作用域里，
- * 刻意不进响应式——否则 Vue DevTools 会把它整个列出来。
- * 本 store 只暴露"配没配"这个布尔值。
+ * ⚠️ 这里**没有** API key 字段：key 放在 `services/llm/secret.ts` 的模块作用域里，
+ * 刻意不进响应式（否则 DevTools 会把它整个列出来）。本 store 只暴露"配没配"这个布尔值。
  */
 export const useLlmStore = defineStore('llm', () => {
-  /** 是否已配置 API key */
+  /** 当前选中的提供商 id */
+  const providerId = ref(llmProviders[0].id)
+  /** 每个提供商的模型 id 覆盖（没覆盖就用清单里的默认值） */
+  const modelOverrides = ref<Record<string, string>>({})
+  /** 每个提供商的 base_url 覆盖 */
+  const baseUrlOverrides = ref<Record<string, string>>({})
+  /** 当前提供商是否已配置 API key */
   const configured = ref(false)
-  /** 控制器模式 */
+  /** 决策来源 */
   const mode = ref<LlmControllerMode>('rule')
   /** 最近一次解释 */
   const explanation = ref('')
@@ -42,13 +48,47 @@ export const useLlmStore = defineStore('llm', () => {
   /** 冷却截止时间戳：失败后这段时间内不再重试 */
   let cooldownUntil = 0
 
+  /** 当前提供商 */
+  const provider = computed<LlmProvider>(
+    () => findProvider(providerId.value) ?? llmProviders[0],
+  )
+  /** 当前使用的模型 id */
+  const model = computed<string>(
+    () => modelOverrides.value[providerId.value] ?? provider.value.model,
+  )
+  /** 当前使用的 base_url */
+  const baseUrl = computed<string>(
+    () => baseUrlOverrides.value[providerId.value] ?? provider.value.baseUrl,
+  )
+
   const syncConfigured = (): void => {
-    configured.value = hasApiKey()
+    configured.value = hasApiKey(providerId.value)
   }
 
-  /** 写入 key（只进内存） */
+  /** 切换提供商：换 key 槽位，也载入它自己的默认模型与端点 */
+  const selectProvider = (id: string): void => {
+    if (!findProvider(id)) return
+    providerId.value = id
+    syncConfigured()
+    lastError.value = ''
+  }
+
+  /** 改模型 id（模型迭代很快、还常常与账号绑定，所以让它可以随手改） */
+  const setModel = (value: string): void => {
+    modelOverrides.value = { ...modelOverrides.value, [providerId.value]: value.trim() }
+  }
+
+  /** 改 base_url（换代理网关、自建服务时用得到） */
+  const setBaseUrl = (value: string): void => {
+    baseUrlOverrides.value = {
+      ...baseUrlOverrides.value,
+      [providerId.value]: value.trim().replace(/\/+$/, ''),
+    }
+  }
+
+  /** 写入 key（只进内存，按提供商分槽） */
   const applyKey = (value: string): void => {
-    setApiKey(value)
+    setApiKey(providerId.value, value)
     syncConfigured()
     if (configured.value) {
       lastError.value = ''
@@ -56,11 +96,11 @@ export const useLlmStore = defineStore('llm', () => {
     }
   }
 
-  /** 清掉 key */
+  /** 清掉当前提供商的 key */
   const clearKey = (): void => {
-    clearApiKey()
+    clearApiKey(providerId.value)
     syncConfigured()
-    explanation.value = ''
+    if (providerId.value === llmProviders[0].id) explanation.value = ''
     lastError.value = ''
   }
 
@@ -78,7 +118,7 @@ export const useLlmStore = defineStore('llm', () => {
     maxCompletionTokens: number,
   ) => {
     if (!configured.value) {
-      lastError.value = '未配置 API key（LLM 功能未启用）'
+      lastError.value = `未配置 ${provider.value.name} 的 API Key`
       return { ok: false as const, content: '', error: lastError.value }
     }
     if (callCount.value >= llmConfig.maxCallsPerSession) {
@@ -89,7 +129,13 @@ export const useLlmStore = defineStore('llm', () => {
     callCount.value += 1
     lastCallAt.value = Date.now()
 
-    const result = await callLlm({ messages, maxCompletionTokens })
+    const result = await callLlm({
+      provider: provider.value,
+      model: model.value,
+      baseUrl: baseUrl.value,
+      messages,
+      maxCompletionTokens,
+    })
     if (!result.ok) {
       lastError.value = result.error ?? '调用失败'
       cooldownUntil = Date.now() + llmConfig.cooldownMs
@@ -128,11 +174,11 @@ export const useLlmStore = defineStore('llm', () => {
   /**
    * 请求一个动作。
    *
-   * 返回 `null` 表示"这次没拿到可用动作"——调用方必须回落到规则式控制器。
+   * 返回 `null` 表示"这次没有可用动作"——调用方必须回落规则式控制器。
    */
   const requestAction = async (snapshot: AgentSnapshot): Promise<LlmAction | null> => {
     if (!configured.value) {
-      lastError.value = '未配置 API key（LLM 控制器未启用）'
+      lastError.value = `未配置 ${provider.value.name} 的 API Key（LLM 控制器未启用）`
       return null
     }
     if (!canCall()) {
@@ -158,14 +204,14 @@ export const useLlmStore = defineStore('llm', () => {
     if (reason) lastError.value = reason
   }
 
-  /** 外部设置一条错误提示（已脱敏的短消息） */
-  const setError = (message: string): void => {
-    lastError.value = message
-  }
-
   /** 解除降级标记（LLM 恢复可用） */
   const clearDegraded = (): void => {
     degraded.value = false
+  }
+
+  /** 外部设置一条错误提示（已脱敏的短消息） */
+  const setError = (message: string): void => {
+    lastError.value = message
   }
 
   /** 重置本次会话的计数 */
@@ -180,6 +226,9 @@ export const useLlmStore = defineStore('llm', () => {
   syncConfigured()
 
   return {
+    providerId,
+    modelOverrides,
+    baseUrlOverrides,
     configured,
     mode,
     explanation,
@@ -188,6 +237,12 @@ export const useLlmStore = defineStore('llm', () => {
     degraded,
     callCount,
     lastCallAt,
+    provider,
+    model,
+    baseUrl,
+    selectProvider,
+    setModel,
+    setBaseUrl,
     applyKey,
     clearKey,
     canCall,

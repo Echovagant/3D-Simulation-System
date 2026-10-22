@@ -1,35 +1,43 @@
 /**
  * API key 的**唯一**存放点。
  *
- * ⚠️ 这个 key 刻意**不放进 Pinia / Vue 响应式**：
+ * ⚠️ 这些 key 刻意**不放进 Pinia / Vue 响应式**：
  * 响应式状态会被 Vue DevTools 完整列出来、也容易被顺手写进 localStorage。
- * 放在模块作用域里，它只活在当前页面的内存中，刷新即失效。
+ * 放在模块作用域里，它们只活在当前页面的内存中，刷新即失效。
  *
- * 它也**不会**出现在：
+ * 它们也**不会**出现在：
  * - 仓库里（这里没有任何持久化代码）
  * - 磁盘上（没有任何写文件的代码）
  * - 日志与错误信息里（`client.ts` 只回报脱敏后的错误）
- * - 构建产物里（它是运行时才有的，不来自任何环境变量）
+ * - 构建产物里（它们是运行时才有的，不来自任何环境变量）
+ *
+ * 按提供商分槽存放：换一家提供商不用重新粘贴另一家的 key。
  */
 
-/** 当前会话的 API key（只在内存里） */
-let apiKey = ''
+/** providerId → key */
+const apiKeys = new Map<string, string>()
 
-/** 读 key（调用方负责不外传） */
-export const getApiKey = (): string => apiKey
+/** 读某个提供商的 key（调用方负责不外传） */
+export const getApiKey = (providerId: string): string => apiKeys.get(providerId) ?? ''
 
-/** 写入 key（会去掉首尾空白） */
-export const setApiKey = (value: string): void => {
-  apiKey = typeof value === 'string' ? value.trim() : ''
+/** 写入某个提供商的 key（会去掉首尾空白） */
+export const setApiKey = (providerId: string, value: string): void => {
+  apiKeys.set(providerId, typeof value === 'string' ? value.trim() : '')
 }
 
-/** 清掉 key */
-export const clearApiKey = (): void => {
-  apiKey = ''
+/** 清掉某个提供商的 key */
+export const clearApiKey = (providerId: string): void => {
+  apiKeys.delete(providerId)
 }
 
-/** 是否已配置 */
-export const hasApiKey = (): boolean => apiKey.length > 0
+/** 某个提供商是否已配置 */
+export const hasApiKey = (providerId: string): boolean =>
+  (apiKeys.get(providerId) ?? '').length > 0
+
+/** 一次性清掉所有 key（"清除全部"按钮用） */
+export const clearAllApiKeys = (): void => {
+  apiKeys.clear()
+}
 
 /**
  * 脱敏：把任何长得像密钥的片段替换掉。

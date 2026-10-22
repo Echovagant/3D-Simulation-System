@@ -1,9 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
   <head>
+    <!--
+      connect-src 里的域名与 src/config/llmProviders.ts 的清单一一对应：
+      换服务商 / 改 base_url 时，两边都要同步改，否则浏览器会直接拦掉请求
+      （控制台里报 Refused to connect）。
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://*.minimax.io https://*.minimaxi.com https://*.minimax.cn; worker-src 'self' blob:; child-src 'self' blob:; form-action 'self'"
+      content="default-src 'self'; base-uri 'none'; object-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' ws://127.0.0.1:* ws://localhost:* https://api.minimax.io https://api.minimaxi.com https://api.minimax.cn https://api.deepseek.com https://open.bigmodel.cn https://dashscope.aliyuncs.com https://ark.cn-beijing.volces.com https://api.openai.com https://api.anthropic.com https://generativelanguage.googleapis.com https://api.x.ai; worker-src 'self' blob:; child-src 'self' blob:; form-action 'self'"
     >
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">

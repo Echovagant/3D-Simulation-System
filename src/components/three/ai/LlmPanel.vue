@@ -11,7 +11,55 @@
       <span class="ai-t-amber">状态：</span>
       <span v-if="llm.configured" class="ai-t-blue">已配置</span>
       <span v-else class="ai-t-faint">未配置（只有规则式控制器可用）</span>
-      <span v-if="llm.configured" class="ai-t-faint"> · 模型 {{ model }}</span>
+      <span class="ai-t-faint"> · {{ llm.provider.name }} · {{ llm.model }}</span>
+    </div>
+
+    <!-- 提供商 -->
+    <div class="ai-mb-2">
+      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-provider">服务商</label>
+      <select
+        id="llm-provider"
+        class="ai-w-full"
+        :value="llm.providerId"
+        @change="onSelectProvider"
+      >
+        <option v-for="item in providers" :key="item.id" :value="item.id">
+          {{ item.name }}
+        </option>
+      </select>
+      <p v-if="llm.provider.note" class="ai-fs-xs ai-t-faint ai-mt-1">
+        {{ llm.provider.note }}
+      </p>
+    </div>
+
+    <!-- 模型 -->
+    <div class="ai-mb-2">
+      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-model">模型</label>
+      <input
+        id="llm-model"
+        class="ai-w-full"
+        :value="llm.model"
+        spellcheck="false"
+        autocomplete="off"
+        @input="onModelInput"
+      />
+    </div>
+
+    <!-- 端点 -->
+    <div class="ai-mb-3">
+      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-base-url">端点（base_url）</label>
+      <input
+        id="llm-base-url"
+        class="ai-w-full"
+        :value="llm.baseUrl"
+        spellcheck="false"
+        autocomplete="off"
+        @input="onBaseUrlInput"
+      />
+      <p class="ai-fs-xs ai-t-faint ai-mt-1">
+        改端点后还要同步放行浏览器的 CSP（index.html 的 connect-src）。
+        <a :href="llm.provider.docsUrl" target="_blank" rel="noreferrer noopener">官方文档</a>
+      </p>
     </div>
 
     <!-- API Key -->
@@ -24,7 +72,7 @@
         class="ai-w-full"
         autocomplete="off"
         spellcheck="false"
-        placeholder="粘贴 MiniMax API Key"
+        :placeholder="`粘贴 ${llm.provider.name} 的 API Key`"
         @keyup.enter="applyKey"
       />
       <p class="ai-fs-xs ai-t-faint ai-mt-1">
@@ -50,7 +98,7 @@
       </div>
     </div>
 
-    <!-- 控制器模式 -->
+    <!-- 决策来源 -->
     <div class="ai-mb-3">
       <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-mode">决策来源</label>
       <select id="llm-mode" v-model="llm.mode" class="ai-w-full">
@@ -101,6 +149,7 @@
 import { computed, ref } from 'vue'
 import { useLlmStore } from '@/stores/llmStore'
 import { llmConfig } from '@/config/llm'
+import { llmProviders } from '@/config/llmProviders'
 import type { AgentSnapshot } from '@/services/llm/prompts'
 
 /**
@@ -120,12 +169,26 @@ const props = defineProps<{
 const llm = useLlmStore()
 const keyInput = ref('')
 const testing = ref(false)
-const model = llmConfig.model
+const providers = llmProviders
 const maxCalls = llmConfig.maxCallsPerSession
 
 const canExplain = computed(
   () => llm.configured && !llm.explaining && Boolean(props.agentId),
 )
+
+const onSelectProvider = (event: Event): void => {
+  const target = event.target as HTMLSelectElement
+  llm.selectProvider(target.value)
+  keyInput.value = ''
+}
+
+const onModelInput = (event: Event): void => {
+  llm.setModel((event.target as HTMLInputElement).value)
+}
+
+const onBaseUrlInput = (event: Event): void => {
+  llm.setBaseUrl((event.target as HTMLInputElement).value)
+}
 
 /** 应用 key：写进内存后立刻把输入框清空，不让 key 留在 DOM 里 */
 const applyKey = (): void => {
