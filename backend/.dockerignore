@@ -1,0 +1,21 @@
+# 宿主机 .venv 是 Windows 版，平台与镜像内不兼容；
+# 若被 COPY 进镜像会覆盖容器里 uv sync 装好的 venv，镜像直接不可用。
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 开发期 SQLite 数据目录，不进镜像。
+backend_data/
+*.db
+
+# 本地环境变量与临时产物，可能含本机配置。
+.env
+.env.*
+.openapi-tmp.json
+
+# 版本库与日志不需要进镜像。
+.git/
+*.log

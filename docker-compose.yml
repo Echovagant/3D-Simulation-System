@@ -1,0 +1,45 @@
+# 本地开发用的容器编排：api + postgres + redis。
+# 说明：下面的 sim/sim 是本地开发用的占位凭据，不是真实密码，也不是任何环境的真实密钥。
+services:
+  api:
+    build:
+      context: ./backend
+    environment:
+      # postgres 的驱动串格式：postgresql+psycopg://user:pass@host:port/db
+      BACKEND_DATABASE_URL: postgresql+psycopg://sim:sim@db:5432/sim
+      # 列表型环境变量必须是 JSON 字符串（pydantic-settings 的要求），不是 YAML 数组。
+      BACKEND_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      # 启动时跑 alembic upgrade head；生产应改成 false，把迁移当独立部署步骤。
+      BACKEND_AUTO_MIGRATE: "true"
+    depends_on:
+      db:
+        # 必须等 postgres 通过健康检查，否则迁移会在数据库还没就绪时执行而失败。
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      # 占位凭据，仅本地开发用，不是真实密码。
+      POSTGRES_USER: sim
+      POSTGRES_PASSWORD: sim
+      POSTGRES_DB: sim
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1 强制走 TCP：初始化阶段 postgres 会起一个只监听 unix socket 的临时实例，
+      # 用 socket 判定会过早报告 ready。
+      test: ["CMD", "pg_isready", "-U", "sim", "-d", "sim", "-h", "127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    # 现阶段只是基础设施，api 服务还没有接 Redis 客户端。
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
