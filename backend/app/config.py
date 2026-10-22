@@ -36,6 +36,26 @@ class Settings(BaseSettings):
     # 生产应该设成 false，把迁移当成独立的部署步骤。
     auto_migrate: bool = True
 
+    # ---- LLM 托管服务 ----
+
+    # 部署者模式的主密钥。**配了就走 host 模式**（HKDF-SHA256 派生 KEK），
+    # 前端托管 key 时不需要提交口令；没配就走 argon2id 模式，
+    # 前端必须提交口令（否则 422 passphrase_required）。
+    # 这个值只从环境变量读，不落盘、不入库、不进日志。
+    llm_key_master_key: str = ""
+
+    # 每个 owner 每天的托管调用上限。
+    llm_quota_per_day: int = 100
+
+    # 故障转移顺序（厂商 id 列表）。
+    llm_fallback_order: list[str] = ["minimax", "deepseek", "zhipu"]
+
+    # 调厂商的超时（毫秒）。
+    llm_upstream_timeout_ms: int = 30000
+
+    # 单次请求的输出上限。
+    llm_max_tokens_limit: int = 4096
+
 
 @lru_cache
 def get_settings() -> Settings:

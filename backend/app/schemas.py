@@ -83,3 +83,92 @@ class TelemetryBatch(ApiModel):
 
 class TelemetryAccepted(ApiModel):
     accepted: int
+
+
+# --------------------------------------------------------------------------
+# LLM 托管服务
+#
+# 托管模式下前端只说「我要什么」（模型 + 消息），
+# 三族协议的差别全在后端。
+# --------------------------------------------------------------------------
+
+
+class LlmMessage(ApiModel):
+    """一条归一化的对话消息。
+
+    role 的取值在服务层校验（报 llm_invalid_request），不走 Pydantic：
+    请求形状的问题归到同一个错误码，前端只要认一种。
+    """
+
+    role: str
+    content: str
+
+
+class LlmCompleteRequest(ApiModel):
+    """托管调用的请求体。
+
+    provider_id 不给就走配置的默认顺序；model 不给就用该厂商的默认模型。
+    passphrase 只在用户口令模式（服务端没配 master key）下有意义。
+    """
+
+    provider_id: str | None = None
+    model: str | None = None
+    messages: list[LlmMessage] = Field(default_factory=list)
+    max_tokens: int | None = None
+    passphrase: str | None = None
+
+
+class LlmUsage(ApiModel):
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+
+
+class LlmCompletionResponse(ApiModel):
+    content: str
+    usage: LlmUsage | None = None
+    # 实际答上那家——故障转移时可能不是请求里指定的那家
+    provider_id: str
+    model: str
+
+
+class LlmKeyUpsertRequest(ApiModel):
+    """托管一把厂商密钥。"""
+
+    provider_id: str = Field(min_length=1, max_length=64)
+    api_key: str = Field(min_length=1, max_length=4096)
+    passphrase: str | None = Field(default=None, max_length=1024)
+
+
+class LlmKeyCreated(ApiModel):
+    provider_id: str
+    configured: bool
+
+
+class LlmKeyStatus(ApiModel):
+    """只回「配没配」——不回 key、密文、盐、口令。"""
+
+    provider_id: str
+    configured: bool
+    updated_at: datetime | None = None
+
+
+class LlmQuotaStatus(ApiModel):
+    limit: int
+    used: int
+    remaining: int
+    # 次日 UTC 零点
+    reset_at: datetime
+
+
+class LlmAuditEntry(ApiModel):
+    ts: datetime
+    provider_id: str
+    model: str
+    ok: bool
+    latency_ms: int
+    tokens: LlmUsage | None = None
+    error_code: str | None = None
+
+
+class LlmAuditResponse(ApiModel):
+    calls: list[LlmAuditEntry] = Field(default_factory=list)
