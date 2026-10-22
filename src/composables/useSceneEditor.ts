@@ -814,7 +814,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         try {
           physicsWorld?.removeRigidBody(rigidBody)
         } catch (error) {
-          // 该刚体可能已被单独移除（removeRigidBodyByUuid），忽略
+          // 账本（rigidBodies）与物理世界必须一一对应：
+          // 走到这里说明刚体已被移出过世界却没销账，属于账实不符，必须留痕。
+          console.warn('[useSceneEditor] 清理刚体失败（该刚体可能已不在物理世界中）', error)
         }
       })
 

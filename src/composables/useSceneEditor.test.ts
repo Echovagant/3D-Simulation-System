@@ -19,6 +19,8 @@ const rapierMock = vi.hoisted(() => ({
   lastWorld: null as null | {
     bodies: { len: () => number }
   },
+  /** 让「从物理世界里摘掉刚体」这一步失败——用来模拟账实不符 */
+  throwOnRemove: false,
 }))
 
 vi.mock('./loadRapier', () => {
@@ -72,6 +74,7 @@ vi.mock('./loadRapier', () => {
   class MockBody {
     handle: number
     removed = false
+    kind: 'fixed' | 'dynamic'
     // 真实 Rapier 的 RigidBody.translation() / rotation() / linvel() 都是**方法**，
     // 替身必须保持同样的形状，否则「刚体 → mesh」的同步那条路径根本测不到。
     private currentTranslation: { x: number; y: number; z: number }
@@ -80,8 +83,13 @@ vi.mock('./loadRapier', () => {
     private currentAngvel = { x: 0, y: 0, z: 0 }
     colliders: MockCollider[] = []
 
-    constructor(handle: number, translation: { x: number; y: number; z: number }) {
+    constructor(
+      handle: number,
+      translation: { x: number; y: number; z: number },
+      kind: 'fixed' | 'dynamic' = 'dynamic',
+    ) {
       this.handle = handle
+      this.kind = kind
       this.currentTranslation = { ...translation }
     }
 
@@ -138,7 +146,7 @@ vi.mock('./loadRapier', () => {
 
     createRigidBody(desc: RigidBodyDesc): MockBody {
       const handle = this.handles.size
-      const body = new MockBody(handle, desc.translation)
+      const body = new MockBody(handle, desc.translation, desc.kind)
       this.handles.set(handle, body)
       return body
     }
@@ -150,6 +158,9 @@ vi.mock('./loadRapier', () => {
     }
 
     removeRigidBody(body: MockBody) {
+      if (rapierMock.throwOnRemove && body.kind === 'dynamic') {
+        throw new Error('刚体已不在物理世界中')
+      }
       body.removed = true
       rapierMock.removedBodies.push(body)
     }
@@ -171,11 +182,16 @@ vi.mock('./loadRapier', () => {
     private tx = 0
     private ty = 0
     private tz = 0
+    /** 地面是 fixed，物体是 dynamic——清理路径对两者的处理不一样 */
+    readonly kind: 'fixed' | 'dynamic'
+    constructor(kind: 'fixed' | 'dynamic') {
+      this.kind = kind
+    }
     static dynamic() {
-      return new RigidBodyDesc()
+      return new RigidBodyDesc('dynamic')
     }
     static fixed() {
-      return new RigidBodyDesc()
+      return new RigidBodyDesc('fixed')
     }
     setTranslation(x: number, y: number, z: number) {
       this.tx = x
@@ -261,6 +277,7 @@ describe('useSceneEditor 的刚体生命周期', () => {
     setActivePinia(createPinia())
     rapierMock.removedBodies.length = 0
     rapierMock.lastWorld = null
+    rapierMock.throwOnRemove = false
   })
 
   afterEach(() => {
@@ -345,6 +362,26 @@ describe('useSceneEditor 的刚体生命周期', () => {
     expect(store.objects).toHaveLength(0)
   })
 
+  it('清理刚体失败时会留痕，不会静默吞掉', async () => {
+    const editor = await initEditor()
+    expect(editor.addCube()).toBe(true)
+    expect(editor.getRigidBodyCount()).toBe(1)
+
+    // 让摘除刚体这一步失败：模拟「刚体已不在物理世界里」这种账实不符
+    rapierMock.throwOnRemove = true
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    // 卸载组件即触发清理
+    wrappers.pop()?.unmount()
+
+    expect(warn).toHaveBeenCalled()
+    expect(
+      warn.mock.calls.some((call) => String(call[0]).includes('[useSceneEditor]')),
+    ).toBe(true)
+
+    warn.mockRestore()
+  })
+
   it('刚体同时挂在 mesh 的 userData.physics 上（与 usePhysics.ts 的约定一致）', async () => {
     const editor = await initEditor()
     const store = useSceneEditorStore()
@@ -403,6 +440,7 @@ describe('变换写回物理引擎', () => {
     setActivePinia(createPinia())
     rapierMock.removedBodies.length = 0
     rapierMock.lastWorld = null
+    rapierMock.throwOnRemove = false
   })
 
   afterEach(() => {
