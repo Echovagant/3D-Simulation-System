@@ -172,3 +172,130 @@ class LlmAuditEntry(ApiModel):
 
 class LlmAuditResponse(ApiModel):
     calls: list[LlmAuditEntry] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# 批量仿真
+# --------------------------------------------------------------------------
+
+# 参数扫描支持哪些维度。**一次只扫一个维度**——多维笛卡尔积会让
+# 「到底是哪个参数导致的」变得难查。
+SIMULATION_SWEEP_PARAMS = ("gravityY", "friction", "restitution", "initialVelocityY")
+
+
+class SimulationParams(ApiModel):
+    """一次运行的物理参数。
+
+    ``friction`` / ``restitution`` 是 ``None`` 表示**不下发**——
+    用 Rapier 的默认值（0.5 / 0.0），与前端「只在被覆盖时才下发」一致。
+    """
+
+    gravity_y: float | None = None
+    friction: float | None = None
+    restitution: float | None = None
+    dt: float | None = None
+    steps: int | None = None
+    trace: bool = False
+    initial_velocity_y: float | None = None
+
+
+class SimulationSweep(ApiModel):
+    """参数扫描：只有一个维度。"""
+
+    param: str
+    values: list[float] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _check_param(self) -> "SimulationSweep":
+        if self.param not in SIMULATION_SWEEP_PARAMS:
+            allowed = "、".join(SIMULATION_SWEEP_PARAMS)
+            raise ValueError(f"sweep.param 只能是 {allowed} 之一，收到 {self.param}")
+        return self
+
+
+class SimulationCreateRequest(ApiModel):
+    """提交一次批量仿真。"""
+
+    # 给人看的名字，可选
+    label: str | None = Field(default=None, max_length=200)
+    # 完整的前端 SceneDocument
+    scene: dict[str, Any]
+    params: SimulationParams | None = None
+    sweep: SimulationSweep | None = None
+
+
+class SimulationJobAccepted(ApiModel):
+    """排队成功。"""
+
+    job_id: str
+
+
+class SimulationJobStatus(ApiModel):
+    """任务状态。"""
+
+    job_id: str
+    status: str
+    total: int
+    done: int
+    error: str | None = None
+    created_at: datetime
+    label: str | None = None
+
+
+class SimulationVector(ApiModel):
+    x: float
+    y: float
+    z: float
+
+
+class SimulationTracePoint(ApiModel):
+    frame: int
+    position: SimulationVector
+
+
+class SimulationObjectResult(ApiModel):
+    """一个物体在这次运行里的结果。
+
+    ``skipped`` 非空表示这个物体**没有参与仿真**（模型等后端不支持的类型），
+    ``reason`` 说明为什么。
+    """
+
+    uuid: str
+    type: str
+    resting: bool = False
+    settled_at_frame: int | None = None
+    final_position: SimulationVector | None = None
+    final_velocity: SimulationVector | None = None
+    penetration_depth: float = 0.0
+    trace: list[SimulationTracePoint] | None = None
+    skipped: str | None = None
+    reason: str | None = None
+
+
+class SimulationMetrics(ApiModel):
+    settled_at_frame: int | None = None
+    max_penetration: float = 0.0
+    total_fall_distance: float = 0.0
+
+
+class SimulationRun(ApiModel):
+    """一次运行的结果。"""
+
+    index: int
+    params: dict[str, Any] = Field(default_factory=dict)
+    duration_ms: int = 0
+    objects: list[SimulationObjectResult] = Field(default_factory=list)
+    metrics: SimulationMetrics = Field(default_factory=SimulationMetrics)
+
+
+class SimulationSummary(ApiModel):
+    runs: int = 0
+    settled_runs: int = 0
+    max_penetration: float = 0.0
+
+
+class SimulationResultsResponse(ApiModel):
+    """一个任务的全部运行结果。"""
+
+    runs: list[SimulationRun] = Field(default_factory=list)
+    summary: SimulationSummary = Field(default_factory=SimulationSummary)

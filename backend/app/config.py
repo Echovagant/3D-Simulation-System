@@ -56,6 +56,28 @@ class Settings(BaseSettings):
     # 单次请求的输出上限。
     llm_max_tokens_limit: int = 4096
 
+    # ---- 批量仿真 ----
+
+    # 队列用的 Redis。默认本机 6379。
+    simulation_redis_url: str = "redis://127.0.0.1:6379"
+
+    # 连不上 Redis 时等多久就放弃（秒）。
+    # 队列不通要**立刻**如实报错，不能让用户对着转圈等。
+    simulation_redis_timeout: int = 2
+
+    # 队列名。API 端与 worker 必须一致。
+    simulation_queue_name: str = "simulation:queue"
+
+    # 单个任务最多跑多少次（扫描取值数）。
+    simulation_max_runs_per_job: int = 32
+
+    # 单次运行最多跑多少个物理步。
+    simulation_max_steps: int = 10000
+
+    # 每天最多跑多少次仿真。
+    # 计数**从 simulation_results 的行数数出来**，不另建计数表。
+    simulation_max_runs_per_day: int = 2000
+
 
 @lru_cache
 def get_settings() -> Settings:

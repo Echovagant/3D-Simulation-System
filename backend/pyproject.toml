@@ -14,6 +14,10 @@ dependencies = [
   "psycopg[binary]>=3.2",
   "argon2-cffi>=23.1",
   "cryptography>=42",
+  "rapier3d==0.36.1",
+  "arq>=0.28.0",
+  "redis>=5.3.1",
+  "numpy>=2.5.4",
 ]
 
 [dependency-groups]
@@ -22,6 +26,14 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
 ]
+
+# 依赖来源固定为官方 PyPI。锁文件里记的就是 canonical 地址，
+# 换台机器 `uv sync` 拿到的还是同一批包（版本与哈希一致）。
+# 想用镜像加速时用环境变量 UV_DEFAULT_INDEX 临时覆盖，不要改这里。
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+default = true
 
 [build-system]
 requires = ["hatchling"]

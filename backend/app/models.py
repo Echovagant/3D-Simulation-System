@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -101,3 +101,58 @@ class LlmCallAudit(Base):
     completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # 失败时的分类（网络失败 / 限流 / 服务端错误 / 请求本身有问题）
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class SimulationJob(Base):
+    """一次批量仿真任务。
+
+    ``scene`` 存**完整的前端 SceneDocument JSON**（与 ``scenes`` 表一样的口径），
+    ``params`` / ``sweep`` 存这次运行的物理参数与扫描维度。
+
+    ``done`` 是**已经跑完的次数**，不是「进度百分比」——
+    百分比是前端拿 ``done / total`` 自己算的。
+    """
+
+    __tablename__ = "simulation_jobs"
+
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # queued -> running -> succeeded | failed
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    scene: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
+    params: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
+    sweep: Mapped[dict[str, Any] | None] = mapped_column(JSONType, nullable=True)
+    # 一共要跑几次（扫描取值数 × 1）
+    total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 已经跑完几次
+    done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
+class SimulationResult(Base):
+    """批量仿真里**一次运行**的明细。
+
+    每次运行一行：扫了几个取值就有几行。
+    配额（每天最多跑多少次）就是从这里数出来的——
+    不另建计数表，多一个真相源就会漂移。
+    """
+
+    __tablename__ = "simulation_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    job_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("simulation_jobs.job_id"), nullable=False, index=True
+    )
+    run_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    params: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
