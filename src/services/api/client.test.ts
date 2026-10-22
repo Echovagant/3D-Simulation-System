@@ -71,6 +71,14 @@ describe('API 客户端', () => {
     expect(isApiUnavailable(error)).toBe(false)
   })
 
+  it('代理层的上游错误（502/503/504）算「后端不在」', async () => {
+    vi.stubGlobal('fetch', async () => brokenJsonResponse(502))
+
+    const error = await catchError(apiRequest('/api/scenes'))
+
+    expect(isApiUnavailable(error)).toBe(true)
+  })
+
   it('网络层失败（fetch 直接 reject）能被识别成「后端不在」', async () => {
     vi.stubGlobal('fetch', async () => {
       throw new TypeError('Failed to fetch')
@@ -102,13 +110,13 @@ describe('API 客户端', () => {
   })
 
   it('后端返回非 JSON 时抛的仍然是 ApiError，状态码取真实值', async () => {
-    vi.stubGlobal('fetch', async () => brokenJsonResponse(502))
+    vi.stubGlobal('fetch', async () => brokenJsonResponse(500))
 
     const error = await catchError(apiRequest('/api/scenes'))
 
     expect(error).toBeInstanceOf(ApiError)
     const apiError = error as ApiError
-    expect(apiError.status).toBe(502)
+    expect(apiError.status).toBe(500)
     expect(apiError.code).toBe('http_error')
     expect(isApiUnavailable(error)).toBe(false)
   })

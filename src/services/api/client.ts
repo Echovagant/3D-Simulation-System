@@ -58,13 +58,23 @@ const errorName = (error: unknown): string => {
 }
 
 /**
+ * 代理层「上游不在」的状态码。
+ *
+ * 开发期走 vite 代理、生产走反向代理：后端挂了时代理会回 502/503/504，
+ * 这些和「连不上」是一回事，都该降级，而不是当成业务错误。
+ */
+const UPSTREAM_DOWN_STATUSES = new Set([502, 503, 504])
+
+/**
  * 判断这次失败是不是「后端不在」。
  *
- * 只有网络层失败（TypeError）与超时（AbortError）算后端缺席；
+ * 只有网络层失败（TypeError）、超时（AbortError）与代理层的上游错误算后端缺席；
  * 后端回了 404 / 409 / 500 说明它好好地应答了，是这次请求本身的问题，不该降级。
  */
 export const isApiUnavailable = (error: unknown): boolean => {
-  if (error instanceof ApiError) return false
+  if (error instanceof ApiError) {
+    return UPSTREAM_DOWN_STATUSES.has(error.status)
+  }
   if (error instanceof TypeError) return true
   const name = errorName(error)
   return name === 'TypeError' || name === 'AbortError'

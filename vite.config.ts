@@ -1,9 +1,9 @@
-import { fileURLToPath, URL } from 'node:url';
-import { defineConfig } from 'vite';
-import vue from '@vitejs/plugin-vue';
-import vueDevTools from 'vite-plugin-vue-devtools';
-import wasm from 'vite-plugin-wasm';
-import topLevelAwait from 'vite-plugin-top-level-await';
+import { fileURLToPath, URL } from 'node:url'
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vueDevTools from 'vite-plugin-vue-devtools'
+import wasm from 'vite-plugin-wasm'
+import topLevelAwait from 'vite-plugin-top-level-await'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -20,6 +20,21 @@ export default defineConfig({
   },
   // 解决开发环境下的 Wasm 加载问题
   optimizeDeps: {
-    exclude: ['@dimforge/rapier3d'] // 不让 Vite 预构建 Rapier
-  }
-});
+    exclude: ['@dimforge/rapier3d'], // 不让 Vite 预构建 Rapier
+  },
+  server: {
+    proxy: {
+      /**
+       * 开发期把 /api 转到后端。
+       *
+       * 这样浏览器只跟自己的源说话，`connect-src 'self'` 就够了——
+       * 不必为了接后端去放宽 CSP 的 connect-src。
+       * 生产部署由反向代理负责同一件事。
+       */
+      '/api': {
+        target: process.env.VITE_API_PROXY_TARGET ?? 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+    },
+  },
+})
