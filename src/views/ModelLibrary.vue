@@ -6,6 +6,20 @@
       <p>浏览、管理和使用各类3D模型资产</p>
     </div>
 
+    <!-- 下载反馈：成功与失败都写在这里，3 秒后自动消失 -->
+    <div
+      v-if="downloadNotice"
+      class="download-notice"
+      :class="`download-notice--${downloadNotice.type}`"
+      role="status"
+    >
+      <i
+        class="fas"
+        :class="downloadNotice.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'"
+      ></i>
+      <span>{{ downloadNotice.message }}</span>
+    </div>
+
     <!-- 模型分类标签 -->
     <div class="category-tabs">
       <button
@@ -233,10 +247,11 @@
 </template>
 
 <script lang="ts" setup name="ModelLibrary">
-import { ref, computed } from 'vue';
+import { ref, computed, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { useModelStore } from '@/stores/modelStore';
 import { isPlaceholderModel } from '@/data/modelLibrary';
+import { resolveModelUrl } from '@/utils/modelLoader';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
 
 // ===================== 类型定义 =====================
@@ -292,6 +307,10 @@ const showUploadModal = ref<boolean>(false);
 const selectedModel = ref<Model | null>(null);
 const isUploading = ref<boolean>(false);
 const selectedFileName = ref<string>('');
+
+/** 下载反馈：成功与失败都写在这里，不用 alert 弹窗打断操作 */
+const downloadNotice = ref<{ type: 'success' | 'error'; message: string } | null>(null);
+let downloadNoticeTimer: number | undefined;
 
 // 新模型上传表单 - 使用正确的类型定义
 const newModel = ref<UploadModelForm>({
@@ -397,9 +416,103 @@ const handleAddToScene = (model: Model) => {
   router.push('/scene-editor');
 };
 
-const handleDownloadModel = (model: Model) => {
+/**
+ * 下载文件名：模型名 + 小写扩展名。
+ *
+ * 名字里的路径分隔符要去掉——它会直接进 <a download>，
+ * 留着就可能把文件写到别处去。扩展名取自 format 字段（GLB → .glb）。
+ */
+const buildDownloadFileName = (model: Model): string => {
+  const safeName = model.name.replace(/[\\/:*?"<>|]/g, '_').trim() || 'model';
+  const format = (model.format || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (format && format !== 'unknown') return `${safeName}.${format}`;
 
-  alert(`开始下载模型: ${model.name}`);
+  // format 不可信时退回到地址上的扩展名：宁可没有扩展名，也不要写一个错的
+  const fromUrl = model.modelUrl.split(/[?#]/)[0].match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase();
+  return fromUrl ? `${safeName}.${fromUrl}` : safeName;
+};
+
+/**
+ * 取模型文件的字节。
+ *
+ * 入参是**已解析过**的地址：站内绝对路径要拼 BASE_URL（子路径部署时否则 404），
+ * 这一步由 resolveModelUrl 负责。
+ */
+const fetchModelBlob = async (url: string): Promise<Blob> => {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+  }
+  return await response.blob();
+};
+
+/** 触发浏览器把某个地址存成文件 */
+const triggerUrlDownload = (url: string, fileName: string): void => {
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+};
+
+/**
+ * 把字节交给浏览器下载。
+ *
+ * 浏览器可能到 click() 之后才真正开始读这个 blob，
+ * 立刻 revoke 会让下载变成 0 字节——因此延后回收。
+ */
+const triggerBlobDownload = (blob: Blob, fileName: string): void => {
+  const objectUrl = URL.createObjectURL(blob);
+  triggerUrlDownload(objectUrl, fileName);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+};
+
+/** 显示一条下载反馈，3 秒后自动消失 */
+const showDownloadNotice = (type: 'success' | 'error', message: string): void => {
+  downloadNotice.value = { type, message };
+  if (downloadNoticeTimer !== undefined) {
+    window.clearTimeout(downloadNoticeTimer);
+  }
+  downloadNoticeTimer = window.setTimeout(() => {
+    downloadNotice.value = null;
+    downloadNoticeTimer = undefined;
+  }, 3000);
+};
+
+onUnmounted(() => {
+  if (downloadNoticeTimer !== undefined) {
+    window.clearTimeout(downloadNoticeTimer);
+  }
+});
+
+/**
+ * 下载模型文件：真的把文件存到本地。
+ *
+ * 站内地址走 fetch：非 2xx 与网络失败都能变成一条明确的失败提示，
+ * 而不是浏览器静悄悄地什么都不做。
+ *
+ * 会话上传的模型是 blob: 地址，**不能**走 fetch——
+ * 应用的 CSP `connect-src` 里没有 blob:，浏览器会把 fetch 直接拦掉。
+ * 这种地址原样交给 <a download>，由浏览器自己去取字节。
+ */
+const handleDownloadModel = async (model: Model): Promise<void> => {
+  const fileName = buildDownloadFileName(model);
+  const url = resolveModelUrl(model.modelUrl);
+
+  try {
+    if (model.modelUrl.startsWith('blob:')) {
+      triggerUrlDownload(url, fileName);
+    } else {
+      const blob = await fetchModelBlob(url);
+      triggerBlobDownload(blob, fileName);
+    }
+    showDownloadNotice('success', `已下载：${fileName}`);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    showDownloadNotice('error', `下载失败：${reason}`);
+  }
 };
 
 const handleDeleteModel = (model: Model) => {
@@ -463,6 +576,30 @@ const modelMeta = (model: Model): string =>
 .page-header p {
   font-size: 1.1rem;
   color: #666;
+}
+
+/* 下载反馈条：成功与失败用两套配色，3 秒后自动消失 */
+.download-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  border: 1px solid transparent;
+}
+
+.download-notice--success {
+  color: #14532d;
+  background-color: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.download-notice--error {
+  color: #7f1d1d;
+  background-color: #fef2f2;
+  border-color: #fecaca;
 }
 
 .category-tabs {

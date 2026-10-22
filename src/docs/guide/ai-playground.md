@@ -148,10 +148,15 @@ AI 演武场（路由 `/ai-playground`）是系统里用于配置智能体、启
 
 感知同样来自引擎：
 
-- 视野内障碍物数量：`world.intersectionsWithShape` 用一个半径等于感知范围的球做形状查询；
-- 最近障碍物距离：`world.projectPoint` 把智能体所在点投影到最近的障碍物碰撞体上；
+- 视野内障碍物数量与最近障碍物距离：**逐个碰撞体**查询——对每个障碍物调用
+  `collider.projectPoint(position, true)`，把智能体所在点投影到**那个碰撞体**的表面上量出间距；
+  间距 ≤ 感知范围的计入「视野内数量」，所有间距里最小的是「最近距离」；
 - 是否撞上：窄相位的接触流形（`numContacts() > 0`），不是"距离够近就算撞上"。
 
+> ⚠️ 这里刻意**不用** `world.intersectionsWithShape` / `world.projectPoint` 这类全局查询：
+> 它们的过滤回调一旦把所有碰撞体都拒掉（空场地就是这种情形），Rapier 0.19.3 会在 WASM 内部
+> 直接 panic 并污染整个实例。逐碰撞体查询没有这个风险，而且碰撞体最多十几个，比全局查询还快。
+>
 > ⚠️ Rapier 的场景查询依赖 `world.step()` 建好的宽相位与窄相位结构。
 > 在世界建好但一步都还没走的时候查询，WASM 内部会直接 panic 并污染整个实例——
 > 所以 `usePhysics.initPhysics` 建完世界后会先预热一步。

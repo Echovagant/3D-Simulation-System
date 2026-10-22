@@ -119,10 +119,15 @@
 `getAgentCurrentState` 读的是**真实场景对象**：位置、旋转来自智能体网格本身
 （网格位置由 Rapier 刚体每步回写），速度来自刚体的 `linvel()`；
 `sensors` 里的 `proximity` 来自**物理引擎的查询**——
-视野内障碍物数量用 `world.intersectionsWithShape` 做球形形状查询，
-最近距离用 `world.projectPoint` 把智能体所在点投影到最近的障碍物碰撞体上。
+视野内障碍物数量与最近距离都是**逐个碰撞体**算出来的：对每个障碍物调用
+`collider.projectPoint(position, true)`，把智能体所在点投影到**那个碰撞体**的表面上量出间距；
+间距 ≤ 感知范围就计入「视野内数量」，所有间距里最小的是「最近距离」。
 真的撞上障碍物时（窄相位接触流形里接触点数 > 0），`status` 会是 `collided`；
 智能体抵达过目标点（胜利条件达成）且当前没有碰撞时，`status` 是 `goal_reached`。
+
+> 之所以不用 `world.intersectionsWithShape` / `world.projectPoint` 这类全局查询：
+> 它们的过滤回调一旦把所有碰撞体都拒掉（空场地就是这种情形），Rapier 0.19.3 会在 WASM 内部
+> 直接 panic 并污染整个实例。逐碰撞体查询没有这个风险。
 
 ### 执行入口
 
