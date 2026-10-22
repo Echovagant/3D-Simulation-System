@@ -1,0 +1,47 @@
+# 前端 CI：仓库的门禁入口是 npm run build
+# （type-check → build-only → vitest → 全部 verify:* 闸门），本工作流负责把它跑起来，
+# 并在构建之前先跑一遍 lint（仓库里已有这个脚本，但它不在 build 链里）。
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# 只读代码即可，不需要写入仓库的权限
+permissions:
+  contents: read
+
+# 同一分支上的新运行自动取消旧运行，避免连续推送时排队占用额度
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: 前端构建与门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Node.js 22（启用 npm 缓存）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          # 缓存 npm 下载产物，命中时能省掉 install 的大部分耗时
+          cache: 'npm'
+
+      - name: 安装依赖（npm ci）
+        run: npm ci
+
+      # 静态检查放最前面：它比构建便宜得多，先让它把问题报出来
+      - name: 代码规范检查（npm run lint）
+        run: npm run lint
+
+      - name: 构建并执行全部门禁（npm run build）
+        run: npm run build
