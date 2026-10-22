@@ -90,6 +90,7 @@ import { useModelStore } from '@/stores/modelStore';
 // 状态管理
 const store = useSceneEditorStore();
 const router = useRouter();
+const modelStore = useModelStore();
 
 // 从父组件注入的方法（修改后）
 const addCube = inject('addCube') ?? (() => false);
@@ -99,7 +100,7 @@ const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
 
 // 状态
 const statusMessage = ref('');
-const importModelInProgress = ref(false);
+const importingModel = ref(false);
 
 // 计算属性
 const isSceneInitialized = computed(() => getIsSceneInitialized());
@@ -116,8 +117,11 @@ const showTempMessage = (message, duration = 2000) => {
 
 // 播放/暂停模拟
 const handlePlayPause = () => {
+  // 切换**前**先记住当前状态：isPlaying 在切换调用里就同步翻转了，
+  // 之后再读读到的是切换后的状态，提示语会与实际动作正好相反。
+  const wasPlaying = isPlaying.value;
   store.togglePlayStateWithTransition();
-  showTempMessage(isPlaying.value ? '开始物理模拟' : '暂停物理模拟');
+  showTempMessage(wasPlaying ? '已暂停物理模拟' : '已开始物理模拟');
 };
 
 // 重置模拟
@@ -150,12 +154,8 @@ const handleAddSphere = () => {
 const handleImportModel = async () => {
   if (!isSceneInitialized.value) return;
 
-  // 记录当前路由作为返回地址
-  const returnUrl = router.currentRoute.value.fullPath;
-  importModelInProgress.value = true;
-
   // 跳转到模型库页面
-  await router.push(`/model-library?returnUrl=${encodeURIComponent(returnUrl)}`);
+  await router.push(`/model-library?returnUrl=${encodeURIComponent(router.currentRoute.value.fullPath)}`);
 };
 
 // 删除选中对象
@@ -212,37 +212,42 @@ const handleExportScene = () => {
   }
 };
 
-// 监听路由变化，处理从模型库返回的情况
+// 导入「模型库交接过来的模型」
+//
+// 模型库把选中的模型写进 modelStore.selectedModelId，再跳回场景编辑器；
+// 场景就绪后在这里完成导入。
+//
+// 导入必须走 useSceneEditor 的 importModel：它会连同 Rapier 刚体与包围盒碰撞体
+// 一起建好。直接往 store 里塞对象只会得到一个不会下落、不会碰撞的空壳。
+//
+// 监听的是「选中的模型」而不是路由：场景编辑器可能是在模型库之后才挂载的，
+// 那时路由早已切换完，路由监听器永远不会触发。
 watch(
-  () => router.currentRoute.value,
-  (route) => {
-    if (importModelInProgress.value && route.name !== 'model-library') {
-      importModelInProgress.value = false;
+  () => [isSceneInitialized.value, modelStore.selectedModelId],
+  async ([ready, modelId]) => {
+    if (!ready || !modelId || importingModel.value) return;
 
-      // 检查是否有选中的模型需要导入
-      const modelStore = useModelStore();
-      if (modelStore.selectedModelId) {
-        const modelId = modelStore.selectedModelId;
-        const modelInfo = modelStore.getModelById(modelId);
-
-        if (modelInfo) {
-          // 导入选中的模型
-          importModel(modelId)
-            .then(success => {
-              if (success) {
-                showTempMessage(`模型 "${modelInfo.name}" 导入成功`);
-              } else {
-                showTempMessage(`模型 "${modelInfo.name}" 导入失败`, 3000);
-              }
-            })
-            .finally(() => {
-              // 清除选中状态
-              modelStore.selectedModelId = null;
-            });
-        }
-      }
+    const modelInfo = modelStore.getModelById(modelId);
+    if (!modelInfo) {
+      modelStore.selectedModelId = null;
+      showTempMessage('选中的模型已不存在', 3000);
+      return;
     }
-  }
+
+    importingModel.value = true;
+    try {
+      const success = await importModel(modelId);
+      showTempMessage(
+        success ? `模型 "${modelInfo.name}" 导入成功` : `模型 "${modelInfo.name}" 导入失败`,
+        success ? 2000 : 3000,
+      );
+    } finally {
+      // 清除选中状态，避免同一个模型被重复导入
+      modelStore.selectedModelId = null;
+      importingModel.value = false;
+    }
+  },
+  { immediate: true },
 );
 </script>
 

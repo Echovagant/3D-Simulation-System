@@ -93,10 +93,16 @@ vi.mock('./loadRapier', () => {
     }
 
     step() {}
+
+    /** Rapier 的 World 住在 WASM 堆上，销毁时必须显式释放 */
+    free() {}
   }
 
   class EventQueue {
     constructor(_autoDrain: boolean) {}
+
+    /** Rapier 的 EventQueue 住在 WASM 堆上，销毁时必须显式释放 */
+    free() {}
   }
 
   class RigidBodyDesc {

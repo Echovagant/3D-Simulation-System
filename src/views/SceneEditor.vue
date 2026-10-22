@@ -12,7 +12,7 @@
       <button @click="retryInit" class="retry-btn">重试</button>
     </div>
 
-    <Toolbar class="editor-toolbar" @import-model="handleImportModel" />
+    <Toolbar class="editor-toolbar" />
     <div class="editor-main-content">
       <!-- ThreeScene组件在整个生命周期都需要存在，负责初始化和管理场景 -->
       <ThreeScene
@@ -23,13 +23,14 @@
       />
 
       <!-- Viewport组件也在整个生命周期存在，负责渲染场景 -->
-      <div class="viewport-wrapper" ref="containerRef">
+      <div class="viewport-wrapper">
         <Viewport
           :scene="sceneStore.getScene()"
           :camera="sceneStore.getCamera()"
           :renderer="sceneStore.getRenderer()"
           :update-physics="sceneMethods.updatePhysics"
           @viewport-click="handleViewportClick"
+          @update-camera="handleUpdateCamera"
         />
       </div>
       <PropertyPanel class="property-panel" />
@@ -38,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, provide } from 'vue'
+import { ref, onMounted, onUnmounted, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import ThreeScene from '@/components/three/core/ThreeScene.vue'
@@ -46,19 +47,15 @@ import Toolbar from '@/components/three/panels/Toolbar.vue'
 import PropertyPanel from '@/components/three/panels/PropertyPanel.vue'
 import Viewport from '@/components/three/panels/Viewport.vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
-import { useSceneEditor } from '@/composables/useSceneEditor'
 import { useModelStore } from '@/stores/modelStore'
 
 // 组件引用与状态
 const threeScene = ref<InstanceType<typeof ThreeScene> | null>(null)
-const containerRef = ref<HTMLDivElement | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref('')
-const importModelInProgress = ref(false)
 
 // 状态管理
 const sceneStore = useSceneEditorStore()
-const sceneEditor = useSceneEditor(containerRef)
 const modelStore = useModelStore()
 const router = useRouter()
 
@@ -106,22 +103,8 @@ const handleSceneInitSuccess = () => {
   isLoading.value = false
   errorMessage.value = ''
 
-  // 直接在编辑器中创建立方体进行测试
-  setTimeout(() => {
-    if (sceneMethods.value.addCube()) {
-      if (import.meta.env.DEV) {
-      }
-    } else {
-      if (import.meta.env.DEV) {
-      }
-    }
-  }, 1000)
-
   // 启用物理模拟
   sceneStore.togglePlayState()
-
-  if (import.meta.env.DEV) {
-  }
 }
 
 // 重试初始化
@@ -171,53 +154,17 @@ const handleViewportClick = (object: THREE.Object3D | null) => {
   }
 }
 
-// 导入模型（与模型库交互）
-const handleImportModel = async () => {
-  if (!sceneMethods.value.getIsSceneInitialized()) {
-    alert('场景尚未初始化完成，请稍后再试')
-    return
-  }
+// 视口把真实的宽高比交回来
+//
+// 相机的比例必须跟着视口走：初始化时用的是 800×600 的兜底比例（4:3），
+// 不接这个事件的话画面会一直横向拉宽。
+const handleUpdateCamera = (data: { type: 'perspective' | 'orthographic'; aspect?: number }) => {
+  const camera = sceneStore.getCamera()
+  if (!camera || data.type !== 'perspective' || !data.aspect) return
 
-  // 跳转到模型库，并传递返回URL
-  const returnUrl = router.currentRoute.value.fullPath
-  importModelInProgress.value = true
-
-  try {
-    await router.push(`/model-library?returnUrl=${encodeURIComponent(returnUrl)}`)
-
-    // 监听modelStore的selectedModelId变化
-    const unwatch = watch(
-      () => modelStore.selectedModelId,
-      async (modelId) => {
-        if (modelId && sceneMethods.value.getIsSceneInitialized()) {
-          // 调用场景方法导入模型
-          const success = await sceneMethods.value.importModel(modelId)
-
-          if (success) {
-          } else {
-          }
-
-          // 清除选中状态
-          modelStore.selectedModelId = null
-          unwatch()
-          importModelInProgress.value = false
-        }
-      },
-    )
-
-    // 监听路由变化，如果用户取消选择返回，也需要清理状态
-    const routeUnwatch = watch(
-      () => router.currentRoute.value.path,
-      (path) => {
-        if (path !== '/model-library' && importModelInProgress.value) {
-          importModelInProgress.value = false
-          unwatch()
-          routeUnwatch()
-        }
-      },
-    )
-  } catch (error) {
-    importModelInProgress.value = false
+  if (camera instanceof THREE.PerspectiveCamera) {
+    camera.aspect = data.aspect
+    camera.updateProjectionMatrix()
   }
 }
 
@@ -225,15 +172,17 @@ const handleImportModel = async () => {
 onMounted(() => {
   const sceneId = router.currentRoute.value.query.sceneId
   if (sceneId && typeof sceneId === 'string') {
-    sceneStore.loadScene(sceneId).catch((err: unknown) => {})
+    sceneStore.loadScene(sceneId).catch((err: unknown) => {
+      // 加载失败不打断页面，但现场必须留下来
+      console.warn('[SceneEditor] 加载场景失败', err)
+    })
   }
 })
 
 // 当组件卸载时清理状态
 onUnmounted(() => {
-  if (importModelInProgress.value) {
-    modelStore.selectedModelId = null
-  }
+  // 未被消费的「待导入模型」不能留到下次进入编辑器时被意外导入
+  modelStore.selectedModelId = null
 })
 </script>
 

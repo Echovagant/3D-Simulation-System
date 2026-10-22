@@ -125,6 +125,26 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
    */
   const initialTransforms = new Map<string, InitialTransform>()
 
+  /**
+   * 显式改写「重置模拟」的复位基线。
+   *
+   * 只有「从存档恢复」的两条路径可以调用它：基本体是通过工厂在**随机出生点**建出来的，
+   * 基线必须改写成存档里的位置，否则「重置模拟」会把物体送回随机出生点。
+   *
+   * ⚠️ 日常的 `updateObject` 路径**不能**调用它：属性面板改位置表示
+   * 「用户最后设定的位置」，那不是初始位置，不该污染复位基线。
+   */
+  const setInitialTransform = (uuid: string, transform: Partial<InitialTransform>) => {
+    const current = initialTransforms.get(uuid)
+    if (!current) return
+
+    initialTransforms.set(uuid, {
+      position: { ...(transform.position ?? current.position) },
+      rotation: { ...(transform.rotation ?? current.rotation) },
+      scale: { ...(transform.scale ?? current.scale) },
+    })
+  }
+
   // 计算属性
   const selectedObject = computed(() => {
     return objects.value.find((item) => item.uuid === selectedObjectUuid.value) || null
@@ -207,6 +227,10 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   // 开始物理模拟 - 改进错误处理和状态管理
+  //
+  // ⚠️ `renderState.isRendering` 在这里表示「store 的记账循环是否在跑」。
+  // 它**不是**渲染器的开关：视口的渲染循环由 Viewport 组件自己管
+  // （挂载时启动、卸载时停止），「暂停模拟」不该停掉它——否则画面会冻住。
   const startSimulation = () => {
     try {
       // 「是否已经在跑」只看 animationId：
@@ -226,6 +250,9 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   // 停止物理模拟 - 改进错误处理和状态管理
+  //
+  // 这里停的是**物理与记账**，不是渲染：渲染循环归 Viewport 组件所有，
+  // 「暂停模拟」之后画面必须还能刷新、能转视角。
   const stopSimulation = () => {
     try {
       isLoopActive = false
@@ -298,6 +325,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       // 短暂延迟确保状态切换完成
       await new Promise((resolve) => setTimeout(resolve, 100))
     } catch (error) {
+      // 状态切换失败不中断流程，但现场必须留下来：否则界面上只会看到「没反应」
+      console.warn('[sceneEditorStore] 播放状态切换失败', error)
     } finally {
       simulationState.isTransitioning = false
     }
@@ -318,7 +347,10 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       scene.value = markRaw(newScene)
       camera.value = markRaw(newCamera)
       renderer.value = markRaw(newRenderer)
-    } catch (error) {}
+    } catch (error) {
+      // 初始化失败不能把异常抛给界面（界面会显示成白屏），但必须留下现场
+      console.warn('[sceneEditorStore] 场景核心对象初始化失败', error)
+    }
   }
 
   // 新增：场景保存与加载
@@ -530,6 +562,13 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
           scale: objData.scale,
           visible: objData.visible !== false,
         })
+        // 工厂是在随机出生点建体的：复位基线必须改写成存档里的位置，
+        // 否则「重置模拟」会把物体送回随机出生点。
+        setInitialTransform(restored.uuid, {
+          position: objData.position,
+          rotation: objData.rotation,
+          scale: objData.scale,
+        })
         return true
       }
     }
@@ -583,6 +622,13 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       rotation: objData.rotation,
       scale: objData.scale,
       visible: objData.visible !== false,
+    })
+    // 复位基线就是存档里的位置：模型没有「随机出生点」这一步，
+    // 但基线必须显式对齐，否则以后改动建体流程时基线会悄悄跑偏。
+    setInitialTransform(objData.uuid, {
+      position: objData.position,
+      rotation: objData.rotation,
+      scale: objData.scale,
     })
     return true
   }
@@ -869,6 +915,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     getRenderer,
     initializeScene,
     addObject,
+    setInitialTransform,
     setSelectedObject,
     removeObject,
     removeSelectedObject,

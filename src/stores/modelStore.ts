@@ -67,6 +67,15 @@ const parseModelFile = async (file: File, format: string): Promise<THREE.Object3
   }
 }
 
+/**
+ * 上传模型的 id 序号。
+ *
+ * 放在模块作用域：id 必须**全局唯一**且**单调递增**——
+ * 同一毫秒内连续上传两个模型时，单纯用 `Date.now()` 会得到两个完全相同的 id，
+ * 模型列表的 key 就会重复、选中项会指向错误的那一条。
+ */
+let uploadedModelSeq = 0
+
 export const useModelStore = defineStore('model', () => {
   // 模型列表（复制一份，避免与模块级清单共享同一个数组）
   const models = ref<Model[]>([...createModelLibrary()])
@@ -126,7 +135,7 @@ export const useModelStore = defineStore('model', () => {
     // 这是在「没有后端」的前提下唯一能让模型真正被加载的办法，
     // 代价是它不持久——界面必须如实标注这一点。
     const objectUrl = URL.createObjectURL(params.file)
-    const id = `model-${Date.now()}`
+    const id = `model-${Date.now()}-${uploadedModelSeq++}`
 
     const newModel: Model = {
       id,
@@ -166,7 +175,14 @@ export const useModelStore = defineStore('model', () => {
     models.value = models.value.filter((model) => model.id !== id)
   }
 
-  // 将模型添加到场景
+  /**
+   * 把模型添加到场景（**不建刚体**）。
+   *
+   * ⚠️ 这里只往 store 里塞一个 mesh：没有 Rapier 刚体，也没有碰撞体，
+   * 模型既不会下落也不会与地面碰撞。
+   * 场景编辑器里的导入走 `useSceneEditor` 的 `importModel`——它会建刚体与包围盒碰撞体。
+   * 保留本方法是为了「不经过编辑器、只把模型放进场景」这种用法（如单元测试）。
+   */
   const addModelToScene = async (id: string) => {
     const model = getModelById(id)
     if (!model) return

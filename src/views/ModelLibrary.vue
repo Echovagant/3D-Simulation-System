@@ -390,7 +390,10 @@ const handleUpload = async () => {
 };
 
 const handleAddToScene = (model: Model) => {
-  modelStore.addModelToScene(model.id);
+  // 把选中的模型交给场景编辑器去导入。
+  // 导入走 useSceneEditor 的 importModel：它会连同 Rapier 刚体与包围盒碰撞体一起建好；
+  // 直接往场景里塞对象只会得到一个不会下落、不会碰撞的空壳。
+  modelStore.selectedModelId = model.id;
   router.push('/scene-editor');
 };
 

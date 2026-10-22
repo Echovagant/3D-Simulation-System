@@ -65,16 +65,6 @@ const openScene = async (sceneId: string) => {
       return
     }
 
-    // 场景编辑器初始化完成后约 1 秒会补两个演示立方体。
-    // 如果它们刚好落在「加载场景」之后，场景里就会凭空多出两个物体。
-    // 这里盯一小会儿：数量比存档多就再加载一次（loadScene 会把多出来的清掉）。
-    const expected = scene?.objectCount ?? store.objects.length
-    for (let i = 0; i < 8; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      if (store.objects.length <= expected) break
-      await store.loadScene(sceneId)
-    }
-
     statusMessage.value = `已加载场景：${scene?.name ?? sceneId}`
   } catch (error) {
     statusMessage.value = '加载场景失败'

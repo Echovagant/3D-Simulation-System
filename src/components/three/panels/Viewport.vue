@@ -114,8 +114,9 @@ const initRenderer = () => {
   // 重置重试计数
   initRetryCount = 0
 
-  // 设置渲染器尺寸
-  props.renderer.setSize(containerWidth, containerHeight)
+  // 设置渲染器尺寸与相机比例
+  // handleResize 会一并发出 update-camera：相机的宽高比必须跟着真实视口走
+  handleResize()
 
   // 如果canvas不在容器中，则添加
   if (!container.contains(props.renderer.domElement)) {
@@ -244,6 +245,9 @@ const handleResize = () => {
   if (!containerRef.value || !props.renderer || !props.camera) return
 
   const { clientWidth, clientHeight } = containerRef.value
+  // 尺寸为 0 时算出来的比例是 NaN，会让整个投影矩阵失效
+  if (clientWidth <= 0 || clientHeight <= 0) return
+
   props.renderer.setSize(clientWidth, clientHeight)
 
   // 发送事件让父组件更新相机，而不是直接修改props
@@ -326,27 +330,29 @@ watch(
         containerRef.value.appendChild(renderer.domElement)
       }
 
-      // 重新初始化渲染器尺寸
+      // 重新初始化渲染器尺寸与相机比例
+      // 相机可能比视口晚到（物理引擎是异步加载的）：
+      // 这一步必须把比例重新发出去，否则画面会一直停在初始的 4:3。
       const container = containerRef.value
       if (container) {
-        if (renderer instanceof THREE.WebGLRenderer) {
-          renderer.setSize(container.clientWidth, container.clientHeight)
-        }
+        handleResize()
       }
     }
   },
 )
 
 // 监听store中的渲染状态变化
+//
+// ⚠️ 这里**只能**启动渲染，不能因为标志变 false 就停：
+// `renderState.isRendering` 是「仿真/记账循环是否在跑」的标志，
+// 「暂停模拟」会把它置为 false。若把它当成渲染开关，暂停就会把整个画布冻住
+// （画面不再刷新、连相机都转不动）。
+// 渲染循环的生命周期归组件所有：挂载时启动，卸载时停止。
 watch(
   () => sceneEditorStore.renderState.isRendering,
   (newState) => {
-    if (newState !== isRendering.value) {
-      if (newState) {
-        startRendering()
-      } else {
-        stopRendering()
-      }
+    if (newState && !isRendering.value) {
+      startRendering()
     }
   },
   { immediate: true },

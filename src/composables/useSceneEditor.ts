@@ -3,7 +3,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { ref, watch, type Ref, onUnmounted } from 'vue'
 import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
-import { loadModel } from '../utils/modelLoader'
 import { loadRapier } from './loadRapier'
 import { simulationConfig } from '../config/simulation'
 import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
@@ -697,7 +696,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       }
 
       // 加载模型
-      model = await loadModel(modelInfo.modelUrl)
+      // 走 modelStore 的统一入口：本次会话上传的模型用的是 blob: 对象 URL，
+      // 按 URL 后缀判断格式的 loadModel 认不出它，只有 loadModelById 知道怎么解析它。
+      model = await modelStore.loadModelById(modelId)
       if (!model) {
         alert(`模型加载失败: ${modelInfo.name}`)
         return false
@@ -776,17 +777,18 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   }
 
   // 窗口大小调整
+  //
+  // 视口的尺寸与相机比例由 Viewport 负责（它有真实的容器尺寸，
+  // 并通过 update-camera 事件把比例交回来）。拿不到真实容器时**不要**动相机：
+  // 800×600 的兜底比例会把画面重新拉成 4:3。
   const handleResize = (): void => {
     if (!camera || !renderer) return
 
-    // 如果有容器引用，使用容器尺寸；否则使用默认尺寸
-    let width: number = 800
-    let height: number = 600
+    if (!containerRef || !containerRef.value) return
 
-    if (containerRef && containerRef.value) {
-      width = containerRef.value.clientWidth
-      height = containerRef.value.clientHeight
-    }
+    const width = containerRef.value.clientWidth
+    const height = containerRef.value.clientHeight
+    if (width <= 0 || height <= 0) return
 
     camera.aspect = width / height
     camera.updateProjectionMatrix()
@@ -800,7 +802,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     unbindEvents()
 
     // 优化物理世界清理逻辑
-    if (physicsWorld && rapier) {
+    if (physicsWorld) {
       // 首先清除地面刚体（如果存在）
       if (groundRigidBody) {
         physicsWorld.removeRigidBody(groundRigidBody)
@@ -821,7 +823,16 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       colliderShapes.clear()
 
       // 销毁物理世界
+      //
+      // Rapier 的 World / EventQueue 住在 WASM 堆上：把 JS 引用置空**不会**归还内存，
+      // 每进出一次场景编辑器就泄漏一整份物理世界。必须显式 free()，
+      // 而且要在置空引用**之前**调用——置空之后就再也拿不到它们了。
+      physicsWorld.free()
       physicsWorld = null
+    }
+
+    if (eventQueue) {
+      eventQueue.free()
       eventQueue = null
     }
 

@@ -49,11 +49,6 @@ const exposeReinit = () => reinit()
 // 监听初始化结果
 onInitSuccess.value = () => {
   isInitializing.value = false
-
-  // 现有逻辑：添加示例立方体
-  setTimeout(() => {
-    addCube()
-  }, 1000)
   emits('init-success')
 }
 
