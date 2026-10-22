@@ -58,7 +58,7 @@ def update_scene(
     # 不一致时若照单全收，场景主键和文档自带的 id 就会各说各话，之后再也找不回来。
     if payload.scene_id != scene_id:
         raise ApiError(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             code="scene_id_mismatch",
             message=f"document.id 与路径不一致：{payload.scene_id} != {scene_id}",
         )

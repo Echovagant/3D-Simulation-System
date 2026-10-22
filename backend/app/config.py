@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # 是否允许无鉴权写入（开发默认开，生产必须关）。
     allow_anonymous_writes: bool = True
 
+    # 启动时把数据库升到最新迁移。开发期省一条命令；
+    # 生产应该设成 false，把迁移当成独立的部署步骤。
+    auto_migrate: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -44,3 +44,23 @@ def test_engine_knows_its_tables():
 
     assert "scenes" in Base.metadata.tables
     assert "telemetry_events" in Base.metadata.tables
+
+
+def test_upgrade_database_builds_a_fresh_database(tmp_path, monkeypatch):
+    """一个空库跑完迁移就该有全部表——新环境起服务不能撞 500。"""
+    from sqlalchemy import create_engine, inspect
+
+    from app import migrate
+
+    db_file = tmp_path / "fresh.db"
+    monkeypatch.setattr(migrate.settings, "database_url", f"sqlite:///{db_file.as_posix()}")
+
+    migrate.upgrade_database()
+
+    engine = create_engine(f"sqlite:///{db_file.as_posix()}")
+    try:
+        tables = set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()
+
+    assert {"scenes", "telemetry_events"} <= tables
