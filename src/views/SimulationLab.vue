@@ -169,6 +169,9 @@
           </div>
         </div>
 
+        <!-- 批量仿真面板：后端缺席时安静降级，不影响本页的实时仿真 -->
+        <SimulationBatchPanel />
+
         <!-- 选中物体信息 -->
         <div class="selected-object-info" v-if="selectedObject">
           <h4>选中物体信息</h4>
@@ -204,6 +207,7 @@ import * as THREE from 'three'
 import { Vector3, Object3D, Scene } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import Header from '@/components/layout/Header.vue'
+import SimulationBatchPanel from '@/components/simulations/SimulationBatchPanel.vue'
 import { usePhysics } from '@/composables/usePhysics'
 import { simulationConfig } from '@/config/simulation'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
