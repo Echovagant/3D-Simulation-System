@@ -147,12 +147,31 @@ if (!chromePath) {
   )
 }
 
+/**
+ * CI 里要关掉沙箱。
+ *
+ * 容器里 Chrome 的 setuid 沙箱经常起不来（"No usable sandbox!"），
+ * 浏览器根本不会启动，调试端口也就永远连不上。
+ * 只在 CI 环境加——本地跑保留沙箱。
+ */
+const CHROME_CI_ARGS = process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : []
+
+/**
+ * `--enable-unsafe-swiftshader`：**软件 WebGL 兜底**。
+ *
+ * 三个 3D 页面要真的渲染出画面，需要 WebGL 上下文。
+ * 没有 GPU 的机器（CI 容器、无显卡的虚拟机）上，Chrome 只能靠 SwiftShader 软件渲染，
+ * 而新版 Chrome 默认把它禁掉——不显式打开，WebGL 上下文创建会失败，
+ * 页面上就会出现 "Error creating WebGL context"。有显卡的机器上这个开关没有副作用。
+ */
+const CHROME_WEBGL_ARGS = ['--enable-unsafe-swiftshader']
+
 const port = Number(process.env.PORT) || (await findFreePort())
 const debugPort = await findFreePort()
 const server = await startStaticServer(port)
 
 console.log(`静态服务器：http://127.0.0.1:${port}（生产产物）`)
-console.log(`浏览器：${chromePath}`)
+console.log(`浏览器：${chromePath}${CHROME_CI_ARGS.length ? '（CI 模式：--no-sandbox）' : ''}`)
 
 const chrome = spawn(
   chromePath,
@@ -165,12 +184,18 @@ const chrome = spawn(
     '--hide-scrollbars',
     '--force-device-scale-factor=1',
     '--window-size=1280,900',
+    ...CHROME_WEBGL_ARGS,
+    ...CHROME_CI_ARGS,
     'about:blank',
   ],
   { stdio: ['ignore', 'pipe', 'pipe'] },
 )
+// Chrome 的 stderr 要收着：起不来的时候，这是唯一能看出原因的地方
+let chromeStderr = ''
+chrome.stderr?.on('data', (chunk) => {
+  chromeStderr += chunk.toString()
+})
 chrome.stdout?.resume()
-chrome.stderr?.resume()
 
 /** 等 Chrome 的调试端口起来 */
 let wsUrl = null
@@ -193,6 +218,8 @@ if (!wsUrl) {
     // 已经退出
   }
   server.close()
+  console.error('Chrome 的输出（排查用）：')
+  console.error(chromeStderr.trim() || '（没有输出）')
   fail('Chrome 没有就绪（调试端口没起来）')
 }
 
@@ -283,9 +310,9 @@ for (const route of ROUTES) {
   issues = []
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}${route.path}` }, sessionId)
 
-  // 等页面根节点出现（最多 20 秒）
+  // 等页面根节点出现（最多 30 秒——CI 机器慢，3D 页面要初始化 WASM）
   let mounted = false
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < 60; i++) {
     await sleep(500)
     const ok = await evalJs(
       cdp,
@@ -298,7 +325,7 @@ for (const route of ROUTES) {
     }
   }
   // 页面出来了还要等 3D 场景与 WASM 初始化——错误常在这之后才冒出来
-  await sleep(2500)
+  await sleep(3000)
 
   const pageIssues = issues.slice()
   report.push({ route: route.path, name: route.name, mounted, issues: pageIssues })

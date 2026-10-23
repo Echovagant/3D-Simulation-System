@@ -204,6 +204,11 @@ const main = async () => {
       '--hide-scrollbars',
       '--force-device-scale-factor=1',
       `--window-size=${request.width},${request.height}`,
+      // 软件 WebGL 兜底：没有 GPU 的机器（容器、虚拟机）上，
+      // 新版 Chrome 默认禁用 SwiftShader，不开这个 WebGL 上下文会创建失败。
+      '--enable-unsafe-swiftshader',
+      // 容器里 setuid 沙箱常常起不来；只在 CI/容器环境关掉它。
+      ...(process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : []),
       'about:blank',
     ],
     { stdio: ['ignore', 'pipe', 'pipe'] },
