@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="Vitest 40 files / 366 cases" src="https://img.shields.io/badge/test-40%20files%20%2F%20366%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="45 test files / 413 cases" src="https://img.shields.io/badge/test-45%20files%20%2F%20413%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -35,8 +35,9 @@
   <a href="#功能">功能</a> ·
   <a href="#界面">界面</a> ·
   <a href="#模型">模型</a> ·
-  <a href="#快速开始">快速开始</a> ·
   <a href="#技术栈">技术栈</a> ·
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#可选后端">可选后端</a> ·
   <a href="#架构">架构</a> ·
   <a href="#质量保障">质量保障</a> ·
   <a href="#文档">文档</a> ·
@@ -51,6 +52,13 @@
 
 7 个页面：首页 / 总览 / 场景编辑器 / 仿真实验室 / 模型资源库 / AI 演武场 / 系统文档。
 物理由 **Rapier** 承担，它是场景与智能体行为的唯一权威。
+
+两件值得先说的事：
+
+- **前后端跑的是同一套物理。** 可选后端里的批量仿真用与浏览器完全相同的引擎与参数，
+  自由落体段逐位相同，落地后的偏差在毫米级——结论可以拿去做回归基准。
+- **后端是可选的。** `npm run build` 的产物可以直接扔到任何静态托管上；
+  后端缺席时，前端功能一件不少，界面只多一句「后端不在」。
 
 ## 功能
 
@@ -72,8 +80,22 @@
 </tr>
 <tr>
 <td width="33%" valign="top" align="center">
+<b>📊 批量仿真</b><br><br>
+<sub>同一场景按参数网格批量跑，后端与浏览器用同一物理引擎，结果逐位对得上</sub>
+</td>
+<td width="33%" valign="top" align="center">
+<b>🎬 服务端渲染</b><br><br>
+<sub>提交场景，服务端逐帧推进物理产出 MP4；同一场景重跑帧数完全一致</sub>
+</td>
+<td width="33%" valign="top" align="center">
 <b>📦 模型资源库</b><br><br>
 <sub>9 个内置模型全部可加载，且全部由本仓库生成</sub>
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top" align="center">
+<b>🔐 LLM 托管</b><br><br>
+<sub>Key 交给服务端加密保管，由后端做配额、调用审计与故障转移</sub>
 </td>
 <td width="33%" valign="top" align="center">
 <b>📚 系统文档</b><br><br>
@@ -133,6 +155,22 @@
 
 </details>
 
+## 技术栈
+
+| 领域 | 选型 | 版本 |
+| --- | --- | --- |
+| 框架 | Vue | 3.5.44 |
+| 构建 / 语言 | Vite · TypeScript | 6.4.4 · 5.8.3 |
+| 渲染 | Three.js | 0.180.0 |
+| 物理 | Rapier3D（WASM） | 0.19.3 |
+| 状态 / 路由 | Pinia · Vue Router | 3.0.3 · 4.5.1 |
+| 测试 | Vitest + jsdom | 5.0.5 / 30.x |
+| 文档 / 图标 | marked · DOMPurify · Font Awesome Free | 16.3.0 / 6.7.2 |
+| 后端 | FastAPI · SQLAlchemy · Alembic · ARQ | 0.158 / 2.1 / 1.20 / 0.28 |
+
+> 样式是手写 CSS + CSS 变量，令牌层见 [`DESIGN.md`](DESIGN.md)。**本项目没有接 Tailwind**——
+> 模板里的工具类不生效，仓库有闸门盯着死类名数量不增长。
+
 ## 快速开始
 
 ```bash
@@ -162,23 +200,25 @@ npm run preview    # 预览生产产物
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
 | `npm run gen:docs` | 重新生成封面与页面截图 |
 
-## 后端（可选）
+## 可选后端
 
 本项目默认是**纯前端**应用：`npm run build` 出来的产物可以直接扔到任何静态托管上。
 
-仓库里另带一个 Python 后端（`backend/`），用来做浏览器天生做不到的事：
+仓库里另带一个 Python 后端（`backend/`），只做浏览器天生做不到的事：
 
-- **跨设备场景库**——在 A 设备保存的场景，B 设备打开就能看到；
-- **LLM 托管**——不想自己填 Key 的人，把 Key 交给服务端加密保管，
-  请求走后端，由后端做**配额、调用审计与故障转移**（一家厂商不通会自动换下一家）；
-- **批量仿真**——同一个场景按参数网格批量跑，产出可对比的结果；
-  后端用**与前端同一个物理引擎**（Rapier），结果与浏览器逐位对得上；
-- **服务端渲染**——提交一个场景，服务端直接产出 MP4：
-  无头浏览器按脚本逐帧推进物理，抓帧编码成视频，**同一个场景重跑两次的帧数完全一致**；
-- **错误上报**——前端的错误现场收进后端，不只是控制台里滚过去就没了。
+| 能力 | 说明 |
+| --- | --- |
+| 跨设备场景库 | 在 A 设备保存的场景，B 设备打开就能看到 |
+| LLM 托管 | Key 交给服务端加密保管；后端做**配额、调用审计与故障转移**（一家厂商不通会自动换下一家） |
+| 批量仿真 | 同一场景按参数网格批量跑；用**与前端同一个物理引擎**，结果与浏览器逐位对得上 |
+| 服务端渲染 | 提交场景，服务端产出 MP4；同一场景重跑两次的帧数完全一致 |
+| 错误上报 | 前端的错误现场收进后端，不只是控制台里滚过去就没了 |
 
-**后端缺席时前端功能完全不受影响**：场景仍然存在浏览器本地，
-Key 仍然只留在本页内存里，错误仍然能在控制台看到，界面不会多出任何提示以外的打扰。
+**后端缺席时前端功能完全不受影响**：场景仍然存在浏览器本地，Key 仍然只留在本页内存里，
+错误仍然能在控制台看到，界面不会多出任何提示以外的打扰。
+
+<details>
+<summary><b>起后端，以及批量仿真 / 服务端渲染的额外前提</b></summary>
 
 ```bash
 cd backend
@@ -186,7 +226,13 @@ uv sync
 uv run uvicorn app.main:app --port 8000
 ```
 
-批量仿真走 Redis 队列，要多起一个 worker 进程：
+前端要连后端时，开发服务器会把 `/api` 代理过去（用 `VITE_API_PROXY_TARGET` 指定后端地址）：
+
+```bash
+VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
+```
+
+**批量仿真**走 Redis 队列，要多起一个 worker 进程：
 
 ```bash
 cd backend
@@ -196,7 +242,7 @@ uv run arq app.workers.simulation.WorkerSettings
 Redis 连不上时 `POST /api/simulations` 直接返回 503 `simulation_queue_unavailable`——
 队列不通就说队列不通，不会假装排队成功。
 
-服务端渲染要的是**生产产物 + Chrome + ffmpeg**，缺哪个就直接回 503 并说清楚缺什么：
+**服务端渲染**要的是**生产产物 + Chrome + ffmpeg**，缺哪个就直接回 503 并说清楚缺什么：
 
 | 缺什么 | 错误码 | 怎么办 |
 | --- | --- | --- |
@@ -206,12 +252,6 @@ Redis 连不上时 `POST /api/simulations` 直接返回 503 `simulation_queue_un
 
 渲染页在**生产产物**里（`dist/render.html`），开发服务器不提供它。
 
-前端要连后端时，开发服务器会把 `/api` 代理过去（用 `VITE_API_PROXY_TARGET` 指定后端地址）：
-
-```bash
-VITE_API_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
-```
-
 后端自己的测试与质量检查：
 
 ```bash
@@ -220,23 +260,10 @@ uv run pytest        # 124 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
-后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md) 是**生成物**：
+后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（21 个端点）是**生成物**：
 它由后端代码生成，改了接口却没重新生成，CI 会直接红。
 
-## 技术栈
-
-| 领域 | 选型 | 版本 |
-| --- | --- | --- |
-| 框架 | Vue | 3.5.44 |
-| 构建 / 语言 | Vite · TypeScript | 6.4.4 · 5.8.3 |
-| 渲染 | Three.js | 0.180.0 |
-| 物理 | Rapier3D（WASM） | 0.19.3 |
-| 状态 / 路由 | Pinia · Vue Router | 3.0.3 · 4.5.1 |
-| 测试 | Vitest + jsdom | 5.0.5 / 30.x |
-| 文档 / 图标 | marked · DOMPurify · Font Awesome Free | 16.3.0 / 6.7.2 |
-
-> 样式是手写 CSS + CSS 变量，令牌层见 [`DESIGN.md`](DESIGN.md)。**本项目没有接 Tailwind**——
-> 模板里的工具类不生效，仓库有闸门盯着死类名数量不增长。
+</details>
 
 ## 架构
 
