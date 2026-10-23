@@ -49,9 +49,13 @@ if (!entryName) {
 }
 const entryKB = (await stat(join(DIST, 'assets', entryName))).size / 1024
 const deps = Object.keys(pkg.dependencies).length
-// 闸门数量：从 package.json 的 verify:* 脚本数出来，不写死。
-// 注意排除 verify:all —— 它是汇总入口，不是又一道闸门。
-const gateCount = Object.keys(pkg.scripts).filter((s) => s.startsWith('verify:') && s !== 'verify:all').length
+// 闸门数量：数**构建链里真正调用**的 verify:* 闸门。
+// ⚠️ 不能数全部 verify:* 脚本——`npm run build` 之外的（后端闸门、契约校验、
+// 离线降级）不在构建链里，数进去封面会和 README 正文的「11 道构建闸门」对不上。
+// 口径与 scripts/check-readme.mjs 保持一致。
+const gateCount = new Set(
+  [...pkg.scripts.build.matchAll(/npm run (verify:[a-z0-9-]+)/g)].map((m) => m[1]),
+).size
 
 let testCases = '?'
 {

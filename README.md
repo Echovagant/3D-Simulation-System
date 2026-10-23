@@ -23,8 +23,8 @@
 
 <table>
   <tr>
-    <td align="center"><b>254.98 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>410</b><br><sub>测试用例 · 45 个文件</sub></td>
+    <td align="center"><b>255.02 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>412</b><br><sub>测试用例 · 45 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -152,7 +152,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 11 道闸门 |
-| `npm test` | Vitest 全量用例（45 个测试文件 / 410 个用例） |
+| `npm test` | Vitest 全量用例（45 个测试文件 / 412 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
