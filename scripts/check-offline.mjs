@@ -133,12 +133,22 @@ const startStaticServer = async (port) => {
  *
  * 步骤日志要登录才看得到，但 annotation 是公开可读的——
  * 失败原因因此不会只藏在日志里。
+ *
+ * ⚠️ `::error::` 会**把步骤判成失败**（哪怕退出码是 0），
+ * 所以它只能在真的失败时用；说明性的输出必须走 `::notice::`。
  */
 const isCI = Boolean(process.env.CI)
 const annotate = (message) => {
   if (!isCI) return
   const text = String(message).replace(/\r?\n/g, '%0A').slice(0, 4000)
   console.log(`::error title=离线降级闸门::${text}`)
+}
+
+/** 说明性输出：只出现在日志与 summary 里，不影响步骤结论 */
+const notice = (message) => {
+  if (!isCI) return
+  const text = String(message).replace(/\r?\n/g, '%0A').slice(0, 4000)
+  console.log(`::notice title=离线降级闸门::${text}`)
 }
 
 const fail = (message) => {
@@ -328,6 +338,30 @@ cdp.on(
 // ---------- 逐页走一遍 ----------
 
 const report = []
+
+/**
+ * 报一下实际用的 OpenGL 渲染器。
+ *
+ * 这条信息在排查时很值钱：它能一眼看出这次跑的是**真 GPU** 还是
+ * **SwiftShader 软件渲染**——两者在别的机器上的表现并不一样。
+ */
+const glRenderer = await evalJs(
+  cdp,
+  sessionId,
+  `(() => {
+    try {
+      const c = document.createElement('canvas')
+      const gl = c.getContext('webgl2') || c.getContext('webgl')
+      if (!gl) return '没有 WebGL 上下文'
+      const ext = gl.getExtension('WEBGL_debug_renderer_info')
+      return ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER))
+    } catch (e) {
+      return '读不到：' + String(e)
+    }
+  })()`,
+).catch((e) => '读取失败：' + String(e))
+console.log(`WebGL 渲染器：${glRenderer}`)
+notice(`本次使用的 WebGL 渲染器：${glRenderer}`)
 
 for (const route of ROUTES) {
   issues = []
