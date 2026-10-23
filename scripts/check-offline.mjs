@@ -128,7 +128,21 @@ const startStaticServer = async (port) => {
   return server
 }
 
+/**
+ * 在 GitHub Actions 里把失败原因变成 **annotation**。
+ *
+ * 步骤日志要登录才看得到，但 annotation 是公开可读的——
+ * 失败原因因此不会只藏在日志里。
+ */
+const isCI = Boolean(process.env.CI)
+const annotate = (message) => {
+  if (!isCI) return
+  const text = String(message).replace(/\r?\n/g, '%0A').slice(0, 4000)
+  console.log(`::error title=离线降级闸门::${text}`)
+}
+
 const fail = (message) => {
+  annotate(`致命错误：${message}`)
   console.error(`FAIL ${message}`)
   process.exit(1)
 }
@@ -220,6 +234,7 @@ if (!wsUrl) {
   server.close()
   console.error('Chrome 的输出（排查用）：')
   console.error(chromeStderr.trim() || '（没有输出）')
+  annotate(`Chrome 起不来。stderr：${chromeStderr.trim().slice(-800) || '（没有输出）'}`)
   fail('Chrome 没有就绪（调试端口没起来）')
 }
 
@@ -272,7 +287,7 @@ const isExpectedApiFailure = (entry) => {
 
 cdp.on(
   'Runtime.consoleAPICalled',
-  (params, sid) => {
+  (params) => {
     if (params?.type !== 'error') return
     const text = (params.args ?? [])
       .map((a) => a.value ?? a.description ?? '')
@@ -283,7 +298,7 @@ cdp.on(
 )
 cdp.on(
   'Runtime.exceptionThrown',
-  (params, sid) => {
+  (params) => {
     const details = params?.exceptionDetails
     issues.push({
       kind: '未捕获异常',
@@ -294,7 +309,7 @@ cdp.on(
 )
 cdp.on(
   'Log.entryAdded',
-  (params, sid) => {
+  (params) => {
     if (params?.entry?.level !== 'error') return
     if (isExpectedApiFailure(params.entry)) return
     issues.push({ kind: '浏览器日志', text: params.entry.text ?? '' })
@@ -336,7 +351,9 @@ for (const route of ROUTES) {
   )
   for (const issue of pageIssues) {
     console.log(`      · [${issue.kind}] ${issue.text.slice(0, 300)}`)
+    annotate(`${route.name}（${route.path}）${issue.kind}：${issue.text.slice(0, 800)}`)
   }
+  if (!mounted) annotate(`${route.name}（${route.path}）页面没渲染出来`)
 }
 
 // ---------- 降级面板必须给出说明 ----------
@@ -361,7 +378,10 @@ for (const panel of BACKEND_PANELS) {
     `!!document.querySelector(${JSON.stringify(panel.selector)})`,
   ).catch(() => false)
   console.log(`  ${found ? '✓' : '✗'} ${panel.name}：${found ? '给出了说明' : '没有说明（会让人以为一切正常）'}`)
-  if (!found) panelProblems.push(panel.name)
+  if (!found) {
+    panelProblems.push(panel.name)
+    annotate(`${panel.name} 在后端缺席时没有给出降级说明（选择器 ${panel.selector} 没命中）`)
+  }
 }
 
 // ---------- 收尾 ----------
@@ -391,7 +411,10 @@ for (const name of panelProblems) problems.push(`${name} 在后端缺席时没�
 console.log('')
 if (problems.length) {
   console.error(`FAIL 离线降级有问题（${problems.length} 处）：`)
-  for (const p of problems) console.error(`  · ${p.slice(0, 400)}`)
+  for (const p of problems) {
+    console.error(`  · ${p.slice(0, 400)}`)
+    annotate(p.slice(0, 1000))
+  }
   process.exit(1)
 }
 
