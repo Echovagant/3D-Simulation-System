@@ -25,7 +25,7 @@
   <tr>
     <td align="center"><b>255.09 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>413</b><br><sub>测试用例 · 45 个文件</sub></td>
-    <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
+    <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
 </table>
@@ -180,7 +180,7 @@ cd 3D-Simulation-System
 npm install
 
 npm run dev        # 开发服务器
-npm run build      # 类型检查 + 构建 + 测试 + 11 道闸门
+npm run build      # 类型检查 + 构建 + 测试 + 12 道闸门
 npm run preview    # 预览生产产物
 ```
 
@@ -189,7 +189,7 @@ npm run preview    # 预览生产产物
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 开发服务器 |
-| `npm run build` | 类型检查 + 构建 + 测试 + 11 道闸门 |
+| `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
 | `npm test` | Vitest 全量用例（45 个测试文件 / 413 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
@@ -281,10 +281,14 @@ flowchart LR
 2. **three.js 对象不进 Vue 响应式**——`shallowRef` + `markRaw`，避免每帧遍历整棵场景图。
 3. **仿真按固定步长推进**——真实时间按 1/60 秒切成整步，步数与显示帧率无关。
 
+「一次仿真到底发生了什么」写成了一份可核对的规格：[**仿真过程规格**](docs/simulation-spec.md)——
+世界、时间、状态、一致性、意图五层，每条约束都标出它在源码里的实现位置与验证它的测试。
+文档里写下的每个数值都由 `verify:spec` 闸门自动与源码对账，改了代码没改规格，构建会直接失败。
+
 ## 质量保障
 
-`npm run build` 会依次跑完类型检查、构建、全部测试，并用 **11 道构建闸门**守住不回退：
-入口体积、README 数字与产物对账、资产来源与协议、仓库里不许有疑似密钥、零引用依赖、
+`npm run build` 会依次跑完类型检查、构建、全部测试，并用 **12 道构建闸门**守住不回退：
+入口体积、README 数字与产物对账、**仿真规格与源码逐项对账**、资产来源与协议、仓库里不许有疑似密钥、零引用依赖、
 **浅色页面的配色必须达到 WCAG AA**、**死 Tailwind 类名不得超过 239 处** 等。任何一道不过，构建就失败。
 
 | 指标 | 数值 |
@@ -317,10 +321,13 @@ Markdown 原文在 [`src/docs/`](src/docs)。
 [`api/`](docs/dev/api/)（AI 接口 / 物理引擎 / Three.js 集成）与
 [`examples/`](docs/dev/examples/)；后端接口契约见 [`docs/api-contract.md`](docs/api-contract.md)（由后端代码生成，CI 校验一致）。
 
+**仿真过程规格**见 [`docs/simulation-spec.md`](docs/simulation-spec.md)：
+规定一次仿真从场景到结果的每一步判定，并逐条标出实现位置与验证方式。
+
 ## 贡献
 
 欢迎提 Issue 与 PR。动手前先读 [`DESIGN.md`](DESIGN.md)，
-**改完必须跑 `npm run build`**，11 道闸门全绿才算完成。
+**改完必须跑 `npm run build`**，12 道闸门全绿才算完成。
 
 ## 许可证
 
