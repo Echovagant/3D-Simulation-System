@@ -4,7 +4,7 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：17
+后端版本：0.1.0　端点总数：21
 
 ## 端点
 
@@ -17,6 +17,10 @@
 | `POST` | `/api/llm/keys` | `upsert_key_api_llm_keys_post` | 托管一把厂商密钥 |
 | `DELETE` | `/api/llm/keys/{providerId}` | `delete_key_api_llm_keys__providerId__delete` | 删掉一把托管密钥 |
 | `GET` | `/api/llm/quota` | `quota_api_llm_quota_get` | 查今天的托管额度 |
+| `GET` | `/api/render` | `list_renders_api_render_get` | 列出最近的服务端渲染 |
+| `POST` | `/api/render` | `create_render_api_render_post` | 提交一次服务端渲染 |
+| `GET` | `/api/render/{jobId}` | `get_render_api_render__jobId__get` | 读取一个渲染任务的状态 |
+| `GET` | `/api/render/{jobId}/video.mp4` | `get_render_video_api_render__jobId__video_mp4_get` | 下载渲染产物 |
 | `GET` | `/api/scenes` | `list_scenes_api_scenes_get` | 列出场景摘要 |
 | `POST` | `/api/scenes` | `create_scene_api_scenes_post` | 新建场景 |
 | `DELETE` | `/api/scenes/{scene_id}` | `delete_scene_api_scenes__scene_id__delete` | 删除场景 |
