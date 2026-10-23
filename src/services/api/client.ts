@@ -68,12 +68,19 @@ const UPSTREAM_DOWN_STATUSES = new Set([502, 503, 504])
 /**
  * 判断这次失败是不是「后端不在」。
  *
- * 只有网络层失败（TypeError）、超时（AbortError）与代理层的上游错误算后端缺席；
+ * 只有网络层失败（TypeError）、超时（AbortError）、代理层的上游错误，
+ * 以及「应答的根本不是我们的后端」算后端缺席；
  * 后端回了 404 / 409 / 500 说明它好好地应答了，是这次请求本身的问题，不该降级。
  */
 export const isApiUnavailable = (error: unknown): boolean => {
   if (error instanceof ApiError) {
-    return UPSTREAM_DOWN_STATUSES.has(error.status)
+    if (UPSTREAM_DOWN_STATUSES.has(error.status)) return true
+    // 2xx 但响应体不是 JSON：**应答的不是我们的后端**。
+    // 典型场景是纯静态部署——/api/* 落到 SPA 回退，返回了 index.html。
+    // 这时候必须按「后端不在」降级，否则界面会谎称「后端在线」，
+    // 同时甩一句「后端返回的不是合法 JSON」给用户。
+    if (error.code === 'invalid_response') return true
+    return false
   }
   if (error instanceof TypeError) return true
   const name = errorName(error)

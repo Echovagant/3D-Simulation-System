@@ -121,7 +121,10 @@ describe('API 客户端', () => {
     expect(isApiUnavailable(error)).toBe(false)
   })
 
-  it('状态码成功但响应体不是 JSON：单独一个错误码，不算「后端不在」', async () => {
+  it('状态码成功但响应体不是 JSON：算「后端不在」', async () => {
+    // 纯静态部署时 /api/* 落到 SPA 回退，返回 index.html（200 + HTML）——
+    // 应答的根本不是我们的后端。这种情况必须按「后端不在」降级，
+    // 否则界面会一边显示「后端在线」一边甩一句「不是合法 JSON」。
     vi.stubGlobal('fetch', async () => brokenJsonResponse(200))
 
     const error = await catchError(apiRequest('/api/scenes'))
@@ -129,7 +132,7 @@ describe('API 客户端', () => {
     const apiError = error as ApiError
     expect(apiError.status).toBe(200)
     expect(apiError.code).toBe('invalid_response')
-    expect(isApiUnavailable(error)).toBe(false)
+    expect(isApiUnavailable(error)).toBe(true)
   })
 
   it('错误信封缺字段时退回通用错误码与文案', async () => {

@@ -350,7 +350,12 @@ const describeFailure = (error: unknown): { unavailable: boolean; message: strin
     if (error.code === 'simulation_queue_unavailable') {
       return { unavailable: false, message: '仿真队列不可用（Redis 没连上），任务没能入队。' }
     }
-    return { unavailable: isApiUnavailable(error), message: error.message }
+    // 「后端不在」时给一句人话，别把原始报错甩给用户
+    const unavailable = isApiUnavailable(error)
+    return {
+      unavailable,
+      message: unavailable ? '后端不在，批量仿真暂不可用。' : error.message,
+    }
   }
   if (isApiUnavailable(error)) {
     return { unavailable: true, message: '后端不在，批量仿真暂不可用。' }

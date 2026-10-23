@@ -26,6 +26,24 @@ const jsonResponse = (body: unknown, status = 200): Response =>
     text: async () => JSON.stringify(body),
   }) as unknown as Response
 
+/**
+ * 造一个「回的不是 JSON」的 Response 替身。
+ *
+ * 纯静态部署时 /api/* 会落到 SPA 回退，返回 index.html（200 + HTML）。
+ * 这种情况必须按「后端不在」降级，不能让界面谎称后端在线。
+ */
+const htmlResponse = (): Response =>
+  ({
+    ok: true,
+    status: 200,
+    statusText: 'OK',
+    headers: new Headers({ 'Content-Type': 'text/html' }),
+    json: async () => {
+      throw new SyntaxError('Unexpected token < in JSON')
+    },
+    text: async () => '<!doctype html><html><body>index.html</body></html>',
+  }) as unknown as Response
+
 /** 一份最小可用的场景文档 */
 const buildDocument = (id: string): SceneDocument => ({
   id,
@@ -109,6 +127,21 @@ describe('渲染面板 —— 后端缺席时的降级', () => {
     expect(errorSpy).not.toHaveBeenCalled()
     expect(warnSpy).not.toHaveBeenCalled()
     expect(rejections).toEqual([])
+  })
+
+  it('静态部署（/api 回的是 HTML）也算后端不在，不谎称在线', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => htmlResponse()),
+    )
+
+    const wrapper = mountPanel()
+    await settle()
+
+    // 关键：面板要显示「后端不在」，而不是「后端在线」+ 一句看不懂的 JSON 报错
+    expect(wrapper.find('.sim-backend-missing').exists()).toBe(true)
+    expect(wrapper.find('.sim-backend-online').exists()).toBe(false)
+    expect(wrapper.find('.sim-render-notice').exists()).toBe(false)
   })
 
   it('后端不在时提交任务只给提示，不抛异常', async () => {

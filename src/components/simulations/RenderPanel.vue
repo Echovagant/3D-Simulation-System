@@ -281,7 +281,12 @@ const describeFailure = (error: unknown): { unavailable: boolean; message: strin
     if (error.status === 404) {
       return { unavailable: false, message: '后端还没有渲染接口（404）——后端版本太旧。' }
     }
-    return { unavailable: isApiUnavailable(error), message: error.message }
+    // 「后端不在」时给一句人话，别把原始报错甩给用户
+    const unavailable = isApiUnavailable(error)
+    return {
+      unavailable,
+      message: unavailable ? '后端不在，服务端渲染暂不可用。' : error.message,
+    }
   }
   if (isApiUnavailable(error)) {
     return { unavailable: true, message: '后端不在，服务端渲染暂不可用。' }
