@@ -369,28 +369,24 @@ cdp.on(
 const report = []
 
 /**
- * 报一下实际用的 OpenGL 渲染器。
+ * 带超时的 evalJs。
  *
- * 这条信息在排查时很值钱：它能一眼看出这次跑的是**真 GPU** 还是
- * **SwiftShader 软件渲染**——两者在别的机器上的表现并不一样。
+ * 页面里如果有个操作卡住（无 GPU 的容器里创建 WebGL 上下文就可能卡），
+ * `Runtime.evaluate` 会一直不回来——CDP 客户端虽有 60 秒兜底，
+ * 但那 60 秒乘以页面数量就足够把闸门拖死。
+ * 这里给每次求值都加一道短超时：读不到就当读不到，不能拖住整体。
  */
-const glRenderer = await evalJs(
-  cdp,
-  sessionId,
-  `(() => {
-    try {
-      const c = document.createElement('canvas')
-      const gl = c.getContext('webgl2') || c.getContext('webgl')
-      if (!gl) return '没有 WebGL 上下文'
-      const ext = gl.getExtension('WEBGL_debug_renderer_info')
-      return ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER))
-    } catch (e) {
-      return '读不到：' + String(e)
-    }
-  })()`,
-).catch((e) => '读取失败：' + String(e))
-console.log(`WebGL 渲染器：${glRenderer}`)
-notice(`本次使用的 WebGL 渲染器：${glRenderer}`)
+const evalJsWithTimeout = async (sessionId, expression, ms = 15000) => {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`超过 ${ms}ms 没有返回`)), ms)
+  })
+  try {
+    return await Promise.race([evalJs(cdp, sessionId, expression), timeout])
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
 for (const route of ROUTES) {
   issues = []
@@ -405,8 +401,7 @@ for (const route of ROUTES) {
   let mounted = false
   for (let i = 0; i < 60; i++) {
     await sleep(500)
-    const ok = await evalJs(
-      cdp,
+    const ok = await evalJsWithTimeout(
       sessionId,
       `!!document.querySelector(${JSON.stringify(route.selector)})`,
     ).catch(() => false)
@@ -433,6 +428,33 @@ for (const route of ROUTES) {
 }
 
 // ---------- 降级面板必须给出说明 ----------
+
+/**
+ * 报一下实际用的 OpenGL 渲染器。
+ *
+ * 这条信息在排查时很值钱：它能一眼看出这次跑的是**真 GPU** 还是
+ * **SwiftShader 软件渲染**——两者在别的机器上的表现并不一样。
+ *
+ * 放在页面检查**之后**：创建 WebGL 上下文在无 GPU 的机器上可能卡住，
+ * 它是诊断信息，不该挡在真正的检查前面。读不到就记「读不到」，不影响判定。
+ */
+const glRenderer = await evalJsWithTimeout(
+  sessionId,
+  `(() => {
+    try {
+      const c = document.createElement('canvas')
+      const gl = c.getContext('webgl2') || c.getContext('webgl')
+      if (!gl) return '没有 WebGL 上下文'
+      const ext = gl.getExtension('WEBGL_debug_renderer_info')
+      return ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER))
+    } catch (e) {
+      return '读不到：' + String(e)
+    }
+  })()`,
+  8000,
+).catch((e) => '读取失败：' + String(e))
+console.log(`WebGL 渲染器：${glRenderer}`)
+notice(`本次使用的 WebGL 渲染器：${glRenderer}`)
 
 await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/simulation-lab` }, sessionId).catch(
   (error) => {
