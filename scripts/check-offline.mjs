@@ -151,6 +151,30 @@ const notice = (message) => {
   console.log(`::notice title=离线降级闸门::${text}`)
 }
 
+/**
+ * 崩溃兜底。
+ *
+ * 脚本里任何一处抛异常，Node 都会直接以退出码 1 结束——
+ * 那种失败**没有** annotation，页面上只会剩一句
+ * 「Process completed with exit code 1.」，等于什么线索都没留下。
+ * 这里把堆栈抓出来变成 annotation，失败才可诊断。
+ *
+ * 注册时机在 Chrome 起来之后：处理器要用到 chrome / server，
+ * 在它们声明之前注册会踩到暂时性死区。
+ */
+const reportCrash = (kind, error) => {
+  const detail = error instanceof Error ? error.stack || error.message : String(error)
+  console.error(detail)
+  annotate(`${kind}：${detail}`)
+  try {
+    chrome.kill()
+  } catch {
+    // 浏览器可能已经关了
+  }
+  server.close()
+  process.exit(1)
+}
+
 const fail = (message) => {
   annotate(`致命错误：${message}`)
   console.error(`FAIL ${message}`)
@@ -228,6 +252,11 @@ chrome.stderr?.on('data', (chunk) => {
   chromeStderr += chunk.toString()
 })
 chrome.stdout?.resume()
+
+// 崩溃兜底在这里注册：处理器要用到 chrome / server，
+// 在它们声明之前注册会踩到暂时性死区。
+process.on('uncaughtException', (error) => reportCrash('脚本崩溃', error))
+process.on('unhandledRejection', (reason) => reportCrash('未处理的 Promise 拒绝', reason))
 
 /** 等 Chrome 的调试端口起来 */
 let wsUrl = null
@@ -365,7 +394,12 @@ notice(`本次使用的 WebGL 渲染器：${glRenderer}`)
 
 for (const route of ROUTES) {
   issues = []
-  await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}${route.path}` }, sessionId)
+  // 导航失败不该让整个脚本崩掉——记成这一页的问题，后面的页面还要继续查
+  try {
+    await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}${route.path}` }, sessionId)
+  } catch (error) {
+    issues.push({ kind: '导航失败', text: error instanceof Error ? error.message : String(error) })
+  }
 
   // 等页面根节点出现（最多 30 秒——CI 机器慢，3D 页面要初始化 WASM）
   let mounted = false
@@ -400,7 +434,11 @@ for (const route of ROUTES) {
 
 // ---------- 降级面板必须给出说明 ----------
 
-await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/simulation-lab` }, sessionId)
+await cdp.send('Page.navigate', { url: `http://127.0.0.1:${port}/simulation-lab` }, sessionId).catch(
+  (error) => {
+    annotate(`回到仿真实验室页时导航失败：${error instanceof Error ? error.message : String(error)}`)
+  },
+)
 for (let i = 0; i < 40; i++) {
   await sleep(500)
   const ok = await evalJs(cdp, sessionId, `!!document.querySelector('.sim-batch-panel')`).catch(
