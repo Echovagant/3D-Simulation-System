@@ -103,25 +103,23 @@ export default {
 
 h1 {
   font-size: 3rem;
-  color: #fff;
+  color: #333333;
   margin-bottom: 20px;
   min-height: 4rem; /* 防止文字变化时布局跳动 */
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .subtitle {
-  color: #f0f0f0;
+  color: #666666;
   font-size: 1.1rem;
   line-height: 1.8;
   margin-bottom: 10px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .start-button {
   padding: 14px 36px;
   font-size: 1.3rem;
-  background-color: transparent;
-  color: white;
+  background-color: #4b37c9;
+  color: #ffffff;
   border: none;
   border-radius: 50px;
   cursor: pointer;
@@ -129,18 +127,18 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(75, 55, 201, 0.25);
 }
 
 .start-button:hover {
-  background-color: rgba(66, 185, 131, 0.9);
+  background-color: #3b2bab;
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 6px 16px rgba(75, 55, 201, 0.3);
 }
 
 .footer-text {
   margin-top: 60px;
-  color: rgba(255, 255, 255, 0.7);
+  color: #666666;
   font-size: 0.9rem;
 }
 
@@ -148,7 +146,7 @@ h1 {
 h1::after {
   content: "|";
   animation: blink 1s step-end infinite;
-  color: #fff;
+  color: #4b37c9;
 }
 
 @keyframes blink {

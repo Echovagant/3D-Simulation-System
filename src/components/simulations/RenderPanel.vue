@@ -1,27 +1,27 @@
 <template>
-  <div class="ai-form sim-render-panel ai-p-4 ai-bg-panel ai-r-lg ai-b ai-b-amber ai-mb-4">
-    <h3 class="ai-t-amber ai-fs-lg ai-fw-bold ai-mb-3">服务端渲染</h3>
+  <div class="sim-form sim-render-panel sim-p-4 sim-bg-panel sim-r-lg sim-b sim-b-accent sim-mb-4">
+    <h3 class="sim-t-accent sim-fs-lg sim-fw-bold sim-mb-3">服务端渲染</h3>
 
     <!-- 后端是可选增强：缺席时只说明情况，不影响本页其它功能 -->
-    <p v-if="backendMissing" class="ai-fs-xs ai-t-amber-soft ai-mb-3 sim-backend-missing">
+    <p v-if="backendMissing" class="sim-fs-xs sim-t-accent-soft sim-mb-3 sim-backend-missing">
       后端不在，服务端渲染暂不可用。浏览器里的实时仿真不受影响。
     </p>
-    <p v-else-if="backendChecked" class="ai-fs-xs ai-t-faint ai-mb-3 sim-backend-online">
+    <p v-else-if="backendChecked" class="sim-fs-xs sim-t-faint sim-mb-3 sim-backend-online">
       后端在线<template v-if="recentJobCount > 0"> · 最近 {{ recentJobCount }} 个任务</template>
     </p>
 
     <!-- 场景来源 -->
-    <div class="ai-mb-3">
-      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-scene-source">场景来源</label>
-      <select id="rnd-scene-source" v-model="sceneSource" class="ai-w-full">
+    <div class="sim-mb-3">
+      <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-scene-source">场景来源</label>
+      <select id="rnd-scene-source" v-model="sceneSource" class="sim-w-full">
         <option value="library">本地场景库</option>
         <option value="paste">粘贴场景文档</option>
       </select>
     </div>
 
-    <div v-if="sceneSource === 'library'" class="ai-mb-3">
-      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-scene-id">场景</label>
-      <select id="rnd-scene-id" v-model="selectedSceneId" class="ai-w-full">
+    <div v-if="sceneSource === 'library'" class="sim-mb-3">
+      <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-scene-id">场景</label>
+      <select id="rnd-scene-id" v-model="selectedSceneId" class="sim-w-full">
         <option value="">（未选择）</option>
         <option v-for="scene in savedScenes" :key="scene.id" :value="scene.id">
           {{ scene.name }}（{{ scene.objectCount }} 个物体）
@@ -29,67 +29,67 @@
       </select>
     </div>
 
-    <div v-else class="ai-mb-3">
-      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-scene-json">场景文档 JSON</label>
+    <div v-else class="sim-mb-3">
+      <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-scene-json">场景文档 JSON</label>
       <textarea
         id="rnd-scene-json"
         v-model="pastedScene"
-        class="ai-w-full"
+        class="sim-w-full"
         rows="4"
         spellcheck="false"
       ></textarea>
     </div>
 
     <!-- 画面参数 -->
-    <div class="ai-mb-3 ai-flex ai-gap-2">
-      <div class="ai-flex-1">
-        <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-frames">帧数</label>
-        <input id="rnd-frames" v-model="frames" type="number" class="ai-w-full" min="1" step="1" />
+    <div class="sim-mb-3 sim-flex sim-gap-2">
+      <div class="sim-flex-1">
+        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-frames">帧数</label>
+        <input id="rnd-frames" v-model="frames" type="number" class="sim-w-full" min="1" step="1" />
       </div>
-      <div class="ai-flex-1">
-        <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-fps">帧率</label>
-        <input id="rnd-fps" v-model="fps" type="number" class="ai-w-full" min="1" step="1" />
+      <div class="sim-flex-1">
+        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-fps">帧率</label>
+        <input id="rnd-fps" v-model="fps" type="number" class="sim-w-full" min="1" step="1" />
       </div>
     </div>
 
-    <div class="ai-mb-3 ai-flex ai-gap-2">
-      <div class="ai-flex-1">
-        <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-width">宽</label>
-        <input id="rnd-width" v-model="width" type="number" class="ai-w-full" min="16" step="1" />
+    <div class="sim-mb-3 sim-flex sim-gap-2">
+      <div class="sim-flex-1">
+        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-width">宽</label>
+        <input id="rnd-width" v-model="width" type="number" class="sim-w-full" min="16" step="1" />
       </div>
-      <div class="ai-flex-1">
-        <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-height">高</label>
-        <input id="rnd-height" v-model="height" type="number" class="ai-w-full" min="16" step="1" />
+      <div class="sim-flex-1">
+        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-height">高</label>
+        <input id="rnd-height" v-model="height" type="number" class="sim-w-full" min="16" step="1" />
       </div>
     </div>
 
     <!-- 动作脚本（可选） -->
-    <div class="ai-mb-3">
-      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-actions">动作脚本（可选，JSON 数组）</label>
+    <div class="sim-mb-3">
+      <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-actions">动作脚本（可选，JSON 数组）</label>
       <textarea
         id="rnd-actions"
         v-model="actionsJson"
-        class="ai-w-full"
+        class="sim-w-full"
         rows="3"
         spellcheck="false"
         placeholder='[{"atFrame":0,"type":"addCube","params":{"size":1}}]'
       ></textarea>
     </div>
 
-    <div class="ai-mb-3">
-      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="rnd-label">任务名</label>
+    <div class="sim-mb-3">
+      <label class="sim-fs-xs sim-t-muted sim-mb-1" for="rnd-label">任务名</label>
       <input
         id="rnd-label"
         v-model="label"
         type="text"
-        class="ai-w-full"
+        class="sim-w-full"
         placeholder="落球演示"
         spellcheck="false"
       />
     </div>
 
     <button
-      class="ai-py-15 ai-fs-sm ai-bg-amber ai-t-on-amber ai-r-sm ai-w-full sim-render-submit"
+      class="sim-py-15 sim-fs-sm sim-bg-accent sim-t-on-accent sim-r-sm sim-w-full sim-render-submit"
       title="提交渲染任务"
       :disabled="submitting"
       @click="submit"
@@ -98,29 +98,29 @@
     </button>
 
     <!-- 进度 -->
-    <div v-if="jobId" class="ai-mt-3 ai-mb-3 sim-render-progress">
-      <div class="ai-flex ai-justify-between ai-items-center ai-mb-1 sim-render-job-line">
-        <span class="ai-fs-xs ai-t-amber sim-render-job-id" :title="jobId">任务 {{ jobId }}</span>
-        <span class="ai-fs-xs ai-t-muted sim-render-status">{{ statusText }}</span>
+    <div v-if="jobId" class="sim-mt-3 sim-mb-3 sim-render-progress">
+      <div class="sim-flex sim-justify-between sim-items-center sim-mb-1 sim-render-job-line">
+        <span class="sim-fs-xs sim-t-accent sim-render-job-id" :title="jobId">任务 {{ jobId }}</span>
+        <span class="sim-fs-xs sim-t-muted sim-render-status">{{ statusText }}</span>
       </div>
-      <div class="ai-flex ai-justify-between ai-items-center ai-mb-1">
-        <span class="ai-fs-xs ai-t-muted">进度</span>
-        <span class="ai-fs-xs ai-t-muted sim-render-progress-text">{{ progress }}%</span>
+      <div class="sim-flex sim-justify-between sim-items-center sim-mb-1">
+        <span class="sim-fs-xs sim-t-muted">进度</span>
+        <span class="sim-fs-xs sim-t-muted sim-render-progress-text">{{ progress }}%</span>
       </div>
       <progress class="sim-render-progress-bar" :value="progress" max="100"></progress>
-      <p v-if="jobError" class="ai-fs-xs ai-t-red ai-mt-1 sim-render-error">{{ jobError }}</p>
+      <p v-if="jobError" class="sim-fs-xs sim-t-danger sim-mt-1 sim-render-error">{{ jobError }}</p>
     </div>
 
-    <p v-if="pollStopped" class="ai-fs-xs ai-t-amber-soft ai-mb-2 sim-render-poll-stopped">
+    <p v-if="pollStopped" class="sim-fs-xs sim-t-accent-soft sim-mb-2 sim-render-poll-stopped">
       轮询已达上限（{{ MAX_POLL_ATTEMPTS }} 次），已停止等待；任务可能仍在后端跑，稍后重新提交即可。
     </p>
 
-    <p v-if="notice" class="ai-fs-xs ai-t-red ai-mb-2 sim-render-notice">{{ notice }}</p>
+    <p v-if="notice" class="sim-fs-xs sim-t-danger sim-mb-2 sim-render-notice">{{ notice }}</p>
 
     <!-- 产物 -->
-    <div v-if="videoUrl" class="ai-mt-3 sim-render-result">
+    <div v-if="videoUrl" class="sim-mt-3 sim-render-result">
       <video class="sim-render-video" :src="videoUrl" controls preload="metadata"></video>
-      <a class="ai-fs-xs ai-t-amber sim-render-download" :href="videoUrl" download>下载 MP4</a>
+      <a class="sim-fs-xs sim-t-accent sim-render-download" :href="videoUrl" download>下载 MP4</a>
     </div>
   </div>
 </template>
@@ -438,11 +438,18 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-/* 进度条：沿用面板工具层的强调色，不另立一套配色 */
+/* 面板标题：这一页的 h3 沿用旧样式（深蓝字 + 蓝下划线），
+   面板按 DESIGN.md 走品牌靛紫，不跟旧样式混 */
+.sim-render-panel h3 {
+  color: #6e5af0;
+  border-bottom-color: #6e5af0;
+}
+
+/* 进度条：用品牌靛紫，与这一页的浅色面板同一套配色 */
 .sim-render-progress-bar {
   width: 100%;
   height: 6px;
-  accent-color: #ffa117;
+  accent-color: #6e5af0;
 }
 
 /* 任务 ID 是 32 位十六进制，挤在一行里会把状态文字压成竖排 */

@@ -32,11 +32,23 @@ tokens_source: src/assets/styles/app-global.css
 3. **网络即背景**：背景是浅色靛紫科技网络（Canvas 2D 绘制），透明度极低（0.035–0.55），
    只提供纵深，不与内容争夺注意力。
 
-**反面清单**（这些在浅色底上都是错色，已被 `scripts/check-overview-contrast.mjs` 列为禁用色）：
+**反面清单**（这些在浅色底上都是错色，已被 `scripts/check-light-contrast.mjs` 列为禁用色）：
 
 - `#ffd700` 金色 —— 不属于本项目色系，且浅底上几乎不可读
 - 纯白 `#fff` 作为浅底上的前景色 —— 不可见
 - 浅灰 `#f0f0f0` 作为浅底上的前景色 —— 不可见
+
+### 1.2 两套工具层，别混用
+
+仓库里有两套互不相干的面板工具层，**各有各的适用页面**：
+
+| 工具层 | 文件 | 外观 | 用在 |
+|---|---|---|---|
+| `ai-*` | `src/assets/styles/ai-panel-kit.css` | 近黑底 `rgba(10,12,18,.7)` + 琥珀 `#ffa117` | **AI 演武场**那套 HUD 界面 |
+| `sim-*` | `src/assets/styles/simulation-panel-kit.css` | 白底 `#FFFFFF` + 靛紫 `#6E5AF0` | **浅色页面**（仿真实验室右栏等） |
+
+把 `ai-*` 搬进浅色页面，整页会像装了两个 App；把 `sim-*` 搬进 AI 演武场，深色 HUD 上又会变成一片白板。
+**`scripts/check-light-contrast.mjs` 会在构建时拦住这种混用**：浅色页面里出现 `ai-bg-panel` / `ai-t-amber` 之类的类名，直接红。
 
 ## 2. Color System
 
@@ -126,7 +138,7 @@ tokens_source: src/assets/styles/app-global.css
 | `--color-target` `#96560A` | `#E4E9F5` | **4.76:1** | AA |
 | `--color-focus-ring` `#6E5AF0` | `#FFFFFF` | **4.79:1** | ≥3:1 ✅ |
 
-> 表格由 `scripts/check-overview-contrast.mjs` 在构建时校验，改色值会让构建失败。
+> 表格由 `scripts/check-light-contrast.mjs` 在构建时校验，改色值会让构建失败。
 
 ### 2.4 Forced-colors mode（Windows 高对比度）
 
@@ -334,7 +346,7 @@ bash ~/.minimax/skills/super-design/scripts/lint-design-md.sh DESIGN.md
 node ~/.minimax/skills/super-design/scripts/contrast-check.mjs DESIGN.md
 
 # 本项目自带的门禁（改完 UI 必跑）
-npm run verify:overview-contrast   # 总览页对比度
+npm run verify:light-contrast     # 浅色页面配色（总览 / 首页 / 仿真实验室面板）
 npm run build                      # 含全部闸门
 ```
 
@@ -373,7 +385,7 @@ npm run build                      # 含全部闸门
 
 | 脚本 | 守什么 |
 |---|---|
-| `scripts/check-overview-contrast.mjs` | 总览页 13 个前景的 WCAG AA + 禁用色 |
+| `scripts/check-light-contrast.mjs` | 浅色页面的 WCAG AA + 禁用色 + 浅色页面不许引用深色工具层 |
 | `scripts/check-no-babylon.mjs` | Babylon 残留（背景已换成 Canvas 2D） |
 | `scripts/check-no-emit-artifacts.mjs` | `src/` 下的编译产物污染 |
 | `scripts/check-docs.mjs` | 文档不能是 0 字节 |
