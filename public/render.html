@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>渲染页</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #222;
+        overflow: hidden;
+      }
+      #render-root {
+        position: fixed;
+        inset: 0;
+      }
+      #render-root canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="render-root"></div>
+    <!--
+      渲染页的脚本入口。
+
+      这是一个**静态外壳**：场景由录制器在打开页面前注入 `window.__RENDER_SCENE__`，
+      物理由录制器通过 `window.__RENDER__.step()` 逐帧推进，页面自己不跑动画循环。
+
+      脚本路径是固定的 `/assets/render.js`——构建时 `vite.config.ts` 把渲染入口
+      的产物名固定成这个名字（其他入口仍带哈希）。带哈希的话这个外壳就没法指向它。
+    -->
+    <script type="module" src="/assets/render.js"></script>
+  </body>
+</html>

@@ -22,6 +22,31 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['@dimforge/rapier3d'], // 不让 Vite 预构建 Rapier
   },
+  build: {
+    rollupOptions: {
+      /**
+       * 第二个入口：服务端渲染页。
+       *
+       * `public/render.html` 是渲染页的静态外壳（它按固定路径引脚本），
+       * 真正被构建的是 `src/render/main.ts`。
+       */
+      input: {
+        index: fileURLToPath(new URL('./index.html', import.meta.url)),
+        render: fileURLToPath(new URL('./src/render/main.ts', import.meta.url)),
+      },
+      output: {
+        /**
+         * 渲染入口的产物名固定成 `assets/render.js`。
+         *
+         * 外壳 `public/render.html` 是静态文件，构建时不会被改写，
+         * 所以它必须能指向一个**名字确定**的产物；其余入口保持默认的
+         * `assets/[name]-[hash].js`（首屏入口的缓存策略不变）。
+         */
+        entryFileNames: (chunk) =>
+          chunk.name === 'render' ? 'assets/render.js' : 'assets/[name]-[hash].js',
+      },
+    },
+  },
   server: {
     proxy: {
       /**
