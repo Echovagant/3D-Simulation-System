@@ -72,7 +72,16 @@ if (!notice.trim()) {
   problems.push('NOTICE 文件缺失或为空')
 }
 
-const assets = walk(repoRoot, new Set(['.git', 'node_modules', 'dist', '.cache'])).filter((p) => {
+/**
+ * 扫描时跳过的目录。
+ *
+ * `backend_data` 是后端的**运行时数据目录**（本地数据库、服务端渲染产出的 MP4），
+ * 它被 gitignore 排除、永远不进仓库——里面出现什么文件都不算「仓库里的资产」，
+ * 所以扫描要跳过它。否则本地跑过一次渲染，产物就会被当成「来源不明的资产」报错。
+ */
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.cache', 'backend_data'])
+
+const assets = walk(repoRoot, SKIP_DIRS).filter((p) => {
   const rel = relative(repoRoot, p).split('\\').join('/')
   if (rel.startsWith('src/docs/')) return false // 文档正文是 Markdown，不是资产
   return ASSET_EXT.has(extname(p).toLowerCase())

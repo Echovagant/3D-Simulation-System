@@ -157,6 +157,7 @@ npm run preview    # 预览生产产物
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
 | `npm run gen:api-contract` | 从后端代码重新生成 API 契约文档 |
+| `npm run verify:offline` | 离线降级闸门：拔掉后端，7 个页面逐个走一遍（需要 Chrome） |
 | `npm run build:all` | 前后端一起跑（前端构建 + 后端闸门） |
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
 | `npm run gen:docs` | 重新生成封面与页面截图 |
@@ -270,6 +271,11 @@ flowchart LR
 后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
+
+还有一道**离线降级闸门**（`npm run verify:offline`）：把后端整个拔掉，
+再用无头浏览器走完 7 个页面，要求**逐页 0 console error、0 个未捕获异常**，
+而且依赖后端的面板必须给出降级说明——
+「后端不在时一切照旧」是本项目的承诺，承诺不能靠人工记得验。
 
 ## 文档
 

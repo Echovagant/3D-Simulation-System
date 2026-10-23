@@ -46,6 +46,12 @@ jobs:
       - name: 构建并执行全部门禁（npm run build）
         run: npm run build
 
+      # 拔掉后端再走一遍 7 个页面：后端是可选增强，这条性质不能靠人工记得验。
+      # 单独成一步而不塞进 npm run build：它要真的开一次浏览器，
+      # 没装 Chrome 的贡献者仍然能跑通本地构建。
+      - name: 离线降级闸门（拔掉后端，7 个页面 0 console error）
+        run: npm run verify:offline
+
   backend:
     name: 后端闸门 · Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
