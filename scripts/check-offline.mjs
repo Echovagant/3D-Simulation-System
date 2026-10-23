@@ -168,7 +168,15 @@ if (!chromePath) {
  * 浏览器根本不会启动，调试端口也就永远连不上。
  * 只在 CI 环境加——本地跑保留沙箱。
  */
-const CHROME_CI_ARGS = process.env.CI ? ['--no-sandbox', '--disable-dev-shm-usage'] : []
+const CHROME_CI_ARGS = process.env.CI
+  ? [
+      '--no-sandbox',
+      '--disable-dev-shm-usage',
+      // 没有 GPU 时强制走 ANGLE 的 SwiftShader 软件渲染路径——
+      // 只给「允许用软件 WebGL」还不够，ANGLE 也要明确指过去。
+      '--use-angle=swiftshader',
+    ]
+  : []
 
 /**
  * `--enable-unsafe-swiftshader`：**软件 WebGL 兜底**。
