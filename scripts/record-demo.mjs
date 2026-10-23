@@ -11,7 +11,7 @@
  * 不是"渲染一张好看的图"——录的是这个项目真的在跑的东西。
  */
 import { createServer } from 'node:http'
-import { readFile, readdir, stat, writeFile, mkdir, rm } from 'node:fs/promises'
+import { readFile, stat, writeFile, mkdir, rm } from 'node:fs/promises'
 import { statSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { spawn, execFileSync } from 'node:child_process'
@@ -204,14 +204,13 @@ try {
     '-c:v', 'libx264', '-preset', 'slow', '-crf', '24', '-movflags', '+faststart',
     mp4,
   ], { stdio: ['ignore', 'inherit', 'inherit'] })
-} catch (e) {
+} catch {
   console.error('MP4 编码失败')
   process.exit(1)
 }
 console.log(`  ${mp4}  ${(await stat(mp4)).size} B`)
 
 console.log('编码 GIF（单命令双通道调色板）…')
-const palette = join(FRAME_DIR, 'palette.png')
 /** 跑 ffmpeg，失败时把 stderr 当字符串打出来（否则只能看到 Buffer 的数字） */
 const runFfmpeg = (args, label) => {
   try {

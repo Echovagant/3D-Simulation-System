@@ -14,7 +14,7 @@
  * 3. **依赖协议**——node_modules 里所有包的协议必须属于宽松清单，
  *    不允许出现 GPL / AGPL / CC-BY-NC 这类带传染性或禁止商用的协议。
  */
-import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs'
+import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { join, relative, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 

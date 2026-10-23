@@ -14,7 +14,7 @@
  * 没有 dist/ 时会跳过依赖产物的两项，并明确说明——不是静默放过。
  */
 import { readFileSync, existsSync, statSync, readdirSync } from 'node:fs'
-import { join, dirname } from 'node:path'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'

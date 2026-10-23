@@ -16,8 +16,8 @@
  * 产物：public/assets/models/thumbnails/<模型名>.png
  */
 import { createServer } from 'node:http'
-import { readFile, readdir, stat, mkdir, writeFile } from 'node:fs/promises'
-import { join, extname, basename, resolve } from 'node:path'
+import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises'
+import { join, extname, basename } from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 

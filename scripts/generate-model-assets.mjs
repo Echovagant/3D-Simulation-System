@@ -15,7 +15,7 @@
  * 缩略图由 render-model-thumbnails.mjs 从**导出的文件**渲染，保证图与文件一致。
  */
 import { createServer } from 'node:http'
-import { readFile, readdir, mkdir, writeFile } from 'node:fs/promises'
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
 import { join, extname } from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
