@@ -50,7 +50,7 @@
     <p class="physics-mode">物理模式：Rapier 刚体物理（质量 · 摩擦 · 弹性 · 固定步长 1/60 秒）</p>
 
     <!-- 日志显示 -->
-    <div class="ai-flex-1 ai-clip ai-flex ai-flex-col">
+    <div class="ai-flex-1 ai-clip ai-flex ai-flex-col ai-log-wrap">
       <div class="ai-fs-xs ai-t-muted ai-mb-1 ai-flex ai-justify-between ai-items-center">
         <span>代理日志</span>
         <select
@@ -64,7 +64,7 @@
         </select>
       </div>
 
-      <div class="ai-flex-1 ai-scroll ai-bg-soft ai-r-sm ai-p-2 ai-fs-xs ai-space-y-1">
+      <div ref="logBoxRef" class="ai-flex-1 ai-scroll ai-bg-soft ai-r-sm ai-p-2 ai-fs-xs ai-space-y-1 ai-log-list">
         <div
           v-for="(log, index) in filteredLogs"
           :key="index"
@@ -87,7 +87,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useAiStore } from '@/stores/aiStore'
 
 const aiStore = useAiStore()
@@ -130,6 +130,19 @@ const filteredLogs = computed(() => {
   }
   return allLogs.value.filter(log => log.type === logFilter.value)
 })
+
+// 日志区自己滚，不把整页撑高
+const logBoxRef = ref<HTMLElement | null>(null)
+
+// 新日志到了就滚到底——日志窗口本来就该跟着最新一条走
+watch(
+  () => filteredLogs.value.length,
+  async () => {
+    await nextTick()
+    const box = logBoxRef.value
+    if (box) box.scrollTop = box.scrollHeight
+  },
+)
 
 // 方法
 const handleSimulationToggle = () => {
@@ -196,5 +209,22 @@ const formatDifficulty = (difficulty: string) => {
   line-height: 1.5;
   color: #9ca3af;
   opacity: 0.85;
+}
+
+/**
+ * 日志区：**自己滚动，绝不把整页撑高**。
+ *
+ * 之前日志框只有 overflow-y:auto、没定高度上限，代理一跑日志就持续变长，
+ * 面板跟着长 → 整页布局被顶开，滚动条也永远不出现（因为盒子在长高，
+ * 从来没“溢出”过）。给它一个上限，日志就老老实实在框里滚。
+ */
+.ai-log-list {
+  max-height: 260px;
+  min-height: 0;
+}
+
+/* flex 里的滚动区要允许被压缩，否则 min-height:auto 会顶住 */
+.ai-log-wrap {
+  min-height: 0;
 }
 </style>

@@ -16,7 +16,8 @@
         </button>
       </div>
 
-      <div class="ai-space-y-2 max-h-40 ai-scroll pr-1">
+      <!-- 代理列表自己滚：代理会越加越多，列表不能把面板撑高 -->
+      <div class="ai-space-y-2 ai-agent-list ai-scroll">
         <div
           v-for="agent in agents"
           :key="agent.id"

@@ -278,6 +278,18 @@
   margin-top: 1rem;
 }
 
+/* ---------- 可滚动的列表 ---------- */
+/**
+ * 代理列表：代理会越加越多，列表不能把面板撑高。
+ *
+ * ⚠️ 这里不能用 Tailwind 的 `max-h-40`——本仓库**没有**接 Tailwind，
+ * 那种类名是死类名、根本不生效（`check-tailwind-classes.mjs` 盯的就是它们）。
+ */
+.ai-agent-list {
+  max-height: 10rem;
+  padding-right: 0.25rem;
+}
+
 /* ---------- 表单控件（原生控件在深底上默认太亮，统一压一档） ---------- */
 .ai-form input[type='text'],
 .ai-form input[type='number'],
