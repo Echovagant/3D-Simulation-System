@@ -156,3 +156,44 @@ class SimulationResult(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
+
+
+class RenderJob(Base):
+    """一次服务端渲染任务（场景 → 视频）。
+
+    ``scene`` / ``actions`` 存**前端给的原始数据**：服务端不理解里面每个字段，
+    只负责把场景与动作脚本原样交给录制器——不在后端造第二套场景格式。
+
+    ``progress`` 是百分比（0-100）。录制器只在结束时写摘要，
+    中途的帧数拿不到，所以渲染过程中就是 0——不猜。
+    """
+
+    __tablename__ = "render_jobs"
+
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # queued -> rendering -> succeeded | failed
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    scene: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
+    actions: Mapped[list[dict[str, Any]]] = mapped_column(JSONType, nullable=False, default=list)
+    # 请求的总帧数、帧率与画面尺寸
+    frames: Mapped[int] = mapped_column(Integer, nullable=False, default=180)
+    fps: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    width: Mapped[int] = mapped_column(Integer, nullable=False, default=1280)
+    height: Mapped[int] = mapped_column(Integer, nullable=False, default=720)
+    # 进度百分比（0-100）
+    progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # 失败时的原因（给人看）与错误码（给程序看）
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 最后一步的 stderr 摘要：出错时最有用的是最后几行
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 产物（MP4）的落盘路径
+    video_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )

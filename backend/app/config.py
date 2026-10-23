@@ -78,6 +78,37 @@ class Settings(BaseSettings):
     # 计数**从 simulation_results 的行数数出来**，不另建计数表。
     simulation_max_runs_per_day: int = 2000
 
+    # ---- 服务端渲染（场景 → 视频）----
+
+    # 仓库根目录。渲染要读 dist/ 与 scripts/，所以得知道仓库在哪。
+    # 留空 = 按本文件位置往上推三层（backend/app/config.py → 仓库根）。
+    render_repo_root: str = ""
+
+    # 生产产物目录（npm run build 的输出）。留空 = <仓库根>/dist
+    render_dist_dir: str = ""
+
+    # 录制器脚本。留空 = <仓库根>/scripts/record-scene.mjs
+    render_script_path: str = ""
+
+    # 产物落盘目录。留空 = <backend>/backend_data/renders
+    render_output_dir: str = ""
+
+    # 无头浏览器（Chrome）。**留空 = 挨个找常见安装位置**；
+    # 一旦显式配置就只认它——配错了要报错，不能悄悄换一台。
+    render_chrome_path: str = ""
+
+    # ffmpeg。规则同 Chrome。
+    render_ffmpeg_path: str = ""
+
+    # 跑录制器的 node 可执行文件。
+    render_node_path: str = "node"
+
+    # 单次录制最长跑多久（秒）。超时算失败，不让它一直挂着。
+    render_timeout_seconds: int = 600
+
+    # 单次渲染最多多少帧。
+    render_max_frames: int = 3600
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.errors import register_error_handlers
-from app.routers import health, llm, scenes, simulations, telemetry
+from app.routers import health, llm, render, scenes, simulations, telemetry
 
 
 def _is_in_memory(url: str) -> bool:
@@ -48,6 +48,7 @@ def create_app() -> FastAPI:
     app.include_router(telemetry.router, prefix="/api")
     app.include_router(llm.router, prefix="/api")
     app.include_router(simulations.router, prefix="/api")
+    app.include_router(render.router, prefix="/api")
     return app
 
 

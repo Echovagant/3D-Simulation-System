@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
@@ -299,3 +299,83 @@ class SimulationResultsResponse(ApiModel):
 
     runs: list[SimulationRun] = Field(default_factory=list)
     summary: SimulationSummary = Field(default_factory=SimulationSummary)
+
+
+# --------------------------------------------------------------------------
+# 服务端渲染（场景 → 视频）
+# --------------------------------------------------------------------------
+
+# 动作脚本支持的动作类型。**就这四种**（规格 §2.3）——
+# 每多一种就要多一条测试与一条前端实现，不发明新的。
+RENDER_ACTION_TYPES = ("addCube", "addSphere", "setCamera", "setSpeed")
+
+
+class RenderVector(ApiModel):
+    """动作参数里的一个三维向量。"""
+
+    x: float
+    y: float
+    z: float
+
+
+class RenderAction(ApiModel):
+    """动作脚本里的一条动作。
+
+    ``at_frame`` 是「在第几帧执行」——录制器逐帧推进，所以帧号必须对得上。
+    """
+
+    at_frame: int = Field(ge=0)
+    type: Literal["addCube", "addSphere", "setCamera", "setSpeed"]
+    params: dict[str, Any] = Field(default_factory=dict)
+
+
+class RenderCreateRequest(ApiModel):
+    """提交一次服务端渲染。
+
+    ``scene`` 存**完整的前端 SceneDocument**（与批量仿真同一口径）：
+    服务端不理解里面每个字段，只负责把它交给录制器。
+    """
+
+    # 给人看的名字，可选
+    label: str | None = Field(default=None, max_length=200)
+    # 完整的前端 SceneDocument
+    scene: dict[str, Any]
+    # 动作脚本（可选）
+    actions: list[RenderAction] = Field(default_factory=list)
+    # 总帧数：180 帧 @30fps = 6 秒
+    frames: int = Field(default=180, ge=1, le=3600)
+    fps: int = Field(default=30, ge=1, le=120)
+    width: int = Field(default=1280, ge=16, le=3840)
+    height: int = Field(default=720, ge=16, le=2160)
+
+
+class RenderJobAccepted(ApiModel):
+    """排队成功。"""
+
+    job_id: str
+
+
+class RenderJobSummary(ApiModel):
+    """任务摘要（列表用）。"""
+
+    job_id: str
+    status: str
+    label: str | None = None
+    created_at: datetime
+    duration_ms: int | None = None
+
+
+class RenderJobDetail(ApiModel):
+    """任务详情。
+
+    ``progress`` 是**百分比**（0-100）：录制器只在结束时给摘要，
+    中途的进度拿不到，这里不猜——渲染中就是 0。
+    """
+
+    job_id: str
+    status: str
+    progress: int
+    error: str | None = None
+    artifact_url: str | None = None
+    duration_ms: int | None = None
+    created_at: datetime
