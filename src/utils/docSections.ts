@@ -18,8 +18,14 @@ export const docFiles = import.meta.glob('/src/docs/**/*.md', {
   eager: true,
 }) as Record<string, string>
 
-/** 允许的章节前缀，与 `src/docs/` 下的目录一一对应 */
-const ALLOWED_PREFIXES = ['guide/', 'api/', 'examples/']
+/**
+ * 允许的章节前缀。
+ *
+ * 产品界面里只放**指南**（`guide/`）：面向使用者的内容。
+ * 面向集成者的 API 参考与操作示例随仓库走（`docs/dev/`），不在产品界面里——
+ * 放在这儿只会让人误以为那是给使用者看的。
+ */
+const ALLOWED_PREFIXES = ['guide/']
 
 /**
  * 把 'guide/introduction' 映射到 glob 的 key

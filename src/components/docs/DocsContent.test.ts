@@ -66,9 +66,9 @@ afterEach(() => {
 
 describe('resolveDocPath', () => {
   it('接受白名单内的合法章节', () => {
-    const key = resolveDocPath('guide/introduction')
+    const key = resolveDocPath('guide/overview')
     expect(key).not.toBeNull()
-    expect(docFiles[key as string]).toContain('# 3D场景编辑与仿真系统')
+    expect(docFiles[key as string]).toContain('# 系统总览')
   })
 
   it('拒绝未知章节', () => {
@@ -85,14 +85,20 @@ describe('resolveDocPath', () => {
     expect(resolveDocPath('/')).toBeNull()
     expect(resolveDocPath('secret/keys')).toBeNull()
   })
+
+  it('开发者文档不在产品界面的白名单里', () => {
+    // API 参考与操作示例随仓库走（docs/dev/），产品界面只放指南
+    expect(resolveDocPath('api/ai-api')).toBeNull()
+    expect(resolveDocPath('examples/basic-scene')).toBeNull()
+  })
 })
 
 describe('DocsContent', () => {
   it('渲染有内容的章节', async () => {
-    const host = await mountDocs('guide/introduction')
+    const host = await mountDocs('guide/overview')
     expect(host.querySelector('.bg-red-50')).toBeNull()
     expect(host.querySelector('h1')).not.toBeNull()
-    expect(host.textContent).toContain('欢迎使用3D场景编辑与仿真系统')
+    expect(host.textContent).toContain('数据存在哪里')
   })
 
   it('空章节提示尚未编写内容', async () => {

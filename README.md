@@ -23,8 +23,8 @@
 
 <table>
   <tr>
-    <td align="center"><b>255.02 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>412</b><br><sub>测试用例 · 45 个文件</sub></td>
+    <td align="center"><b>255.09 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>413</b><br><sub>测试用例 · 45 个文件</sub></td>
     <td align="center"><b>11</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -77,7 +77,7 @@
 </td>
 <td width="33%" valign="top" align="center">
 <b>📚 系统文档</b><br><br>
-<sub>13 篇正文，API / 指南 / 示例三类，与源码逐词核对</sub>
+<sub>2 篇正文：系统总览 + 已知问题与边界</sub>
 </td>
 <td width="33%" valign="top" align="center">
 <b>🎨 浅色科技网络</b><br><br>
@@ -152,7 +152,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 11 道闸门 |
-| `npm test` | Vitest 全量用例（45 个测试文件 / 412 个用例） |
+| `npm test` | Vitest 全量用例（45 个测试文件 / 413 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -262,7 +262,7 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 5.60 MB |
+| 产物体积 | 5.44 MB |
 | 运行时依赖 | 11 个 |
 | 可加载模型 | 9 个（全部程序化生成） |
 | 类型检查 | 0 错误 |
@@ -279,8 +279,16 @@ CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 
 ## 文档
 
-系统内置 13 篇文档（`/docs`），也以 Markdown 形式放在 [`src/docs/`](src/docs)：
-使用指南、API 参考、示例教程。
+产品界面里的 `/docs` 只有两篇，因为只有两件事值得单独写一页：
+**系统总览**（每个模块是什么、数据存在哪）与**已知问题与边界**
+（那些界面里点不出来、也猜不到的限制，按「现象 → 原因 → 怎么办」列）。
+Markdown 原文在 [`src/docs/`](src/docs)。
+
+界面点不出来的限制，大部分已经做成控件旁的 `?` 提示，就地说明，不必翻文档。
+
+面向**集成者**的 API 参考与操作示例随仓库走，在 [`docs/dev/`](docs/dev/)：
+[`api/`](docs/dev/api/)（AI 接口 / 物理引擎 / Three.js 集成）与
+[`examples/`](docs/dev/examples/)；后端接口契约见 [`docs/api-contract.md`](docs/api-contract.md)（由后端代码生成，CI 校验一致）。
 
 ## 贡献
 
