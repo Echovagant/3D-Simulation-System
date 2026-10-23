@@ -49,6 +49,8 @@ const getPageTitle = computed(() => {
     'guide/simulation-lab': '仿真实验室使用指南',
     'guide/model-library': '模型库使用指南',
     'guide/ai-playground': 'AI演武场使用指南',
+    'guide/batch-simulation': '批量仿真使用指南',
+    'guide/server-render': '服务端渲染使用指南',
     'api/three-integration': 'Three.js集成API',
     'api/physics-engine': '物理引擎API',
     'api/ai-api': 'AI接口API',

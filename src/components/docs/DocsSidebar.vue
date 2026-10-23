@@ -48,6 +48,24 @@
             AI演武场
           </a>
         </li>
+        <li>
+          <a
+            :class="{'text-primary font-medium': currentSection === 'guide/batch-simulation'}"
+            @click="$emit('change-section', 'guide/batch-simulation')"
+            class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
+          >
+            批量仿真
+          </a>
+        </li>
+        <li>
+          <a
+            :class="{'text-primary font-medium': currentSection === 'guide/server-render'}"
+            @click="$emit('change-section', 'guide/server-render')"
+            class="block text-gray-600 dark:text-gray-400 hover:text-primary transition-colors"
+          >
+            服务端渲染
+          </a>
+        </li>
       </ul>
     </div>
 

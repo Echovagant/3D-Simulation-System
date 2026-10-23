@@ -77,7 +77,7 @@
 </td>
 <td width="33%" valign="top" align="center">
 <b>📚 系统文档</b><br><br>
-<sub>11 篇正文，API / 指南 / 示例三类，与源码逐词核对</sub>
+<sub>13 篇正文，API / 指南 / 示例三类，与源码逐词核对</sub>
 </td>
 <td width="33%" valign="top" align="center">
 <b>🎨 浅色科技网络</b><br><br>
@@ -279,7 +279,7 @@ CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 
 ## 文档
 
-系统内置 11 篇文档（`/docs`），也以 Markdown 形式放在 [`src/docs/`](src/docs)：
+系统内置 13 篇文档（`/docs`），也以 Markdown 形式放在 [`src/docs/`](src/docs)：
 使用指南、API 参考、示例教程。
 
 ## 贡献
