@@ -9,6 +9,10 @@
       >
         <i class="fas" :class="isPlaying ? 'fa-pause' : 'fa-play'"></i>
       </button>
+      <InfoTip
+        label="关于暂停模拟"
+        text="播放中物理每一步都会改写位置，手工摆的位置会被覆盖。要稳定摆放，先点「暂停模拟」——暂停只停物理，不停渲染。"
+      />
       <button
         class="toolbar-btn"
         @click="handleResetSimulation"
@@ -87,6 +91,7 @@ import { useSceneEditorStore } from '@/stores/sceneEditorStore';
 import { useRouter } from 'vue-router';
 import { useModelStore } from '@/stores/modelStore';
 import { reportError } from '@/services/api/telemetry';
+import InfoTip from '@/components/common/InfoTip.vue';
 
 // 状态管理
 const store = useSceneEditorStore();

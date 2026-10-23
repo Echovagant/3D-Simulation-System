@@ -64,6 +64,10 @@
                   {{ preset.name }}
                 </option>
               </select>
+              <InfoTip
+                label="关于预设场景"
+                text="「钟摆」预设没有实现摆的约束——它和其它预设一样只是自由落体。"
+              />
             </div>
             <div class="preset-selector">
               <select v-model="selectedSceneId" title="选择场景编辑器里保存过的场景">
@@ -117,7 +121,13 @@
 
       <!-- 实验参数面板：固定宽度侧边栏 -->
       <div class="experiment-panel">
-        <h3>实验参数</h3>
+        <h3>
+          实验参数
+          <InfoTip
+            label="关于实验参数"
+            text="摩擦力与弹性系数是全局批量生效的：改动会同时作用于场景里的每一个物体，不能只调某一个。"
+          />
+        </h3>
 
         <!-- 环境参数设置 -->
         <div class="parameter-group">
@@ -210,6 +220,7 @@ import * as THREE from 'three'
 import { Vector3, Object3D, Scene } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import Header from '@/components/layout/Header.vue'
+import InfoTip from '@/components/common/InfoTip.vue'
 import SimulationBatchPanel from '@/components/simulations/SimulationBatchPanel.vue'
 import RenderPanel from '@/components/simulations/RenderPanel.vue'
 import { usePhysics } from '@/composables/usePhysics'

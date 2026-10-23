@@ -2,7 +2,9 @@
   <div class="property-panel">
     <!-- 选中物体时显示属性编辑表单 -->
     <template v-if="selectedObject">
-      <h3>属性编辑</h3>
+      <h3>
+        属性编辑
+      </h3>
       <div class="property-group">
         <label>名称:</label>
         <input
@@ -154,6 +156,10 @@
       <div class="empty-state">
         <p>未选择任何对象</p>
         <p class="hint">点击3D视图中的物体进行编辑</p>
+        <InfoTip
+          label="关于属性编辑"
+          text="这里没有质量、摩擦系数与弹性系数——它们在仿真实验室按全局生效。"
+        />
       </div>
     </template>
 
@@ -167,6 +173,7 @@ import * as THREE from 'three'
 import { computed, watch, ref } from 'vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import SceneList from '@/components/three/panels/SceneList.vue'
+import InfoTip from '@/components/common/InfoTip.vue'
 
 // 获取场景编辑器状态
 const store = useSceneEditorStore()
