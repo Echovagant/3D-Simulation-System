@@ -25,6 +25,7 @@
 import { createServer } from 'node:http'
 import { createServer as createSocketServer } from 'node:net'
 import { readFile, stat } from 'node:fs/promises'
+import { statSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -81,9 +82,17 @@ const MIME = {
   '.ico': 'image/x-icon',
 }
 
+/**
+ * 判断路径是否存在。
+ *
+ * ⚠️ 必须用 **同步** 的 stat：`node:fs/promises` 的 `stat()` 返回 Promise，
+ * 它**不会同步抛异常**，写在这里 try/catch 根本捕获不到，
+ * 这个函数就会**永远返回 true**——于是第一个候选路径（Windows 上的
+ * Chrome 路径）在 Linux 上也被当成「存在」，最后 spawn 直接 ENOENT。
+ */
 const existsSync = (p) => {
   try {
-    stat(p)
+    statSync(p)
     return true
   } catch {
     return false

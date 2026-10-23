@@ -12,6 +12,7 @@
  */
 import { createServer } from 'node:http'
 import { readFile, readdir, stat, writeFile, mkdir, rm } from 'node:fs/promises'
+import { statSync } from 'node:fs'
 import { join, extname } from 'node:path'
 import { spawn, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -36,7 +37,10 @@ if (!existsSync(FFMPEG)) {
 
 function existsSync(p) {
   try {
-    stat(p)
+    // ⚠️ 必须是**同步**的 stat：`node:fs/promises` 的 stat 返回 Promise，
+    // 不会同步抛异常，catch 不到——这个函数就会永远返回 true，
+    // 「dist/ 在不在」「ffmpeg 在不在」的检查就成了摆设。
+    statSync(p)
     return true
   } catch {
     return false

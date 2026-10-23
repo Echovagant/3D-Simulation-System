@@ -16,6 +16,7 @@
 import { createServer } from 'node:http'
 import { createServer as createSocketServer } from 'node:net'
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises'
+import { statSync } from 'node:fs'
 import { join, extname, dirname, resolve } from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -48,9 +49,16 @@ const MIME = {
   '.ico': 'image/x-icon',
 }
 
+/**
+ * 判断路径是否存在。
+ *
+ * ⚠️ 必须用 **同步** 的 stat：`node:fs/promises` 的 `stat()` 返回 Promise，
+ * 不会同步抛异常，try/catch 捕获不到——这个函数就会永远返回 true，
+ * 「dist/ 在不在」「Chrome 在不在」这些检查就全成了摆设。
+ */
 const existsSync = (p) => {
   try {
-    stat(p)
+    statSync(p)
     return true
   } catch {
     return false
