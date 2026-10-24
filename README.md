@@ -10,21 +10,21 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="46 test files / 436 cases" src="https://img.shields.io/badge/test-46%20files%20%2F%20436%20cases-16a34a?logo=vitest&logoColor=fd9714">
-  <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
+  <img alt="47 test files / 439 cases" src="https://img.shields.io/badge/test-47%20files%20%2F%20439%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="12 build gates" src="https://img.shields.io/badge/build%20gates-12%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
 
 <div align="center">
-  <img src="docs/assets/demo.gif" alt="刚体物理仿真与智能体真实运行录屏" width="880" />
+  <img src="docs/screenshots/ai-playground.png" alt="AI 演武场：规则式智能体在 3D 场地里读取感知、自主移动，右侧面板可切换 LLM 决策" width="880" />
   <br>
-  <sub>真实运行录屏（生产产物）· <a href="docs/assets/demo.mp4">下载 720p MP4</a></sub>
+  <sub>AI 演武场（生产产物实拍）· 智能体读真实感知自主移动，碰撞与运动由 Rapier 求解</sub>
 </div>
 
 <table>
   <tr>
     <td align="center"><b>255.09 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>436</b><br><sub>测试用例 · 46 个文件</sub></td>
+    <td align="center"><b>439</b><br><sub>测试用例 · 47 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -60,6 +60,9 @@
 - **后端是可选的。** `npm run build` 的产物可以直接扔到任何静态托管上；
   后端缺席时，前端功能一件不少，界面只多一句「后端不在」。
 
+AI 那部分也遵守同一条规矩：**模型只提供意图，位移永远由物理引擎决定**。
+面板上能直接看到「LLM 生效 12 / 87 拍（13.8%）」——它降级了多久、降到什么程度，是可读的。
+
 ## 功能
 
 <div align="center">
@@ -75,7 +78,7 @@
 </td>
 <td width="33%" valign="top" align="center">
 <b>🤖 AI 演武场</b><br><br>
-<sub>智能体读真实感知自主移动；可选接入 11 家 LLM 服务商做决策与解释</sub>
+<sub>智能体读真实感知自主移动；可选接入 11 条接入线（5 家厂商）做决策与解释</sub>
 </td>
 </tr>
 <tr>
@@ -102,8 +105,8 @@
 <sub>2 篇正文：系统总览 + 已知问题与边界</sub>
 </td>
 <td width="33%" valign="top" align="center">
-<b>🎨 浅色科技网络</b><br><br>
-<sub>Canvas 2D 自绘背景，零 Babylon 依赖</sub>
+<b>📋 仿真过程规格</b><br><br>
+<sub>世界/时间/状态/一致性/意图五层，每条约束标出实现位置与验证它的测试</sub>
 </td>
 </tr>
 </table>
@@ -114,14 +117,14 @@
 <div align="center">
 <table>
 <tr>
-<td width="33%" align="center"><img src="docs/screenshots/overview.png" alt="总览页" width="100%"><br><sub>总览页</sub></td>
-<td width="33%" align="center"><img src="docs/screenshots/scene-editor.png" alt="场景编辑器" width="100%"><br><sub>场景编辑器</sub></td>
-<td width="33%" align="center"><img src="docs/screenshots/simulation-lab.png" alt="仿真实验室" width="100%"><br><sub>仿真实验室</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/scene-editor.png" alt="场景编辑器" width="100%"><br><sub>场景编辑器 · 摆放物体，属性面板改完立刻写回刚体</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/simulation-lab.png" alt="仿真实验室" width="100%"><br><sub>仿真实验室 · 固定步长物理 + 批量仿真 + 服务端渲染</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库 · 9 个模型全部可加载</sub></td>
 </tr>
 <tr>
-<td width="33%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场</sub></td>
-<td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库</sub></td>
-<td width="33%" align="center"><img src="docs/screenshots/docs.png" alt="系统文档" width="100%"><br><sub>系统文档</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场 · 智能体自主移动，可接 LLM 决策</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/overview.png" alt="系统总览" width="100%"><br><sub>系统总览 · 每个模块是什么、数据存在哪</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/docs.png" alt="系统文档" width="100%"><br><sub>系统文档 · 总览与已知问题与边界</sub></td>
 </tr>
 </table>
 </div>
@@ -190,7 +193,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（46 个测试文件 / 436 个用例） |
+| `npm test` | Vitest 全量用例（47 个测试文件 / 439 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -257,7 +260,7 @@ Redis 连不上时 `POST /api/simulations` 直接返回 503 `simulation_queue_un
 
 ```bash
 cd backend
-uv run pytest        # 124 个用例
+uv run pytest        # 139 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
@@ -347,7 +350,7 @@ flowchart LR
 | 类型检查 | 0 错误 |
 | 页面体检 | 7 个页面 0 console error / 0 未捕获异常 / 0 网络失败 |
 
-后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**。
+后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（139 个用例）。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 
@@ -355,6 +358,12 @@ CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 再用无头浏览器走完 7 个页面，要求**逐页 0 console error、0 个未捕获异常**，
 而且依赖后端的面板必须给出降级说明——
 「后端不在时一切照旧」是本项目的承诺，承诺不能靠人工记得验。
+
+还有一道**真厂商验证**（`npm run verify:llm-live`）：用真 key 跑 N 次控制器提示词，
+统计正文为空率、闸门通过率与推理 token 分布。AI 那侧的逻辑全部由替身模型测试，
+真实厂商的返回格式只要对不上，整套逻辑会「看起来完全正常」——
+仿真照跑、智能体照动，只是每一次决策都悄悄回落到了规则式控制器。
+这道检查把那件事变成可测的（需要 key 与网络，因此不在构建链里）。
 
 ## 文档
 

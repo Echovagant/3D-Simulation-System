@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, provide } from 'vue'
+import { ref, onUnmounted, provide, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import ThreeScene from '@/components/three/core/ThreeScene.vue'
@@ -90,6 +90,9 @@ const exposeMethods = (methods: {
   updatePhysics: (timestamp?: number) => void
 }) => {
   sceneMethods.value = methods
+  // 基本体工厂依赖这些方法（建体要真能建出来），到这里才具备条件：
+  // 场景编辑器据此把路由指定的场景真正放进 3D 视图。
+  void loadSceneFromRoute()
 }
 
 // 处理初始化错误
@@ -168,16 +171,32 @@ const handleUpdateCamera = (data: { type: 'perspective' | 'orthographic'; aspect
   }
 }
 
-// 监听路由参数加载场景
-onMounted(() => {
+/**
+ * 加载路由指定的场景。
+ *
+ * ⚠️ 必须等**物理方法就绪之后**再加载：`loadScene` 靠基本体工厂把物体连同
+ * 刚体一起重建，而工厂是「场景列表」组件注册的，它用的 `addCube` 来自
+ * `ThreeScene` 暴露的方法——那要等场景初始化完成才拿得到。
+ * 早一步调用，工厂建体返回 false，场景看着在列表里、3D 视图却是空的。
+ */
+const loadSceneFromRoute = async () => {
   const sceneId = router.currentRoute.value.query.sceneId
-  if (sceneId && typeof sceneId === 'string') {
-    sceneStore.loadScene(sceneId).catch((err: unknown) => {
-      // 加载失败不打断页面，但现场必须留下来
-      console.warn('[SceneEditor] 加载场景失败', err)
-    })
+  if (!sceneId || typeof sceneId !== 'string') return
+  try {
+    await sceneStore.loadScene(sceneId)
+  } catch (err: unknown) {
+    // 加载失败不打断页面，但现场必须留下来
+    console.warn('[SceneEditor] 加载场景失败', err)
   }
-})
+}
+
+// 路由里的场景变了就重新加载：物理方法就绪后第一次，之后每次切换都跟。
+watch(
+  () => router.currentRoute.value.query.sceneId,
+  () => {
+    void loadSceneFromRoute()
+  },
+)
 
 // 当组件卸载时清理状态
 onUnmounted(() => {

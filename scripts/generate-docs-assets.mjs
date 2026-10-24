@@ -259,16 +259,83 @@ await writeFile(join(repoRoot, 'docs', 'assets', 'cover.png'), Buffer.from(cover
 console.log('✓ docs/assets/cover.png')
 
 // ============================================================
-// 2) 7 张页面截图（对生产产物实拍）
+// 2) 页面截图（对生产产物实拍）
 // ============================================================
+
+/**
+ * 预置一个**有内容**的场景到 localStorage。
+ *
+ * ⚠️ 场景编辑器默认是空的（"未选择任何对象"）——空场景当对外截图很难看，
+ * 而且看不出这个页面能做什么。截图前先把一份场景写进去，
+ * 再用 `?sceneId=<id>` 打开它。
+ *
+ * 存储格式与 `src/stores/sceneEditorStore.ts` 一致：
+ * 文档在 `scene-<id>`，索引在 `scene-index`（**两个都要写**，
+ * 只写文档不写索引 = 场景列不出来）。
+ *
+ * ⚠️ 场景文档里**没有颜色字段**：基本体的颜色是建体时 `Math.random()` 定的。
+ * 所以颜色由下面的 `applyColors` 步骤在加载后统一改——
+ * 否则每次生成的截图颜色都不一样，README 的图会「自己会动」。
+ */
+const DEMO_SCENE_ID = 'readme-demo'
+const DEMO_SCENE = {
+  id: DEMO_SCENE_ID,
+  name: '物体堆叠与碰撞',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+  version: 1,
+  gravity: { x: 0, y: -9.81, z: 0 },
+  objects: [
+    {
+      uuid: 'demo-cube-1', type: 'cube', name: '立方体 A',
+      position: { x: -2.2, y: 1.2, z: 0.4 }, rotation: { x: 0, y: 0.6, z: 0 },
+      scale: { x: 1.4, y: 1.4, z: 1.4 }, visible: true,
+      physics: { type: 'dynamic', shape: 'box', mass: 1 },
+    },
+    {
+      uuid: 'demo-cube-2', type: 'cube', name: '立方体 B',
+      position: { x: 0.1, y: 2.6, z: -0.6 }, rotation: { x: 0.3, y: 0.2, z: 0.1 },
+      scale: { x: 1.1, y: 1.1, z: 1.1 }, visible: true,
+      physics: { type: 'dynamic', shape: 'box', mass: 1 },
+    },
+    {
+      uuid: 'demo-sphere-1', type: 'sphere', name: '球体 A',
+      position: { x: 2.4, y: 1.4, z: 1.2 }, rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1.5, y: 1.5, z: 1.5 }, visible: true,
+      physics: { type: 'dynamic', shape: 'sphere', mass: 1 },
+    },
+    {
+      uuid: 'demo-sphere-2', type: 'sphere', name: '球体 B',
+      position: { x: -0.6, y: 3.4, z: 1.8 }, rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 0.9, y: 0.9, z: 0.9 }, visible: true,
+      physics: { type: 'dynamic', shape: 'sphere', mass: 1 },
+    },
+    {
+      uuid: 'demo-cube-3', type: 'cube', name: '斜放的立方体',
+      position: { x: 3.2, y: 0.8, z: -2.2 }, rotation: { x: 0.4, y: 0.9, z: 0.2 },
+      scale: { x: 1.3, y: 1.3, z: 1.3 }, visible: true,
+      physics: { type: 'dynamic', shape: 'box', mass: 1 },
+    },
+  ],
+}
+
+/** 物体配色（场景编辑器建体时随机上色，截图要稳定就得这里定死） */
+const DEMO_COLORS = {
+  '立方体 A': 0x6e5af0,
+  '立方体 B': 0x3b82f6,
+  '球体 A': 0xf97316,
+  '球体 B': 0x10b981,
+  '斜放的立方体': 0xec4899,
+}
+
 const SHOTS = [
   ['/', 'home', 3200],
-  ['/overview', 'overview', 3200],
-  ['/scene-editor', 'scene-editor', 6000],
-  ['/simulation-lab', 'simulation-lab', 6000],
-  ['/model-library', 'model-library', 4000],
+  ['/overview', 'overview', 3600],
+  ['/scene-editor?sceneId=readme-demo', 'scene-editor', 6000],
+  ['/simulation-lab?preset=newtons-cradle', 'simulation-lab', 4500],
+  ['/model-library', 'model-library', 4500],
   ['/ai-playground', 'ai-playground', 6000],
-  ['/docs', 'docs', 3200],
+  ['/docs', 'docs', 3600],
 ]
 
 // 静态服务要先能吐 dist/ 里的文件
@@ -293,20 +360,81 @@ const DIST_PORT = 5312
 await new Promise((r) => distServer.listen(DIST_PORT, '127.0.0.1', r))
 
 await mkdir(join(repoRoot, 'docs', 'screenshots'), { recursive: true })
+
+// 预置演示场景：必须在**首次导航到站点**之前写入 localStorage，
+// 否则同源策略下页面还没拿到 origin，写不进去。
+await cdp.send('Page.navigate', { url: `http://127.0.0.1:${DIST_PORT}/` }, sessionId)
+await sleep(1200)
+await evalJs(
+  cdp,
+  sessionId,
+  `(() => {
+    localStorage.setItem('scene-${DEMO_SCENE_ID}', ${JSON.stringify(JSON.stringify(DEMO_SCENE))});
+    const index = [{
+      id: '${DEMO_SCENE_ID}',
+      name: ${JSON.stringify(DEMO_SCENE.name)},
+      createdAt: '${DEMO_SCENE.createdAt}',
+      objectCount: ${DEMO_SCENE.objects.length},
+    }];
+    localStorage.setItem('scene-index', JSON.stringify(index));
+    return true;
+  })()`,
+)
+console.log(`✓ 预置演示场景 scene-${DEMO_SCENE_ID}（${DEMO_SCENE.objects.length} 个物体）`)
+
 for (const [route, name, wait] of SHOTS) {
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 2, mobile: false }, sessionId)
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${DIST_PORT}${route}` }, sessionId)
   await sleep(wait)
   await evalJs(cdp, sessionId, `document.fonts ? document.fonts.ready.then(()=>1) : 1`)
   await sleep(400)
+
+  // 场景编辑器：把随机色改成定死的配色。
+  // ⚠️ 基本体的颜色是建体时 `Math.random()` 定的，场景文档里不存颜色——
+  // 不改的话每次生成的截图颜色都不一样，README 的图会「自己会动」。
+  if (name === 'scene-editor') {
+    const painted = await evalJs(
+      cdp,
+      sessionId,
+      `(() => {
+        const colors = ${JSON.stringify(DEMO_COLORS)};
+        const app = document.getElementById('app');
+        const pinia = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$pinia : null;
+        const st = pinia ? pinia.state.value.useSceneEditorStore : null;
+        if (!st) return { painted: 0 };
+        let painted = 0;
+        for (const obj of st.objects || []) {
+          const hex = colors[obj.name];
+          const mesh = obj.threeObject;
+          if (hex && mesh && mesh.material && typeof mesh.material.color?.setHex === 'function') {
+            mesh.material.color.setHex(hex);
+            mesh.material.needsUpdate = true;
+            painted += 1;
+          }
+        }
+        return { painted };
+      })()`,
+    )
+    await sleep(600)
+    console.log(`  配色：${painted.painted} 个物体`)
+  }
+
   const info = await evalJs(cdp, sessionId, `(() => {
     const app = document.getElementById('app')
-    return { mounted: !!(app && app.children.length), text: (document.body.innerText||'').trim().length }
+    const pinia = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$pinia : null
+    const st = pinia ? pinia.state.value.useSceneEditorStore : null
+    return {
+      mounted: !!(app && app.children.length),
+      text: (document.body.innerText||'').trim().length,
+      objects: st ? (st.objects || []).length : 0,
+    }
   })()`)
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false }, sessionId)
   const buf = Buffer.from(shot.data, 'base64')
   await writeFile(join(repoRoot, 'docs', 'screenshots', `${name}.png`), buf)
-  console.log(`✓ docs/screenshots/${name}.png  ${String(buf.length).padStart(8)} B  mounted=${info.mounted}`)
+  console.log(
+    `✓ docs/screenshots/${name}.png  ${String(buf.length).padStart(8)} B  mounted=${info.mounted} objects=${info.objects}`,
+  )
   if (!info.mounted) {
     console.error(`  ⚠️ ${route} 页面没挂载，截图可能是空白`)
     process.exitCode = 1
