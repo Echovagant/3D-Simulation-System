@@ -1,0 +1,38 @@
+{
+  "recordedAt": "2026-10-24",
+  "provider": "minimax-cn-subscription",
+  "script": "scripts/verify-llm-live.mjs",
+  "note": "运行期实测记录：真 key 手动复现，脚本不在构建链里。config 段必须与 src/config/llm.ts 的常量一致。",
+  "config": {
+    "controllerMaxTokens": 512,
+    "explainMaxTokens": 400,
+    "reasoningEffort": "low"
+  },
+  "modelsAvailable": 9,
+  "runs": [
+    {
+      "id": "run-1",
+      "runs": 12,
+      "passed": 12,
+      "emptyBody": 0,
+      "reasoningTokensMin": 0,
+      "reasoningTokensAvg": 73,
+      "reasoningTokensMax": 187,
+      "latencyAvgMs": 1702
+    },
+    {
+      "id": "run-2",
+      "runs": 12,
+      "passed": 12,
+      "emptyBody": 0,
+      "reasoningTokensMax": 159
+    },
+    {
+      "id": "run-3",
+      "runs": 6,
+      "passed": 6,
+      "emptyBody": 0,
+      "reasoningTokensMax": 250
+    }
+  ]
+}

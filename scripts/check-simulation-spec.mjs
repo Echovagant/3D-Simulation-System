@@ -14,6 +14,8 @@
  * 约定：
  * - 期望值只来自文档，源码是事实来源；脚本里不写死任何随版本变化的数字。
  * - 双向都查：文档漏写的常量、文档写了却没人核对的常量，都要报错。
+ * - 实测基线是第三条链：`docs/simulation-baseline.json` 记运行期数字，
+ *   文档的基线表与它对账，它的 config 段再与源码常量对账。
  */
 import { readFileSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -142,11 +144,229 @@ const BASELINE = 'backend/tests/fixtures/browser_baseline.json'
 const SIMPY = 'backend/app/services/simulator.py'
 const CFG = 'backend/app/config.py'
 const RENDER = 'src/render/renderPage.ts'
+const PROXY = 'backend/app/services/llm_proxy.py'
+const BASELINE_RECORD = 'docs/simulation-baseline.json'
 
 const simBlock = () => objectBlock(SIM, 'export const simulationConfig')
 const llmBlock = () => objectBlock(LLM, 'export const llmConfig')
 const renderPhysicsBlock = () => objectBlock(RENDER, 'export const RENDER_PHYSICS')
 const renderGroundBlock = () => objectBlock(RENDER, 'export const RENDER_GROUND')
+
+// ---------- 清单与记录的解析 ----------
+
+/** 取第一个捕获组；抓不到就返回 undefined */
+const optionalCapture = (text, regex) => {
+  const m = text.match(regex)
+  return m ? m[1] : undefined
+}
+
+/**
+ * 取数组字面量里的每个对象块（按花括号配对）。
+ *
+ * 只认字面量本身，避免同名标识在文件别处被误命中。
+ */
+const arrayBlocks = (relPath, marker) => {
+  const src = readText(relPath)
+  const start = src.indexOf(marker)
+  if (start < 0) throw new Error(`${relPath} 里找不到 ${marker}`)
+  const open = start + marker.length - 1
+  if (src[open] !== '[') throw new Error(`${relPath} 里 ${marker} 后面不是数组字面量`)
+  const blocks = []
+  let i = open + 1
+  let depth = 1
+  while (i < src.length && depth > 0) {
+    const ch = src[i]
+    if (ch === '[') {
+      depth += 1
+      i += 1
+      continue
+    }
+    if (ch === ']') {
+      depth -= 1
+      i += 1
+      continue
+    }
+    if (ch === '{') {
+      let objDepth = 1
+      const objStart = i
+      i += 1
+      while (i < src.length && objDepth > 0) {
+        if (src[i] === '{') objDepth += 1
+        else if (src[i] === '}') objDepth -= 1
+        i += 1
+      }
+      blocks.push(src.slice(objStart, i))
+      continue
+    }
+    i += 1
+  }
+  return blocks
+}
+
+/** 取元组字面量里每个调用的参数块（`Name(...)` 的圆括号内容） */
+const callBlocks = (relPath, marker) => {
+  const src = readText(relPath)
+  const start = src.indexOf(marker)
+  if (start < 0) throw new Error(`${relPath} 里找不到 ${marker}`)
+  const open = start + marker.length - 1
+  if (src[open] !== '(') throw new Error(`${relPath} 里 ${marker} 后面不是调用字面量`)
+  const blocks = []
+  let i = open + 1
+  let depth = 1
+  while (i < src.length && depth > 0) {
+    const ch = src[i]
+    if (ch === '"' || ch === "'") {
+      const quote = ch
+      i += 1
+      while (i < src.length && src[i] !== quote) i += 1
+      i += 1
+      continue
+    }
+    if (ch === '(') {
+      depth += 1
+      i += 1
+      continue
+    }
+    if (ch === ')') {
+      depth -= 1
+      i += 1
+      continue
+    }
+    const callMatch = /^[A-Za-z_][A-Za-z0-9_]*\(/.exec(src.slice(i, i + 40))
+    if (callMatch) {
+      const callStart = i + callMatch[0].length - 1
+      let callDepth = 1
+      let j = callStart + 1
+      while (j < src.length && callDepth > 0) {
+        if (src[j] === '"' || src[j] === "'") {
+          const quote = src[j]
+          j += 1
+          while (j < src.length && src[j] !== quote) j += 1
+          j += 1
+          continue
+        }
+        if (src[j] === '(') callDepth += 1
+        else if (src[j] === ')') callDepth -= 1
+        j += 1
+      }
+      blocks.push(src.slice(callStart + 1, j - 1))
+      i = j
+      continue
+    }
+    i += 1
+  }
+  return blocks
+}
+
+/** 前端清单里的每个条目 */
+const providerEntries = () =>
+  arrayBlocks(PROVIDERS, 'export const llmProviders: LlmProvider[] = [').map((block) => ({
+    id: capture(block, /id:\s*'([^']+)'/, 'provider.id'),
+    baseUrl: capture(block, /baseUrl:\s*'([^']+)'/, 'provider.baseUrl'),
+    keyKind: optionalCapture(block, /keyKind:\s*'([^']+)'/),
+    keyFamily: optionalCapture(block, /keyFamily:\s*'([^']+)'/),
+    keyPrefix: optionalCapture(block, /keyPrefix:\s*'([^']+)'/),
+    reasoningEffort: optionalCapture(block, /reasoningEffort:\s*'([^']+)'/),
+    models: /models:\s*false/.test(block) ? false : true,
+  }))
+
+/** 后端清单里的每个条目（前端清单的镜像） */
+const backendProviderEntries = () =>
+  callBlocks(PROXY, 'PROVIDERS: tuple[LlmProvider, ...] = (').map((block) => ({
+    id: capture(block, /id="([^"]+)"/, 'provider.id'),
+    baseUrl: capture(block, /base_url="([^"]+)"/, 'provider.base_url'),
+    keyFamily: optionalCapture(block, /key_family="([^"]+)"/),
+    keyPrefix: optionalCapture(block, /key_prefix="([^"]+)"/),
+    models: /models_supported=False/.test(block) ? false : true,
+  }))
+
+/** 一条接入线的五段：id · 端点 · 凭证类型 · 凭证前缀 · 模型列表接口 */
+const accessLineTuple = (id) => {
+  const entry = providerEntries().find((item) => item.id === id)
+  if (!entry) throw new Error(`清单里没有 ${id}`)
+  if (!entry.keyKind) throw new Error(`${id} 不是接入线（没有凭证类型）`)
+  return [
+    entry.id,
+    entry.baseUrl,
+    entry.keyKind,
+    entry.keyPrefix ?? '-',
+    entry.models === false ? 'no-models' : 'models',
+  ]
+}
+
+/** 后端托管通道的故障转移顺序——顺序本身就是契约 */
+const fallbackOrder = () =>
+  capture(
+    readText(CFG),
+    /llm_fallback_order:\s*list\[str\]\s*=\s*\[([^\]]*)\]/,
+    'llm_fallback_order',
+  )
+    .split(',')
+    .map((item) => item.trim().replace(/^["']|["']$/g, ''))
+    .filter(Boolean)
+
+// ---------- 实测基线（文档基线表 ↔ 基线记录）----------
+
+/**
+ * 基线表的列序：与文档里那张表一一对应。
+ *
+ * 逐轮读数不在参数表里，而在实测基线表里——那一列的值由文档给出，
+ * 真值由基线记录给出，两者必须一致。
+ */
+const BASELINE_RUN_COLUMNS = [
+  { label: '调用次数', key: 'CALLS', json: (run) => run.runs },
+  { label: '闸门通过', key: 'PASSED', json: (run) => run.passed },
+  { label: '正文为空', key: 'EMPTY_BODY', json: (run) => run.emptyBody },
+  { label: '推理 token 最小', key: 'REASONING_MIN', json: (run) => run.reasoningTokensMin },
+  { label: '推理 token 平均', key: 'REASONING_AVG', json: (run) => run.reasoningTokensAvg },
+  { label: '推理 token 峰值', key: 'REASONING_MAX', json: (run) => run.reasoningTokensMax },
+  { label: '端到端延迟均值', key: 'LATENCY_AVG_MS', json: (run) => run.latencyAvgMs },
+]
+
+/** 占位符：这一轮没有记这一项 */
+const BASELINE_PLACEHOLDERS = new Set(['—', '–', '-', 'n/a', 'N/A'])
+
+/** 解析实测基线表：行首是 `run-N`，其余按列序取值 */
+const parseBaselineTable = (text) => {
+  const rows = []
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line.startsWith('|')) continue
+    const cells = line.split('|').map((cell) => cell.trim())
+    if (cells.length > 0 && cells[0] === '') cells.shift()
+    if (cells.length > 0 && cells[cells.length - 1] === '') cells.pop()
+    const idMatch = /^`(run-[0-9]+)`$/.exec(cells[0] ?? '')
+    if (!idMatch) continue
+    rows.push({ id: idMatch[1], cells: cells.slice(1) })
+  }
+  return rows
+}
+
+/** 取实测基线表里某一轮某一列的值 */
+const baselineCell = (text, runId, columnIndex, columnLabel) => {
+  const row = parseBaselineTable(text).find((item) => item.id === runId)
+  if (!row) throw new Error(`实测基线表里没有 ${runId} 这一行`)
+  if (row.cells.length !== BASELINE_RUN_COLUMNS.length) {
+    throw new Error(
+      `实测基线表里 ${runId} 这行有 ${row.cells.length} 列，应有 ${BASELINE_RUN_COLUMNS.length} 列`,
+    )
+  }
+  const value = row.cells[columnIndex]
+  if (value === undefined) throw new Error(`实测基线表里 ${runId} 缺少「${columnLabel}」这一列`)
+  if (BASELINE_PLACEHOLDERS.has(value)) {
+    throw new Error(`实测基线表里 ${runId} 的「${columnLabel}」是占位符，但基线记录里有这一项`)
+  }
+  return value
+}
+
+/** 基线记录（读不到时不抛错，交给对账环节报错） */
+const baselineLoad = (() => {
+  try {
+    return { data: readJson(BASELINE_RECORD), error: null }
+  } catch (err) {
+    return { data: null, error: err.message }
+  }
+})()
 
 const CONTRACT = [
   // ---- 前端物理配置 ----
@@ -314,6 +534,129 @@ const CONTRACT = [
         /id:\s*'[a-z0-9-]+'[\s\S]*?keyKind:\s*'subscription'[\s\S]*?keyFamily:\s*'([a-z]+)'/g,
         '订阅接入线',
       ),
+  },
+  {
+    key: 'AI_ACCESS_LINE_STANDARD_COUNT',
+    source: PROVIDERS,
+    kind: 'number',
+    // 按量计费的接入线有几条——它与订阅制的那一套互不通用。
+    read: () => providerEntries().filter((entry) => entry.keyKind === 'standard').length,
+  },
+  {
+    key: 'AI_ACCESS_LINE_VENDOR_COUNT',
+    source: PROVIDERS,
+    kind: 'number',
+    // 接入线覆盖几个厂商。厂商是分组标签，不是接入线本身。
+    read: () =>
+      new Set(providerEntries().filter((entry) => entry.keyKind).map((entry) => entry.keyFamily))
+        .size,
+  },
+  {
+    key: 'AI_ACCESS_LINE_IDS',
+    source: PROVIDERS,
+    kind: 'list',
+    // 全部接入线的 id。集合比较——只比条数会漏掉「换掉一条又加回一条」。
+    read: () =>
+      providerEntries()
+        .filter((entry) => entry.keyKind)
+        .map((entry) => entry.id),
+  },
+  {
+    key: 'AI_ACCESS_LINE_NO_MODELS',
+    source: PROVIDERS,
+    kind: 'list',
+    // 没有模型列表接口的接入线：界面与验证脚本都要跳过它们。
+    read: () =>
+      providerEntries()
+        .filter((entry) => entry.models === false)
+        .map((entry) => entry.id),
+  },
+  {
+    key: 'AI_DIRECT_LINE_COUNT',
+    source: PROVIDERS,
+    kind: 'number',
+    // 不带凭证类型标记的条目：它们不在接入线体系里。
+    read: () => providerEntries().filter((entry) => !entry.keyKind).length,
+  },
+  {
+    key: 'AI_DIRECT_LINE_IDS',
+    source: PROVIDERS,
+    kind: 'list',
+    read: () =>
+      providerEntries()
+        .filter((entry) => !entry.keyKind)
+        .map((entry) => entry.id),
+  },
+  {
+    key: 'AI_PROVIDER_COUNT',
+    source: PROVIDERS,
+    kind: 'number',
+    // 清单的总条数：接入线 + 不带凭证类型标记的那几个。
+    read: () => providerEntries().length,
+  },
+  {
+    key: 'AI_PROVIDER_IDS',
+    source: PROVIDERS,
+    kind: 'list',
+    read: () => providerEntries().map((entry) => entry.id),
+  },
+  {
+    key: 'AI_FALLBACK_ORDER',
+    source: CFG,
+    kind: 'ordered-list',
+    // 后端托管通道的故障转移顺序：顺序本身就是契约，不能只比集合。
+    read: () => fallbackOrder().join(', '),
+  },
+
+  // ---- 实测基线记录（docs/simulation-baseline.json）----
+  {
+    key: 'BASE_RECORDED_AT',
+    source: BASELINE_RECORD,
+    label: '基线记录',
+    kind: 'string',
+    read: () => String(readJson(BASELINE_RECORD).recordedAt),
+  },
+  {
+    key: 'BASE_PROVIDER',
+    source: BASELINE_RECORD,
+    label: '基线记录',
+    kind: 'string',
+    read: () => String(readJson(BASELINE_RECORD).provider),
+  },
+  {
+    key: 'BASE_CONFIG_CONTROLLER_MAX_TOKENS',
+    source: BASELINE_RECORD,
+    label: '基线记录',
+    kind: 'number',
+    read: () => String(readJson(BASELINE_RECORD).config.controllerMaxTokens),
+  },
+  {
+    key: 'BASE_CONFIG_EXPLAIN_MAX_TOKENS',
+    source: BASELINE_RECORD,
+    label: '基线记录',
+    kind: 'number',
+    read: () => String(readJson(BASELINE_RECORD).config.explainMaxTokens),
+  },
+  {
+    key: 'BASE_CONFIG_REASONING_EFFORT',
+    source: BASELINE_RECORD,
+    label: '基线记录',
+    kind: 'string',
+    read: () => String(readJson(BASELINE_RECORD).config.reasoningEffort),
+  },
+  {
+    key: 'BASE_RUN_COUNT',
+    source: BASELINE_RECORD,
+    label: '基线记录',
+    kind: 'number',
+    read: () => String(readJson(BASELINE_RECORD).runs.length),
+  },
+  {
+    key: 'BASE_MODELS_AVAILABLE',
+    source: BASELINE_RECORD,
+    label: '基线记录',
+    kind: 'number',
+    read: () => String(readJson(BASELINE_RECORD).modelsAvailable),
   },
 
   // ---- AI 演武场 ----
@@ -629,6 +972,33 @@ const CONTRACT = [
   },
 ]
 
+// 逐条接入线：条目 id 变了，这里就会多出一条契约——文档必须同步补一行。
+const accessLineContracts = providerEntries()
+  .filter((entry) => entry.keyKind)
+  .map((entry) => ({
+    key: `AI_LINE_${entry.id.replace(/-/g, '_').toUpperCase()}`,
+    source: PROVIDERS,
+    kind: 'tuple',
+    read: () => accessLineTuple(entry.id),
+  }))
+CONTRACT.push(...accessLineContracts)
+
+// 逐轮实测读数：轮次来自基线记录，文档的基线表必须逐项对上。
+const baselineRunContracts = (baselineLoad.data?.runs ?? []).flatMap((run) =>
+  BASELINE_RUN_COLUMNS.map((column, index) => {
+    if (column.json(run) === undefined) return null
+    return {
+      key: `BASE_${run.id.replace(/-/g, '_').toUpperCase()}_${column.key}`,
+      source: BASELINE_RECORD,
+      label: '基线记录',
+      kind: 'number',
+      doc: (text) => baselineCell(text, run.id, index, column.label),
+      read: () => String(column.json(run)),
+    }
+  }).filter(Boolean),
+)
+CONTRACT.push(...baselineRunContracts)
+
 /** Python 元组字面量的第 index 项（0 起） */
 const tupleItem = (text, name, index) => {
   const inner = capture(text, new RegExp(`^${name}\\s*=\\s*\\(([^)]*)\\)`, 'm'), name)
@@ -673,12 +1043,25 @@ const splitTokens = (raw) => {
   return [...new Set(tokens)]
 }
 
+/** 分段值的分隔符（接入线明细那一列） */
+const TUPLE_SEP = '·'
+
+/** 拆「a · b · c」这样的分段值 */
+const splitTuple = (raw) =>
+  String(raw)
+    .split(TUPLE_SEP)
+    .map((part) => part.trim())
+    .filter(Boolean)
+
 const sameSet = (a, b) => {
   if (a.length !== b.length) return false
   const left = [...a].sort()
   const right = [...b].sort()
   return left.every((token, index) => token === right[index])
 }
+
+/** 顺序也要一样——顺序本身就是契约时不能只比集合 */
+const sameOrder = (a, b) => a.length === b.length && a.every((token, index) => token === b[index])
 
 // ---------- 文档解析 ----------
 
@@ -744,59 +1127,100 @@ for (const row of rows) {
 
 for (const entry of CONTRACT) {
   const row = rowsByKey.get(entry.key)
-  if (!row) {
-    problems.push(`文档缺少该常量：${entry.key}`)
-    continue
-  }
-  if (row.source !== entry.source) {
-    problems.push(
-      `文档标的来源与实际读取的文件不一致：${entry.key}（文档写 ${row.source || '空'}，实际读取 ${entry.source}）`,
-    )
-    continue
+  let expectedRaw
+  if (entry.doc) {
+    // 期望值不在参数表里（例如实测基线表），由条目自己去文档里取。
+    try {
+      expectedRaw = entry.doc(docText)
+    } catch (err) {
+      problems.push(`读不到文档里的取值：${entry.key}（${err.message}）`)
+      continue
+    }
+  } else {
+    if (!row) {
+      problems.push(`文档缺少该常量：${entry.key}`)
+      continue
+    }
+    if (row.source !== entry.source) {
+      problems.push(
+        `文档标的来源与实际读取的文件不一致：${entry.key}（文档写 ${row.source || '空'}，实际读取 ${entry.source}）`,
+      )
+      continue
+    }
+    expectedRaw = row.value
   }
 
   let actual
   try {
     actual = entry.read()
   } catch (err) {
-    problems.push(`读不到源码里的取值：${entry.key}（${err.message}）`)
+    problems.push(`读不到${entry.label ?? '源码'}里的取值：${entry.key}（${err.message}）`)
     continue
   }
+
+  // 实际值从哪来：多数条目读的是源码，带 label 的条目读的是基线记录。
+  // 报错时要说清是哪一边——把记录里的数说成「源码」，会让人跑去翻错文件。
+  const actualLabel = entry.label ?? '源码'
   const actualText = typeof actual === 'string' ? actual : String(actual)
 
   if (entry.kind === 'number') {
-    const expectedNumber = toNumber(row.value)
+    const expectedNumber = toNumber(expectedRaw)
     if (!Number.isFinite(expectedNumber)) {
-      problems.push(`文档里的值不是数字：${entry.key} = "${row.value}"`)
+      problems.push(`文档里的值不是数字：${entry.key} = "${expectedRaw}"`)
       continue
     }
     const actualNumber = toNumber(actualText)
     if (!Number.isFinite(actualNumber)) {
-      problems.push(`源码里的值不是数字：${entry.key} = "${actualText}"`)
+      problems.push(`${actualLabel}里的值不是数字：${entry.key} = "${actualText}"`)
       continue
     }
     if (!nearlyEqual(expectedNumber, actualNumber)) {
       problems.push(
-        `文档与源码不一致：${entry.key}（文档 ${row.value} → ${expectedNumber}，源码 ${actualText} → ${actualNumber}）`,
+        `文档与${actualLabel}不一致：${entry.key}（文档 ${expectedRaw} → ${expectedNumber}，${actualLabel} ${actualText} → ${actualNumber}）`,
       )
       continue
     }
     notes.push(`${entry.key} = ${actualText} ✓`)
   } else if (entry.kind === 'list') {
-    const expectedTokens = splitTokens(row.value)
+    const expectedTokens = splitTokens(expectedRaw)
     const actualTokens = splitTokens(actualText)
     if (!sameSet(expectedTokens, actualTokens)) {
       const missing = expectedTokens.filter((token) => !actualTokens.includes(token))
       const extra = actualTokens.filter((token) => !expectedTokens.includes(token))
       problems.push(
-        `文档与源码不一致：${entry.key}（文档 ${row.value}；源码 ${actualText}；文档多出 ${missing.join(', ') || '无'}；源码多出 ${extra.join(', ') || '无'}）`,
+        `文档与${actualLabel}不一致：${entry.key}（文档 ${expectedRaw}；${actualLabel} ${actualText}；文档多出 ${missing.join(', ') || '无'}；${actualLabel}多出 ${extra.join(', ') || '无'}）`,
       )
       continue
     }
     notes.push(`${entry.key} = ${actualTokens.join(', ')} ✓`)
+  } else if (entry.kind === 'ordered-list') {
+    const expectedTokens = splitTokens(expectedRaw)
+    const actualTokens = splitTokens(actualText)
+    if (!sameOrder(expectedTokens, actualTokens)) {
+      problems.push(
+        `文档与${actualLabel}的顺序不一致：${entry.key}（文档 ${expectedRaw}；${actualLabel} ${actualText}）`,
+      )
+      continue
+    }
+    notes.push(`${entry.key} = ${actualTokens.join(', ')} ✓`)
+  } else if (entry.kind === 'tuple') {
+    const expectedParts = splitTuple(expectedRaw)
+    const actualParts = (Array.isArray(actual) ? actual : splitTuple(actualText)).map(String)
+    if (!sameOrder(expectedParts, actualParts)) {
+      const diff = expectedParts
+        .map((part, index) =>
+          part === actualParts[index] ? null : `第 ${index + 1} 段 ${part} ≠ ${actualParts[index] ?? '（缺）'}`,
+        )
+        .filter(Boolean)
+      problems.push(
+        `文档与${actualLabel}不一致：${entry.key}（文档 ${expectedRaw}；${actualLabel} ${actualParts.join(` ${TUPLE_SEP} `)}${diff.length ? `；${diff.join('；')}` : ''}）`,
+      )
+      continue
+    }
+    notes.push(`${entry.key} = ${actualParts.join(` ${TUPLE_SEP} `)} ✓`)
   } else {
-    if (row.value !== actualText) {
-      problems.push(`文档与源码不一致：${entry.key}（文档 ${row.value}，源码 ${actualText}）`)
+    if (expectedRaw !== actualText) {
+      problems.push(`文档与${actualLabel}不一致：${entry.key}（文档 ${expectedRaw}，${actualLabel} ${actualText}）`)
       continue
     }
     notes.push(`${entry.key} = ${actualText} ✓`)
@@ -808,6 +1232,120 @@ for (const row of rows) {
   if (row.broken || row.duplicate) continue
   if (!contractByKey.has(row.key)) {
     problems.push(`文档里的这一行没有对账规则：${row.key}`)
+  }
+}
+
+// ---------- 跨源对账 ----------
+
+// 前后端的提供商清单必须一致：前端是事实来源，后端是它的镜像
+try {
+  const frontendIds = providerEntries().map((entry) => entry.id)
+  const backendIds = backendProviderEntries().map((entry) => entry.id)
+  const missing = frontendIds.filter((id) => !backendIds.includes(id))
+  const extra = backendIds.filter((id) => !frontendIds.includes(id))
+  if (missing.length || extra.length) {
+    problems.push(
+      `前后端的提供商清单不一致（前端缺 ${missing.join(', ') || '无'}；后端多 ${extra.join(', ') || '无'}）`,
+    )
+  } else {
+    notes.push(`前后端提供商清单一致（${frontendIds.length} 条） ✓`)
+  }
+} catch (err) {
+  problems.push(`读不到提供商清单：${err.message}`)
+}
+
+if (baselineLoad.error) {
+  problems.push(`读不到基线记录：${BASELINE_RECORD}（${baselineLoad.error}）`)
+} else {
+  const record = baselineLoad.data
+  const config = record.config ?? {}
+
+  // 基线记录的 config 段必须与源码常量一致——改了源码忘了更新记录，构建要失败
+  const configChecks = [
+    {
+      key: 'controllerMaxTokens',
+      label: 'llmConfig.controllerMaxTokens',
+      read: () =>
+        capture(
+          llmBlock(),
+          new RegExp(`controllerMaxTokens:\\s*(${NUM})`),
+          'llmConfig.controllerMaxTokens',
+        ),
+    },
+    {
+      key: 'explainMaxTokens',
+      label: 'llmConfig.explainMaxTokens',
+      read: () =>
+        capture(
+          llmBlock(),
+          new RegExp(`explainMaxTokens:\\s*(${NUM})`),
+          'llmConfig.explainMaxTokens',
+        ),
+    },
+  ]
+  for (const check of configChecks) {
+    try {
+      const recorded = toNumber(config[check.key])
+      const actual = toNumber(check.read())
+      if (!Number.isFinite(recorded) || !Number.isFinite(actual) || !nearlyEqual(recorded, actual)) {
+        problems.push(
+          `基线记录与源码不一致：config.${check.key}（记录 ${config[check.key]}，源码 ${check.label} = ${check.read()}）`,
+        )
+      } else {
+        notes.push(`基线记录 config.${check.key} = ${recorded} ✓（与 ${check.label} 一致）`)
+      }
+    } catch (err) {
+      problems.push(`基线记录与源码对不上：config.${check.key}（${err.message}）`)
+    }
+  }
+
+  // 基线记录里的接入线必须在清单里，且它的思考深度参数与记录一致
+  try {
+    const providerId = String(record.provider ?? '')
+    const entry = providerEntries().find((item) => item.id === providerId)
+    if (!entry) {
+      problems.push(`基线记录里的接入线 ${providerId} 不在清单里`)
+    } else if (!entry.keyKind) {
+      problems.push(`基线记录里的 ${providerId} 不是接入线（没有凭证类型）`)
+    } else if (entry.reasoningEffort !== config.reasoningEffort) {
+      problems.push(
+        `基线记录与源码不一致：config.reasoningEffort（记录 ${config.reasoningEffort}，源码 ${providerId} 的 reasoningEffort = ${entry.reasoningEffort}）`,
+      )
+    } else {
+      notes.push(`基线记录 config.reasoningEffort = ${config.reasoningEffort} ✓（与 ${providerId} 一致）`)
+    }
+  } catch (err) {
+    problems.push(`基线记录与源码对不上：provider（${err.message}）`)
+  }
+
+  // 文档的实测基线表与基线记录必须逐行对应
+  const docRuns = parseBaselineTable(docText)
+  const recordRuns = record.runs ?? []
+  for (const run of recordRuns) {
+    if (!docRuns.some((row) => row.id === run.id)) {
+      problems.push(`基线记录里有 ${run.id} 这一轮，文档的实测基线表里没有`)
+    }
+  }
+  for (const row of docRuns) {
+    const run = recordRuns.find((item) => item.id === row.id)
+    if (!run) {
+      problems.push(`文档的实测基线表里有 ${row.id} 这一轮，基线记录里没有`)
+      continue
+    }
+    if (row.cells.length !== BASELINE_RUN_COLUMNS.length) {
+      problems.push(
+        `实测基线表里 ${row.id} 这行有 ${row.cells.length} 列，应有 ${BASELINE_RUN_COLUMNS.length} 列`,
+      )
+      continue
+    }
+    BASELINE_RUN_COLUMNS.forEach((column, index) => {
+      const cell = row.cells[index]
+      if (!BASELINE_PLACEHOLDERS.has(cell) && column.json(run) === undefined) {
+        problems.push(
+          `实测基线表里 ${row.id} 的「${column.label}」有值，但基线记录里没有这一项`,
+        )
+      }
+    })
   }
 }
 
@@ -823,5 +1361,5 @@ if (problems.length) {
   process.exit(1)
 }
 
-console.log(`\n✅ ${notes.length} 个常量全部与源码一致`)
+console.log(`\n✅ ${notes.length} 项对账全部通过`)
 process.exit(0)

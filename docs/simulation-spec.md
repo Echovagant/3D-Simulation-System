@@ -313,6 +313,8 @@ AI 在这个系统里是**意图层**，不是物理层。
 
 ⚠️ **不是每家都开放模型列表接口**：百炼的 Coding Plan 不支持（拉它必然失败）。这种接入线要在清单里标出来，界面与验证脚本都要**跳过**而不是报一个必然失败的错。
 
+清单里另外还有 **4 个条目**（`openai` / `anthropic` / `gemini` / `xai`）不带凭证类型标记，也没有厂商分组——它们不在接入线体系里，只是各家的直连端点。接入线条数按「带凭证类型标记的条目」算，不按清单的总条数算。
+
 ### 5.6 可观测
 
 面板必须能回答「LLM 到底有没有在起作用」：
@@ -328,22 +330,42 @@ AI 在这个系统里是**意图层**，不是物理层。
 
 ### 5.7 实测基线
 
-真厂商连通性验证（`scripts/verify-llm-live.mjs`）跑出来的一组基线数字：
+基线里的数字分两类，来源不同，复核方式也不同：
 
-| 指标 | 值 |
-| --- | --- |
-| 闸门通过 | 12/12 |
-| 正文为空 | 0/12 |
-| 闸门拒收 | 0/12 |
-| 推理 token | min 0 / max 187 / avg 73 |
-| 端到端延迟 | avg 1702 ms |
-| 可用模型 | 9 个 |
+| 类别 | 记在哪 | 谁核它 |
+| --- | --- | --- |
+| 源码常量 | [参数与常量表](#6-参数与常量表) | `scripts/check-simulation-spec.mjs` 逐项与源码对账——改了源码没改表，构建失败 |
+| 运行期实测 | `docs/simulation-baseline.json` | `scripts/verify-llm-live.mjs` 用真 key 复现；**它不在构建链里**，要手动跑 |
+
+两类数字串成一条链：**源码 → 文档 → 记录**。记录里的 `config` 段必须与源码常量一致，文档里的基线表必须与记录一致——任何一环改了，另外两环对不上时构建失败。
+
+#### 5.7.1 逐轮读数
+
+复现命令（key 只从仓库外文件或环境变量读，脚本不打印 key）：
+
+`node scripts/verify-llm-live.mjs --key-file <仓库外路径> --provider minimax-cn-subscription --runs 12`
+
+接入线 `minimax-cn-subscription`，输出上限取源码的 `512`：
+
+| 轮次 | 调用次数 | 闸门通过 | 正文为空 | 推理 token 最小 | 推理 token 平均 | 推理 token 峰值 | 端到端延迟均值 (ms) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `run-1` | 12 | 12 | 0 | 0 | 73 | 187 | 1702 |
+| `run-2` | 12 | 12 | 0 | — | — | 159 | — |
+| `run-3` | 6 | 6 | 0 | — | — | 250 | — |
+
+`—` 表示这一轮没有记这一项。
+
+三轮合计 **30 次调用、30 次通过、0 次正文为空**；推理 token 峰值 **250**，出现在第三轮。
+
+⚠️ **改之前是什么样**：输出上限 256、且不传 `reasoning_effort` 时，推理 token 涨到 **242/256** 把正文挤空，返回的 JSON 变成半截（`{"action":"move","direction":[-1,0],`），闸门必然拒收。给到 512 之后才有上面这组读数。
 
 ⚠️ **单次跑通不等于跑对。** 推理长度有波动，同样的提示词同一把 key，第一次可能被挤空、第二次正常。所以判据是**频率**（正文为空率 = 0），不是「跑通了一次」。
 
 ## 6. 参数与常量表
 
 这张表由 `scripts/check-simulation-spec.mjs` 自动与源码对账。改了源码里的数值却没改这里，构建会失败。
+
+表分三块：主表逐个列常量；[6.1 接入线明细](#61-接入线明细)逐条列接入线；[6.2 实测基线记录](#62-实测基线记录)是运行期数字的机器可读记录。
 
 | 常量 | 值 | 单位 | 来源 |
 | --- | --- | --- | --- |
@@ -365,6 +387,15 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `AI_ACCESS_LINE_COUNT` | `11` | 条 | `src/config/llmProviders.ts` |
 | `AI_ACCESS_LINE_FAMILIES` | `minimax, deepseek, zhipu, qwen, ark` | — | `src/config/llmProviders.ts` |
 | `AI_ACCESS_LINE_SUBSCRIPTION_COUNT` | `5` | 条 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_STANDARD_COUNT` | `6` | 条 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_VENDOR_COUNT` | `5` | 个 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_IDS` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding` | — | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_NO_MODELS` | `qwen-coding` | — | `src/config/llmProviders.ts` |
+| `AI_DIRECT_LINE_COUNT` | `4` | 条 | `src/config/llmProviders.ts` |
+| `AI_DIRECT_LINE_IDS` | `openai, anthropic, gemini, xai` | — | `src/config/llmProviders.ts` |
+| `AI_PROVIDER_COUNT` | `15` | 条 | `src/config/llmProviders.ts` |
+| `AI_PROVIDER_IDS` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding, openai, anthropic, gemini, xai` | — | `src/config/llmProviders.ts` |
+| `AI_FALLBACK_ORDER` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding` | — | `backend/app/config.py` |
 | `AI_MAX_SPEED` | `8` | m/s | `src/composables/useAI.ts` |
 | `AI_AVOID_DISTANCE` | `3.5` | 米 | `src/composables/useAI.ts` |
 | `AI_DECISION_INTERVAL_MS` | `100` | 毫秒 | `src/composables/useAI.ts` |
@@ -404,6 +435,41 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `RENDER_GROUND_HALF_Z` | `5` | 米 | `src/render/renderPage.ts` |
 | `RENDER_GROUND_BODY_Y` | `-0.1` | 米 | `src/render/renderPage.ts` |
 | `RENDER_ACTION_TYPES` | `addCube, addSphere, setCamera, setSpeed` | — | `src/render/renderPage.ts` |
+
+### 6.1 接入线明细
+
+一条接入线一行。五段依次是：**接入线 id · 端点 · 凭证类型 · 凭证前缀 · 模型列表接口**。
+
+- 凭证前缀写 `-` 表示这条线的前缀规则认不出凭证类型（[S24](#s24-凭证识别按前缀长度倒序)）；
+- 模型列表接口写 `models` 表示开放、`no-models` 表示不开放。
+
+| 常量 | 值 | 单位 | 来源 |
+| --- | --- | --- | --- |
+| `AI_LINE_MINIMAX` | `minimax · https://api.minimax.io/v1 · standard · sk-api- · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_MINIMAX_SUBSCRIPTION` | `minimax-subscription · https://api.minimax.io/v1 · subscription · sk-cp- · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_MINIMAX_CN` | `minimax-cn · https://api.minimaxi.com/v1 · standard · sk-api- · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_MINIMAX_CN_SUBSCRIPTION` | `minimax-cn-subscription · https://api.minimaxi.com/v1 · subscription · sk-cp- · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_DEEPSEEK` | `deepseek · https://api.deepseek.com · standard · - · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_ZHIPU` | `zhipu · https://open.bigmodel.cn/api/paas/v4 · standard · - · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_ZHIPU_CODING` | `zhipu-coding · https://open.bigmodel.cn/api/coding/paas/v4 · subscription · - · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_QWEN` | `qwen · https://dashscope.aliyuncs.com/compatible-mode/v1 · standard · sk- · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_QWEN_CODING` | `qwen-coding · https://coding.dashscope.aliyuncs.com/v1 · subscription · sk-sp- · no-models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_ARK` | `ark · https://ark.cn-beijing.volces.com/api/v3 · standard · - · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_ARK_CODING` | `ark-coding · https://ark.cn-beijing.volces.com/api/coding/v3 · subscription · - · models` | — | `src/config/llmProviders.ts` |
+
+### 6.2 实测基线记录
+
+`docs/simulation-baseline.json` 是运行期实测的机器可读记录。它的 `config` 段必须与源码常量一致——改了源码忘了更新记录，构建会失败。逐轮读数在 [5.7.1](#571-逐轮读数)，那里与记录逐项对账。
+
+| 常量 | 值 | 单位 | 来源 |
+| --- | --- | --- | --- |
+| `BASE_RECORDED_AT` | `2026-10-24` | 日期 | `docs/simulation-baseline.json` |
+| `BASE_PROVIDER` | `minimax-cn-subscription` | — | `docs/simulation-baseline.json` |
+| `BASE_CONFIG_CONTROLLER_MAX_TOKENS` | `512` | token | `docs/simulation-baseline.json` |
+| `BASE_CONFIG_EXPLAIN_MAX_TOKENS` | `400` | token | `docs/simulation-baseline.json` |
+| `BASE_CONFIG_REASONING_EFFORT` | `low` | — | `docs/simulation-baseline.json` |
+| `BASE_RUN_COUNT` | `3` | 轮 | `docs/simulation-baseline.json` |
+| `BASE_MODELS_AVAILABLE` | `9` | 个 | `docs/simulation-baseline.json` |
 
 ## 7. 条款清单
 
@@ -563,6 +629,38 @@ AI 在这个系统里是**意图层**，不是物理层。
 
 - 验证：`backend/tests/test_llm_hosting.py`
 
+### S26 输出上限要给推理留出正文空间
+
+控制器单次请求的输出上限**同时**管推理与正文。推理型模型先花掉一部分 token 写思考，剩下的才是正文，所以上限必须给正文留出空间：下限 `512` token。
+
+⚠️ 调小上限不是「省一点」，而是把正文挤空——返回的 JSON 变成半截，闸门必然拒收，界面看起来却完全正常。实测推理 token 峰值曾达 `250`（[5.7.1](#571-逐轮读数)），所以 512 是下限而不是随便定的数。
+
+- 验证：`src/config/llm.ts`、`docs/simulation-baseline.json`（由 `scripts/check-simulation-spec.mjs` 对账）
+
+### S27 接入线的身份是「端点 × 凭证类型」
+
+接入线不是厂商。一条接入线由**端点**与**凭证类型**共同确定，厂商只是分组标签。当前清单是 **11 条接入线 / 5 个厂商**，其中订阅制 **5** 条、按量计费 **6** 条。
+
+⚠️ 同厂商不同凭证类型的两条线彼此不通用：换一条线只会得到「这一家没配 key」，而不是「模型名错了」这种指不到真因的错。
+
+- 验证：`src/config/llmProviders.ts`、`backend/app/services/llm_proxy.py`、`backend/tests/test_llm_hosting.py`
+
+### S28 凭证识别只在同厂商内、按前缀长度倒序
+
+凭证识别三条同时成立：① 只在**同一厂商内**比对，别家厂商的 key 是另一类错误；② 前缀按**长度从长到短**匹配；③ 前缀认不出就**不提示**，不硬猜。
+
+⚠️ 第 ② 条反了就把订阅 key 误判成按量 key：短的 `sk-` 正是长的 `sk-sp-` 的前缀。
+
+- 验证：`src/stores/llmStore.test.ts`、`backend/tests/test_llm_hosting.py`
+
+### S29 空正文的两种原因必须可区分
+
+正文为空时，`finish_reason === 'length'`（被输出上限截断）与「模型确实没给正文」必须分开报：前者调大输出上限即可，后者调大没用。
+
+两者都报成「无法解析」的话，用户既不知道怎么修，也无从判断该不该重试。
+
+- 验证：`src/services/llm/client.ts`、`src/stores/llmStore.test.ts`
+
 ## 8. 已知边界
 
 这些是**当前确实如此**，不是待办：
@@ -575,10 +673,11 @@ AI 在这个系统里是**意图层**，不是物理层。
 - **一致性基准只覆盖立方体自由落体**这一条轨迹。它证明的是「参数没漂」，不是「所有场景都一致」。
 - **AI 侧的全部逻辑由替身模型测试**；真实厂商的返回格式只有 `verify:llm-live` 脚本覆盖，它**不在构建链里**，要手动跑。
 - **厂商会退役模型。** MiniMax 的 M2.5 / M2.7 已在退役流程中（官方公告 2026-11-18 退役）。清单里的默认模型是当前有效的，但**厂商改版时清单会过期**——面板上的「拉取可用模型」能看出这把 key 实际还能调什么。
-- **接入线会变。** 厂商新增端点或新凭证类型时，清单里的条目数会变；[参数表](#6-参数与常量表)里的 `AI_ACCESS_LINE_COUNT` 会与它对不上，构建失败——这是故意的。
+- **接入线会变。** 厂商新增端点或新凭证类型时，清单里的条目数会变；[参数表](#6-参数与常量表)里的 `AI_ACCESS_LINE_COUNT` 与 [6.1 接入线明细](#61-接入线明细)会与它对不上，构建失败——这是故意的。后端的故障转移顺序（`AI_FALLBACK_ORDER`）同样在对账里。
 - **有些厂商两类 key 格式一样**（智谱、方舟都是 `id.secret` 或无固定前缀），那就没法靠前缀认出凭证类型。这种接入线不显示类型提示，贴错了只能靠端点返回的错误提示。
 - **清单里的默认模型会过期。** 厂商改版、模型退役时清单不会自动跟——面板上的「拉取可用模型」能看出这把 key 实际还能调什么。
-- **真 key 验证只覆盖了 MiniMax 一家。** 脚本支持全部接入线，但只有 MiniMax 那条真的用真 key 跑过（12/12 通过）。别的接入线要验证得各自准备一把 key。
+- **真 key 验证只覆盖了 MiniMax 一家。** 脚本支持全部接入线，但只有 MiniMax 的订阅接入线真的用真 key 跑过（三轮共 30 次调用、30 次通过、0 次正文为空）。别的接入线要验证得各自准备一把 key。
+- **运行期数字不在构建链里。** 闸门能锁的是源码常量与[基线记录](#62-实测基线记录)本身；记录里的数字要靠 `scripts/verify-llm-live.mjs` 手动复现。厂商改版、换 key 或调了输出上限之后，记录会过期——闸门只会发现「记录与源码对不上」，不会替你重跑。
 
 ## 9. 变更规则
 
@@ -588,5 +687,7 @@ AI 在这个系统里是**意图层**，不是物理层。
 2. **改了语义** → 同步改对应的条款，并指出验证方式。
 3. **新增一条约束** → 在条款清单里加一条，验证方式一栏必须指向真实存在的文件。
 4. **发现了新的边界** → 写进[已知边界](#8-已知边界)，并说明它影响哪条路径。
+5. **改了接入线清单** → 同步改 [6.1 接入线明细](#61-接入线明细)与后端的故障转移顺序；少改一处，闸门会红。
+6. **改了输出上限等常量** → 同步改 `docs/simulation-baseline.json` 的 `config` 段与 [5.7 实测基线](#57-实测基线)；否则基线记录与源码对不上。
 
 规格与代码不一致时，**以代码为准**，然后立刻改规格——规格不是权威，代码才是。规格的价值在于让不一致立刻暴露，而不是让文档说了算。
