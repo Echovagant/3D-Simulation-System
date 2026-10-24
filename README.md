@@ -16,9 +16,9 @@
 </p>
 
 <div align="center">
-  <img src="docs/screenshots/ai-playground.png" alt="AI 演武场：规则式智能体在 3D 场地里读取感知、自主移动，右侧面板可切换 LLM 决策" width="880" />
+  <img src="docs/screenshots/ai-playground.png" alt="AI 演武场：3 个智能体在 48×48 米场地里读感知自主移动，右侧面板实时显示决策日志" width="880" />
   <br>
-  <sub>AI 演武场（生产产物实拍）· 智能体读真实感知自主移动，碰撞与运动由 Rapier 求解</sub>
+  <sub>AI 演武场（生产产物实拍）· 智能体读真实感知自主移动，碰撞与运动由 Rapier 求解，右侧是实时的决策日志</sub>
 </div>
 
 <table>
@@ -78,7 +78,7 @@ AI 那部分也遵守同一条规矩：**模型只提供意图，位移永远由
 </td>
 <td width="33%" valign="top" align="center">
 <b>🤖 AI 演武场</b><br><br>
-<sub>智能体读真实感知自主移动；可选接入 11 条接入线（5 家厂商）做决策与解释</sub>
+<sub>智能体读真实感知自主移动；决策日志随时回看、可导出成 .jsonl；可选接入 11 条接入线（5 家厂商）做决策与解释</sub>
 </td>
 </tr>
 <tr>
@@ -106,13 +106,19 @@ AI 那部分也遵守同一条规矩：**模型只提供意图，位移永远由
 </td>
 <td width="33%" valign="top" align="center">
 <b>📋 仿真过程规格</b><br><br>
-<sub>世界/时间/状态/一致性/意图五层，每条约束标出实现位置与验证它的测试</sub>
+<sub>世界/时间/状态/一致性/意图五层共 34 条约束，每条标出实现位置与验证它的测试</sub>
 </td>
 </tr>
 </table>
 </div>
 
 ## 界面
+
+<div align="center">
+  <img src="docs/assets/demo.gif" alt="录屏：前段是仿真实验室的刚体仿真与批量仿真面板，后段是 AI 演武场的智能体自主移动" width="880" />
+  <br>
+  <sub>录屏（生产产物实拍）· 前段是仿真实验室的刚体仿真，后段是 AI 演武场的智能体自主移动 —— <a href="docs/assets/demo.mp4">MP4 版</a></sub>
+</div>
 
 <div align="center">
 <table>
@@ -122,7 +128,7 @@ AI 那部分也遵守同一条规矩：**模型只提供意图，位移永远由
   <td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库 · 9 个模型全部可加载</sub></td>
 </tr>
 <tr>
-  <td width="33%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场 · 智能体自主移动，可接 LLM 决策</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场 · 智能体自主移动，决策日志随时回看</sub></td>
   <td width="33%" align="center"><img src="docs/screenshots/overview.png" alt="系统总览" width="100%"><br><sub>系统总览 · 每个模块是什么、数据存在哪</sub></td>
   <td width="33%" align="center"><img src="docs/screenshots/docs.png" alt="系统文档" width="100%"><br><sub>系统文档 · 总览与已知问题与边界</sub></td>
 </tr>
@@ -202,7 +208,8 @@ npm run preview    # 预览生产产物
 | `npm run verify:llm-live` | 真厂商连通性验证：用自己的 key 跑一遍控制器提示词（需要 key 与网络，不在构建链里） |
 | `npm run build:all` | 前后端一起跑（前端构建 + 后端闸门） |
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
-| `npm run gen:docs` | 重新生成封面与页面截图 |
+| `npm run gen:docs` | 重新生成封面与页面截图（演武场那张会把仿真跑起来再拍） |
+| `npm run record:demo` | 重新录制 README 里那段演示（产出 GIF 与 MP4） |
 
 ## 可选后端
 
@@ -333,8 +340,9 @@ flowchart LR
 3. **仿真按固定步长推进**——真实时间按 1/60 秒切成整步，步数与显示帧率无关。
 
 「一次仿真到底发生了什么」写成了一份可核对的规格：[**仿真过程规格**](docs/simulation-spec.md)——
-世界、时间、状态、一致性、意图五层，每条约束都标出它在源码里的实现位置与验证它的测试。
-文档里写下的每个数值都由 `verify:spec` 闸门自动与源码对账，改了代码没改规格，构建会直接失败。
+世界、时间、状态、一致性、意图五层共 34 条约束，每条都标出它在源码里的实现位置与验证它的测试。
+文档里写下的每个数值都由 `verify:spec` 闸门自动与源码对账（当前 **110 项**），
+改了代码没改规格，构建会直接失败。
 
 ## 质量保障
 
@@ -344,11 +352,14 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 5.44 MB |
+| 产物体积 | 5.45 MB |
 | 运行时依赖 | 11 个 |
 | 可加载模型 | 9 个（全部程序化生成） |
 | 类型检查 | 0 错误 |
 | 页面体检 | 7 个页面 0 console error / 0 未捕获异常 / 0 网络失败 |
+
+渲染器一律显式请求高性能 GPU（`powerPreference: 'high-performance'`）——**双显卡笔记本**上
+浏览器默认可能把 WebGL 上下文交给核显，帧率直接掉一半；显式请求能显著提高拿到独显的概率。
 
 后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（139 个用例）。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
@@ -390,7 +401,7 @@ Markdown 原文在 [`src/docs/`](src/docs)。
 
 **Apache License 2.0**，完整文本见 [`LICENSE`](LICENSE)。
 
-仓库里的每一份非源码资产（9 个模型、9 张缩略图、logo、favicon、封面、页面截图）
+仓库里的每一份非源码资产（9 个模型、9 张缩略图、logo、favicon、封面、页面截图、演示录屏）
 都由本仓库的脚本生成，随 Apache-2.0 发布，**不含任何第三方模型、贴图或字体素材**。
 
 ## 致谢

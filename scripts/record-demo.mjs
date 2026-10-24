@@ -234,7 +234,9 @@ const runFfmpeg = (args, label) => {
 //   报 "Palette input must contain exactly 256 pixels"。）
 runFfmpeg([
   '-y', '-i', mp4,
-  '-vf', 'fps=10,scale=640:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle',
+  // 960 宽：README 里按 880 显示是等比缩小，文字仍然清楚。
+  // 640 在 1012 宽的正文栏里只占六成，缩到 880 又会糊——两头都不讨好。
+  '-vf', 'fps=10,scale=960:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3:diff_mode=rectangle',
   '-loop', '0', gif,
 ], 'GIF')
 console.log(`  ${gif}  ${(await stat(gif)).size} B`)

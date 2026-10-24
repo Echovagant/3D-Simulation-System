@@ -85,6 +85,44 @@ if (testCases === '?') {
   process.exit(1)
 }
 
+/**
+ * 报告必须覆盖磁盘上的**全部**测试文件。
+ *
+ * ⚠️ vitest 偶尔会在机器吃紧时提前收工：报告里 `success: true`、`numFailedTests: 0`，
+ * 但只跑了一部分文件（实测过：50 个文件只跑了 35 个，用例数从 467 变成 284）。
+ * 那个数会被**画进封面**，从此 README 的封面就在说一个错数字，而且没人会发现。
+ *
+ * 这里数一遍磁盘上的测试文件，跟报告里的对一下：
+ * 对不上就停下来报错——宁可没有封面，也不要一个会骗人的封面。
+ */
+{
+  const countTestFiles = async (dir) => {
+    let total = 0
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name)
+      if (entry.isDirectory()) total += await countTestFiles(full)
+      else if (entry.name.endsWith('.test.ts')) total += 1
+    }
+    return total
+  }
+  const onDisk = await countTestFiles(join(repoRoot, 'src'))
+  const reportPath = join(repoRoot, 'node_modules', '.cache', 'docs-assets-vitest.json')
+  let reported = 0
+  try {
+    const report = JSON.parse(await readFile(reportPath, 'utf8'))
+    reported = Array.isArray(report.testResults) ? report.testResults.length : 0
+  } catch {
+    reported = 0
+  }
+  if (reported < onDisk) {
+    console.error(
+      `测试报告只覆盖了 ${reported} 个文件，磁盘上有 ${onDisk} 个——vitest 提前收工了。\n` +
+        '封面上的用例数会因此是错的，终止。重跑一次 npm run gen:docs 即可。',
+    )
+    process.exit(1)
+  }
+}
+
 console.log(`入口 ${entryKB.toFixed(2)} KB · 用例 ${testCases} · 闸门 ${gateCount} · 依赖 ${deps}`)
 
 // ---------- 静态服务（dist/ 与仓库里的 logo.svg）----------
@@ -417,6 +455,30 @@ for (const [route, name, wait] of SHOTS) {
     )
     await sleep(600)
     console.log(`  配色：${painted.painted} 个物体`)
+  }
+
+  // AI 演武场：把仿真开起来、添几个代理再拍。
+  // ⚠️ 默认是暂停的：不点「开始」，右侧日志面板是一片「没有符合条件的日志」，
+  // 首图就看不出这东西是活的；只留 1 个代理也显得空。
+  if (name === 'ai-playground') {
+    const clickByText = (text) =>
+      evalJs(
+        cdp,
+        sessionId,
+        `(() => {
+          const b = Array.from(document.querySelectorAll('button')).find(x => x.innerText.trim().includes(${JSON.stringify(text)}))
+          if (!b) return 'not-found'
+          b.click()
+          return 'clicked'
+        })()`,
+      )
+    for (let i = 0; i < 2; i += 1) {
+      await clickByText('添加代理')
+      await sleep(700)
+    }
+    const started = await clickByText('开始')
+    await sleep(5000)
+    console.log(`  开跑仿真：${started}`)
   }
 
   const info = await evalJs(cdp, sessionId, `(() => {
