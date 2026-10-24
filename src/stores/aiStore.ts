@@ -14,12 +14,18 @@ export type AiAgentType = 'basic' | 'advanced' | 'custom'
 let agentSequence = 0
 
 /**
- * 单个代理的日志上限。
+ * 日志总条数上限。
  *
- * ⚠️ 面板要把所有代理的日志合起来渲染，条数不封顶的话，
- * 代理一多，面板就会重到拖不动（实测 3 个代理就能堆出 200 多行）。
+ * ⚠️ 日志是**给人查的**，不能一边存一边丢：以前每个代理只留最近 100 条，
+ * 超出的直接丢掉，于是「那个代理当时为什么转向」永远查不到——
+ * 实测 4 个代理跑 1 分钟就到 400 条封顶，界面只看得到最后 60 条。
+ *
+ * 现在上限提到 5000 条（大约十几分钟的会话），到顶之后才丢最旧的。
+ * 5000 条 × 每条约 120 字节 ≈ 0.6 MB，对内存不算什么。
+ *
+ * 渲染的开销**不在这里**管——面板用虚拟滚动，只画视口里那十几行。
  */
-const MAX_AGENT_LOGS = 100
+const MAX_TOTAL_LOGS = 5000
 
 /** 日志序号：全局单调递增，给面板当稳定的 key 用 */
 let logSequence = 0
@@ -40,6 +46,15 @@ export interface AiAgentLog {
   timestamp: number
   message: string
   type: 'info' | 'warning' | 'error'
+  /**
+   * 写这条日志的代理。
+   *
+   * ⚠️ 这两个字段**必须跟着日志走**：日志列表是所有代理合在一起的一张表，
+   * 面板要显示"谁说的"就得知道代理是谁。以前是面板在合并各代理日志时
+   * 现补这两个字段——那等于每来一条日志就重新遍历所有代理、复制一遍所有条目。
+   */
+  agentId: string
+  agentName: string
 }
 
 export interface AiAgent {
@@ -49,7 +64,6 @@ export interface AiAgent {
   active: boolean
   parameters: Record<string, number | string | boolean>
   status: 'idle' | 'running' | 'paused' | 'error'
-  logs: AiAgentLog[]
 }
 
 // 环境设置
@@ -106,6 +120,14 @@ export const getDefaultParametersForType = (
 export const useAiStore = defineStore('ai', () => {
   // 状态
   const agents = ref<AiAgent[]>([])
+  /**
+   * 全部代理的日志——**一张按时间排好的全局表**。
+   *
+   * ⚠️ 以前是每个代理各存一份数组，面板再合并。合并意味着每来一条日志
+   * 就要遍历所有代理、把所有条目复制一遍、重新排序——条数上千之后
+   * 这本身就是主线程开销。现在存一张表，代理是谁记在条目上。
+   */
+  const logs = ref<AiAgentLog[]>([])
   const environmentSettings = ref<AiEnvironmentSettings>({
     scenario: 'navigation',
     difficulty: 'medium',
@@ -178,19 +200,29 @@ export const useAiStore = defineStore('ai', () => {
   // 方法
 
   /**
-   * 往某个代理的日志里追加一条——所有写日志的地方都走这里。
+   * 往日志表里追加一条——所有写日志的地方都走这里。
    *
-   * ⚠️ 上限在这里统一管：每条日志最终都要进面板的 DOM，
-   * 不封顶的话代理一多，面板就会重到拖不动。
+   * ⚠️ 存的是**一张全局表**，不是每个代理各存一份：
+   * 面板要的就是所有代理合起来按时间排的一张表，分开存再合并等于
+   * 每来一条日志就把全部条目复制一遍。
+   *
+   * ⚠️ 上限在这里统一管：到顶之后丢最旧的。
    */
   const appendLog = (
     agent: AiAgent,
     message: string,
     type: 'info' | 'warning' | 'error'
   ): void => {
-    agent.logs.push({ seq: logSequence++, timestamp: Date.now(), message, type })
-    if (agent.logs.length > MAX_AGENT_LOGS) {
-      agent.logs.shift()
+    logs.value.push({
+      seq: logSequence++,
+      timestamp: Date.now(),
+      message,
+      type,
+      agentId: agent.id,
+      agentName: agent.name,
+    })
+    if (logs.value.length > MAX_TOTAL_LOGS) {
+      logs.value.splice(0, logs.value.length - MAX_TOTAL_LOGS)
     }
   }
 
@@ -204,8 +236,7 @@ export const useAiStore = defineStore('ai', () => {
       parameters: getDefaultParametersForType(type),
       // 仿真进行中新建的代理直接进入运行态——否则它永远停在原地，
       // 而界面上没有单个代理的启动开关。
-      status: simulationActive.value ? 'running' : 'idle',
-      logs: []
+      status: simulationActive.value ? 'running' : 'idle'
     }
 
     agents.value.push(newAgent)
@@ -286,6 +317,16 @@ export const useAiStore = defineStore('ai', () => {
     }
   }
 
+  /**
+   * 清空全部日志。
+   *
+   * ⚠️ 只清日志，**不动代理**：清空是给人重新开始观察用的，
+   * 不是把仿真状态一起重置。重置有单独的「重置」按钮。
+   */
+  const clearLogs = (): void => {
+    logs.value = []
+  }
+
   // 更新环境设置
   const updateEnvironmentSettings = (settings: Partial<AiEnvironmentSettings>) => {
     environmentSettings.value = { ...environmentSettings.value, ...settings }
@@ -300,6 +341,7 @@ export const useAiStore = defineStore('ai', () => {
 
   return {
     agents,
+    logs,
     environmentSettings,
     simulationActive,
     simulationTime,
@@ -322,6 +364,7 @@ export const useAiStore = defineStore('ai', () => {
     resetSimulation,
     updateAgentParameters,
     addAgentLog,
+    clearLogs,
     updateEnvironmentSettings,
     initializeDefaultAgents
   }

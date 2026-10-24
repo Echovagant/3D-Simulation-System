@@ -99,9 +99,12 @@ describe('useAiStore', () => {
 
     store.addAgentLog(agent.id, '出发', 'warning')
 
-    expect(store.agents[0].logs).toHaveLength(1)
-    expect(store.agents[0].logs[0].message).toBe('出发')
-    expect(store.agents[0].logs[0].type).toBe('warning')
+    expect(store.logs).toHaveLength(1)
+    expect(store.logs[0].message).toBe('出发')
+    expect(store.logs[0].type).toBe('warning')
+    // 代理是谁记在条目上——日志表是所有代理合起来的一张表
+    expect(store.logs[0].agentName).toBe('a')
+    expect(store.logs[0].agentId).toBe(agent.id)
   })
 
   it('updateEnvironmentSettings 合并环境设置', () => {

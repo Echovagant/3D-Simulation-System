@@ -423,8 +423,11 @@ describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
     vi.advanceTimersByTime(500)
 
     expect(store.simulationTime).toBeGreaterThan(0)
-    expect(agent.logs.length).toBeGreaterThan(0)
-    expect(agent.logs.some((log) => log.message.startsWith('决定:'))).toBe(true)
+    expect(store.logs.length).toBeGreaterThan(0)
+    expect(store.logs.some((log) => log.message.startsWith('决定:'))).toBe(true)
+    // 决策参数里的浮点数要取整：原始浮点十几位小数，一行根本放不下
+    const decision = store.logs.find((log) => log.message.startsWith('决定:'))
+    expect(decision?.message).not.toMatch(/\d\.\d{5,}/)
   })
 
   it('仿真运行时智能体确实在场景里移动（决策 → 执行 → 位置变化）', async () => {

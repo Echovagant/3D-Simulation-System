@@ -145,6 +145,10 @@ const SIMPY = 'backend/app/services/simulator.py'
 const CFG = 'backend/app/config.py'
 const RENDER = 'src/render/renderPage.ts'
 const RENDERING = 'src/config/rendering.ts'
+const AI_STORE = 'src/stores/aiStore.ts'
+const AI_PANEL = 'src/components/three/ai/AiDebugPanel.vue'
+const AI_PLAYGROUND = 'src/views/AIPlayground.vue'
+const AI_COMPOSABLE = 'src/composables/useAI.ts'
 const PROXY = 'backend/app/services/llm_proxy.py'
 const BASELINE_RECORD = 'docs/simulation-baseline.json'
 
@@ -981,6 +985,67 @@ const CONTRACT = [
         readText(RENDERING),
         /^export\s+const\s+RENDER_POWER_PREFERENCE\s*=\s*'([^']+)'/m,
         'RENDER_POWER_PREFERENCE',
+      ),
+  },
+  {
+    // 日志总条数上限：日志要留得住（条款 S32）。
+    key: 'AI_MAX_TOTAL_LOGS',
+    source: AI_STORE,
+    kind: 'number',
+    read: () =>
+      capture(readText(AI_STORE), new RegExp(`MAX_TOTAL_LOGS\\s*=\\s*(${NUM})`), 'MAX_TOTAL_LOGS'),
+  },
+  {
+    // 日志行的固定高度：虚拟滚动靠它换算行号，必须与样式里的行高一致。
+    key: 'AI_LOG_ROW_HEIGHT',
+    source: AI_PANEL,
+    kind: 'number',
+    read: () =>
+      capture(readText(AI_PANEL), new RegExp(`LOG_ROW_HEIGHT\\s*=\\s*(${NUM})`), 'LOG_ROW_HEIGHT'),
+  },
+  {
+    // 演武场相机初始位置：正对场地中心，不站一角（条款 S34）。
+    key: 'AI_CAMERA_POSITION',
+    source: AI_PLAYGROUND,
+    kind: 'ordered-list',
+    read: () => {
+      const block = capture(
+        readText(AI_PLAYGROUND),
+        /DEFAULT_CAMERA_POSITION\s*=\s*\{([^}]*)\}/m,
+        'DEFAULT_CAMERA_POSITION',
+      )
+      const numbers = [...block.matchAll(new RegExp(`(${NUM})`, 'g'))].map((m) => m[1])
+      if (numbers.length !== 3) throw new Error('DEFAULT_CAMERA_POSITION 不是三个数')
+      return numbers.join(', ')
+    },
+  },
+  {
+    key: 'AI_CAMERA_FOV',
+    source: AI_PLAYGROUND,
+    kind: 'number',
+    read: () =>
+      capture(readText(AI_PLAYGROUND), new RegExp(`DEFAULT_CAMERA_FOV\\s*=\\s*(${NUM})`), 'DEFAULT_CAMERA_FOV'),
+  },
+  {
+    key: 'AI_GROUND_COLOR',
+    source: AI_COMPOSABLE,
+    kind: 'string',
+    read: () =>
+      capture(
+        readText(AI_COMPOSABLE),
+        /name:\s*'ai-arena-ground',[\s\S]{0,400}?color:\s*(0x[0-9a-fA-F]+)/m,
+        'ai-arena-ground 的 color',
+      ),
+  },
+  {
+    key: 'AI_WALL_OPACITY',
+    source: AI_COMPOSABLE,
+    kind: 'number',
+    read: () =>
+      capture(
+        readText(AI_COMPOSABLE),
+        /new THREE\.MeshStandardMaterial\(\{[\s\S]{0,400}?opacity:\s*([\d.]+)/m,
+        '围墙的 opacity',
       ),
   },
 ]

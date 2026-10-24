@@ -7,6 +7,7 @@ import { useLlmStore } from '@/stores/llmStore'
 import { useThree } from './useThree'
 import { usePhysics } from './usePhysics'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
+import { formatLogParameters } from '@/utils/agentLogExport'
 import { simulationConfig } from '@/config/simulation'
 import { llmConfig } from '@/config/llm'
 import type { AgentSnapshot, LlmAction } from '@/services/llm/prompts'
@@ -333,7 +334,9 @@ export function useAI() {
       roughness: 0.7,
       metalness: 0.1,
       transparent: true,
-      opacity: 0.35,
+      // 围墙只有 1.2 米高，二十几米外看过去太淡就等于没有——
+      // 场地边界读不出来，智能体像是在无边无际的虚空里跑。
+      opacity: 0.6,
     })
     const halfHeight = WALL_HEIGHT / 2
     const halfThickness = WALL_THICKNESS / 2
@@ -509,7 +512,9 @@ export function useAI() {
       ground: {
         name: 'ai-arena-ground',
         halfExtents: { x: ARENA_GROUND_HALF, y: 0.5, z: ARENA_GROUND_HALF },
-        color: 0x1f2530,
+        // 地面颜色：比背景亮一档，场地才看得出是块地板而不是一片黑。
+        // 太暗就分不出「地面到头了」和「背景」，智能体会像浮在虚空里。
+        color: 0x2a3340,
         opacity: 1,
         friction: GROUND_FRICTION,
         restitution: GROUND_RESTITUTION,
@@ -715,7 +720,9 @@ export function useAI() {
     }
 
     const confidence = clamp(1 - (sense.distance / Math.max(avoidRadius, 1)) * 0.5, 0.5, 1)
-    aiStore.addAgentLog(agentId, `决定: ${action} ${JSON.stringify(parameters)}`, 'info')
+    // 浮点数取整后再记：原始浮点有十几位小数，一行根本放不下，
+    // 面板里每条日志都要折成两三行（也就没法按固定行高做虚拟滚动了）。
+    aiStore.addAgentLog(agentId, `决定: ${action} ${formatLogParameters(parameters)}`, 'info')
     // 记下这次决策的时刻——反应时间靠它算出下一次该什么时候重新决策
     runtime.lastDecisionAt = Date.now()
     return { agentId, action, parameters, confidence, timestamp: runtime.lastDecisionAt }

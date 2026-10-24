@@ -388,7 +388,19 @@ let isUnmounted = false
 const clock = new THREE.Clock()
 
 /** 相机初始机位（也是 R 键的复位目标） */
-const DEFAULT_CAMERA_POSITION = { x: 14, y: 11, z: 14 }
+/**
+ * 演武场的初始取景。
+ *
+ * ⚠️ 相机要**正对场地中心**，不能站在一角斜看：站在 +x/+z 那一角时，
+ * 网格的两条边在画面里成了对角线，看起来就是「网格斜铺」；
+ * 配上 75° 的广角，近处拉变形、远处压扁，斜得更厉害。
+ *
+ * 现在这组参数（正对、俯角约 38°、50° 视野）能把 48×48 米的场地
+ * 整块收进画面，围墙也读得出来。
+ */
+const DEFAULT_CAMERA_POSITION = { x: 0, y: 27, z: 34 }
+/** 视野角：75° 太广，收窄到 50° 后透视畸变小得多 */
+const DEFAULT_CAMERA_FOV = 50
 /** 键盘移动相机的速度（米/秒） */
 const CAMERA_KEY_SPEED = 14
 
@@ -461,6 +473,7 @@ const initializeScene = async () => {
       DEFAULT_CAMERA_POSITION.y,
       DEFAULT_CAMERA_POSITION.z,
     )
+    camera.setCameraFov(DEFAULT_CAMERA_FOV)
     scene.initScene()
     renderer.initRenderer(viewportRef.value)
     controls.initControls()
