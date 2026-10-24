@@ -71,26 +71,21 @@
       </defs>
     </svg>
 
-    <!-- 顶部标题区域 -->
+    <!-- 顶部标题条：标题与一句话说明并排，把纵向空间让给 3D 视图 -->
     <div class="page-header">
       <div class="header-glow"></div>
-      <h1 class="ai-title">
-        <span class="title-text">
-          <span class="ai-title-emoji">🧠</span>AI演武场
-        </span>
-      </h1>
-      <p
-        class="ai-lead"
-      >
-        在<span class="ai-lead-accent">真实渲染的3D场地</span
-        >里运行规则式智能体：它们读取场景里的真实感知、绕开障碍物并自主移动。
-        <span class="ai-lead-muted"
-          >碰撞与运动由 Rapier 刚体物理引擎求解：有质量、摩擦、弹性，
-          撞上障碍物会被挡下并沿着箱体滑开。默认不调用任何外部模型；
-          若自行填入 API Key，右侧面板还可开启 LLM 决策与旁路解释。</span
-        >
-      </p>
-      <div class="header-divider"></div>
+      <div class="header-row">
+        <h1 class="ai-title">
+          <span class="title-text">
+            <span class="ai-title-emoji">🧠</span>AI演武场
+          </span>
+        </h1>
+        <p class="ai-lead">
+          智能体在
+          <span class="ai-lead-accent">真实渲染的 3D 场地</span>里读感知、绕障碍、自主移动；
+          <span class="ai-lead-muted">碰撞与运动由 Rapier 刚体引擎求解</span>。
+        </p>
+      </div>
     </div>
 
     <!-- 主内容区域 -->
@@ -98,7 +93,7 @@
       class="ai-layout"
     >
       <!-- 左侧面板 -->
-      <div class="ai-col-3">
+      <div class="ai-col-side ai-col-left">
         <div class="panel left-panel animate-fade-in-right">
           <div class="panel-glow"></div>
           <div class="panel-header">
@@ -138,7 +133,7 @@
         都不生效。视口高度由 scoped CSS 的 .ai-viewport 给出（否则视口高度会被画布内容顶起来，
         画布尺寸又反过来影响视口高度，形成反馈）。
       -->
-      <div class="ai-col-6 panel center-panel animate-fade-in-up">
+      <div class="ai-col-center panel center-panel animate-fade-in-up">
         <div class="panel-glow"></div>
         <div class="panel-header">
           <span class="ai-panel-title">
@@ -269,13 +264,15 @@
 
         <!-- 物理现状的页面可见说明：碰撞由 Rapier 刚体引擎求解 -->
         <p class="physics-note">
-          物理由 Rapier 刚体引擎求解：智能体与障碍物都是真实刚体，有质量、摩擦与弹性；
-          感知（视野内障碍物数量、最近距离）直接来自引擎的形状查询，碰撞判定来自接触流形。
+          物理由 Rapier 刚体引擎求解：智能体与障碍物都是真实刚体，有质量、摩擦与弹性，
+          撞上障碍物会被挡下并沿着箱体滑开；感知（视野内障碍物数量、最近距离）
+          直接来自引擎的形状查询，碰撞判定来自接触流形。默认不调用任何外部模型；
+          若自行填入 API Key，右侧面板还可开启 LLM 决策与旁路解释。
         </p>
       </div>
 
       <!-- 右侧面板 -->
-      <div class="ai-col-3 ai-col-right">
+      <div class="ai-col-side ai-col-right">
         <div class="panel right-panel animate-fade-in-left">
           <div class="panel-glow"></div>
           <div class="panel-header">
@@ -581,13 +578,6 @@ onUnmounted(() => {
   z-index: -1;
 }
 
-.header-divider {
-  width: 250px;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.6), transparent);
-  margin: 1.5rem auto;
-}
-
 .footer-divider {
   width: 100%;
   height: 1px;
@@ -667,11 +657,14 @@ onUnmounted(() => {
     0 0 30px rgba(255, 215, 0, 0.2);
 }
 
-/* 3D 视口：确定的高度（本仓库没有 Tailwind，工具类不生效） */
+/* 3D 视口：高度不写死，由中间的列分配——面板头与说明文字之外的空间全是它。
+   宽度跟着容器走，Viewport 组件用 ResizeObserver 盯着真实尺寸，
+   相机的宽高比会跟着一起改（否则视口一变窄，场景就被拉成竖长条）。 */
 .ai-viewport {
   position: relative;
   width: 100%;
-  height: 560px;
+  flex: 1;
+  min-height: 260px;
   overflow: hidden;
 }
 
@@ -684,12 +677,6 @@ onUnmounted(() => {
   color: #9ca3af;
   background: rgba(10, 12, 18, 0.6);
   border-top: 1px solid rgba(255, 215, 0, 0.15);
-}
-
-@media (max-width: 768px) {
-  .ai-viewport {
-    height: 420px;
-  }
 }
 
 /* 控制键样式 */
@@ -774,16 +761,16 @@ onUnmounted(() => {
 }
 
 /* 响应式调整 */
-@media (max-width: 1024px) {
+@media (max-width: 1180px) {
   .ai-playground-container {
     grid-template-rows: auto 1fr auto;
   }
 
-  .ai-col-6 {
+  .ai-col-center {
     order: -1;
   }
 
-  .ai-col-3 {
+  .ai-col-left {
     margin-bottom: 1rem;
   }
 }
@@ -827,7 +814,10 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  /* 一屏占满：扣掉应用顶栏(30px)与内容区上下内边距(各30px)。
+     锁定高度后，这一页不再出现整页滚动条——高度由下面的栅格分配。 */
+  height: calc(100vh - 90px);
+  min-height: 520px;
   overflow: hidden;
   /* 深色底：SVG 顶部是透明的，必须由容器兜底，否则页头白字会浮在浅色应用底上 */
   background: #0a0c12;
@@ -843,41 +833,70 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
+/* 顶部标题条：标题与说明并排，纵向空间尽量让给 3D 视图 */
 .page-header {
   position: relative;
   z-index: 10;
-  padding-top: 2.5rem;
-  margin-bottom: 2rem;
-  text-align: center;
+  padding: 1.25rem 1.5rem 0.75rem;
+  width: 100%;
 }
 
-/* 12 栏主栅格 */
+.header-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+/* 24 栏主栅格：左 5 / 中 14 / 右 5 —— 3D 视图是主角，宽度优先给它。
+   行高锁成 minmax(0, 1fr)：单行铺满剩余高度，面板再长也不会把整页撑高，
+   侧栏改为各自内部滚动。 */
 .ai-layout {
   position: relative;
   z-index: 10;
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(24, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 1rem;
   width: 100%;
-  max-width: 80rem;
   margin: 0 auto;
-  padding: 0 2rem 2.5rem;
+  padding: 0 1rem 1rem;
   flex: 1;
+  min-height: 0;
 }
 
-.ai-col-3 {
-  grid-column: span 3;
+/* 两侧栏共用的形态：竖排、可内部滚动 */
+.ai-col-side {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1rem;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 161, 23, 0.45) transparent;
 }
 
-.ai-col-6 {
-  grid-column: span 6;
+/* 左栏：环境配置 + AI 控制器 */
+.ai-col-left {
+  grid-column: span 5;
 }
 
+/* 中间的 3D 视图：拿 14 栏——它是这页的主角 */
+.ai-col-center {
+  grid-column: span 14;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 右栏：调试信息 + LLM 增强 */
 .ai-col-right {
-  display: block;
+  grid-column: span 5;
+}
+
+/* 侧栏里的面板保持自身高度：侧栏滚动，面板不被压扁 */
+.ai-col-side > * {
+  flex: 0 0 auto;
 }
 
 /* 页头文字 */
@@ -885,26 +904,28 @@ onUnmounted(() => {
   position: relative;
   margin: 0;
   color: #ffffff;
-  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-size: clamp(1.5rem, 2.4vw, 2rem);
   font-weight: 700;
   letter-spacing: 0.05em;
-  line-height: 1.15;
+  line-height: 1.2;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .ai-title-emoji {
   display: inline-block;
-  margin-right: 0.75rem;
+  margin-right: 0.5rem;
   animation: pulse 2s ease-in-out infinite;
 }
 
 .ai-lead {
-  max-width: 42rem;
-  margin: 1rem auto 0;
-  padding: 0 1rem;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
   color: #e5e7eb;
-  font-size: 1.0625rem;
+  font-size: 0.9375rem;
   font-weight: 300;
-  line-height: 1.75;
+  line-height: 1.6;
 }
 
 .ai-lead-accent {
@@ -1127,13 +1148,15 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-/* 页脚 */
+/* 页脚：贴底的一条状态栏，不再往上撑出一大片空白 */
 .ai-footer {
   position: relative;
   z-index: 10;
-  margin: 3rem 0 2rem;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0.5rem 0 0.25rem;
   color: #9ca3af;
-  font-size: 0.875rem;
+  font-size: 0.8125rem;
   text-align: center;
 }
 
@@ -1142,7 +1165,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 1rem;
-  margin-top: 1.25rem;
+  margin-top: 0.4rem;
 }
 
 .ai-footer-item {
@@ -1150,21 +1173,49 @@ onUnmounted(() => {
   align-items: center;
 }
 
-@media (max-width: 1024px) {
-  .ai-layout {
-    grid-template-columns: repeat(2, 1fr);
+/* 窄屏：放弃「一屏占满」，回到正常滚动的堆叠布局。
+   3D 视图排到最前（order 由第一段样式里的 .ai-col-center { order: -1 } 给到）。 */
+@media (max-width: 1180px) {
+  .ai-playground-container {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
   }
 
-  .ai-col-3,
-  .ai-col-6 {
+  .ai-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+  }
+
+  .ai-col-left,
+  .ai-col-center {
     grid-column: span 1;
+  }
+
+  .ai-col-right {
+    grid-column: span 2;
+  }
+
+  .ai-col-side {
+    overflow: visible;
+  }
+
+  .ai-viewport {
+    flex: none;
+    height: 60vh;
+    min-height: 420px;
   }
 }
 
 @media (max-width: 768px) {
   .ai-layout {
-    grid-template-columns: 1fr;
-    padding: 0 1rem 2rem;
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 1rem 1rem;
+  }
+
+  .ai-col-right {
+    grid-column: span 1;
   }
 
   .ai-lead {

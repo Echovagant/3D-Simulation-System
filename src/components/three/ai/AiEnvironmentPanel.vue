@@ -1,9 +1,5 @@
 <template>
   <div class="ai-form ai-environment-panel ai-p-4 ai-bg-panel ai-r-lg ai-b ai-b-amber">
-    <h3 class="ai-t-amber ai-fs-lg ai-fw-bold ai-mb-3 ai-flex ai-items-center">
-      <i class="fa fa-cogs ai-mr-2"></i>环境设置
-    </h3>
-
     <form @submit.prevent="saveSettings">
       <div class="ai-space-y-4">
         <!-- 场景类型：只列系统真的实现了的场景 -->

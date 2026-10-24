@@ -1,9 +1,5 @@
 <template>
   <div class="ai-form ai-controller ai-p-4 ai-bg-panel ai-r-lg ai-b ai-b-amber">
-    <h3 class="ai-t-amber ai-fs-lg ai-fw-bold ai-mb-3 ai-flex ai-items-center">
-      <i class="fa fa-robot ai-mr-2"></i>AI代理控制
-    </h3>
-
     <!-- 代理列表 -->
     <div class="ai-mb-4">
       <div class="ai-flex ai-justify-between ai-items-center ai-mb-2">

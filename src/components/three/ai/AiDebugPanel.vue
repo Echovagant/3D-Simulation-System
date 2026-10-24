@@ -1,9 +1,5 @@
 <template>
   <div class="ai-form ai-debug-panel ai-p-4 ai-bg-panel ai-r-lg ai-b ai-b-amber ai-h-full ai-flex ai-flex-col">
-    <h3 class="ai-t-amber ai-fs-lg ai-fw-bold ai-mb-3 ai-flex ai-items-center">
-      <i class="fa fa-terminal ai-mr-2"></i>AI调试面板
-    </h3>
-
     <!-- 仿真控制 -->
     <div class="ai-flex ai-gap-2 ai-mb-4">
       <button

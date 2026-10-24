@@ -2,10 +2,6 @@
   <div
     class="ai-form llm-panel ai-p-4 ai-bg-panel ai-r-lg ai-b ai-b-amber ai-h-full ai-flex ai-flex-col"
   >
-    <h3 class="ai-t-amber ai-fs-lg ai-fw-bold ai-mb-3 ai-flex ai-items-center">
-      <i class="fa fa-brain ai-mr-2"></i>LLM 增强
-    </h3>
-
     <!-- 状态 -->
     <div class="ai-fs-xs ai-t-muted ai-mb-3">
       <span class="ai-t-amber">状态：</span>
