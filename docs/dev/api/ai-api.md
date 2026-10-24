@@ -61,7 +61,7 @@
 | `pauseSimulation` | `() => void` | 置 `simulationActive` 为假，把处于 `running` 的智能体改为 `paused` 并写入“仿真暂停”日志 |
 | `resetSimulation` | `() => void` | 停止仿真、时间归零、所有智能体状态改为 `idle` 并写入“仿真重置”日志，同时递增 `resetToken`——物理层据此把刚体送回出生点、清零速度、复位目标点与期望速度 |
 | `updateAgentParameters` | `(id: string, parameters: Record<string, number \| string \| boolean>) => void` | 合并式更新参数，并写入“参数已更新”日志 |
-| `addAgentLog` | `(id: string, message: string, type?: 'info' \| 'warning' \| 'error') => void` | 追加一条日志。单个智能体的日志上限为 100 条，超出后丢弃最早一条 |
+| `addAgentLog` | `(id: string, message: string, type?: 'info' \| 'warning' \| 'error') => void` | 追加一条日志。单个智能体的日志上限为 100 条，超出后丢弃最早一条。每条日志带一个单调递增的 `seq`——面板渲染时拿它当 key：日志列表按时间排序，时间戳会重复，按下标做的 key 会整片错位，Vue 就得把每一行都重建一遍 |
 | `updateEnvironmentSettings` | `(settings: Partial<AiEnvironmentSettings>) => void` | 合并式更新环境配置 |
 | `initializeDefaultAgents` | `() => void` | 仅当列表为空时创建一个名为“导航机器人”的 `basic` 智能体 |
 
