@@ -1,6 +1,7 @@
 // src/composables/useThree.ts
 import { shallowRef, type ShallowRef } from 'vue'
 import * as THREE from 'three'
+import { RENDER_POWER_PREFERENCE } from '@/config/rendering'
 
 /**
  * `useThree` 的对外契约。
@@ -63,7 +64,12 @@ const initRenderer = (
   }
   const resolvedWidth = width && width > 0 ? width : window.innerWidth
   const resolvedHeight = height && height > 0 ? height : window.innerHeight
-  const next = new THREE.WebGLRenderer({ canvas, antialias: true })
+  const next = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    // 双显卡笔记本上不让浏览器默认挑核显（见 src/config/rendering.ts）
+    powerPreference: RENDER_POWER_PREFERENCE,
+  })
   next.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   next.setSize(resolvedWidth, resolvedHeight)
   renderer.value = next

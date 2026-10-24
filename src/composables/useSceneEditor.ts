@@ -5,6 +5,7 @@ import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
 import { simulationConfig } from '../config/simulation'
+import { RENDER_POWER_PREFERENCE } from '../config/rendering'
 import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
 import type {
   World,
@@ -176,7 +177,11 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       camera.position.set(5, 5, 5)
       camera.lookAt(0, 0, 0)
 
-      renderer = new THREE.WebGLRenderer({ antialias: true })
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        // 双显卡笔记本上不让浏览器默认挑核显（见 src/config/rendering.ts）
+        powerPreference: RENDER_POWER_PREFERENCE,
+      })
       renderer.setSize(defaultWidth, defaultHeight)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
       renderer.shadowMap.enabled = true // 启用阴影

@@ -144,6 +144,7 @@ const BASELINE = 'backend/tests/fixtures/browser_baseline.json'
 const SIMPY = 'backend/app/services/simulator.py'
 const CFG = 'backend/app/config.py'
 const RENDER = 'src/render/renderPage.ts'
+const RENDERING = 'src/config/rendering.ts'
 const PROXY = 'backend/app/services/llm_proxy.py'
 const BASELINE_RECORD = 'docs/simulation-baseline.json'
 
@@ -968,6 +969,18 @@ const CONTRACT = [
         readText(RENDER),
         /^export\s+const\s+RENDER_ACTION_TYPES\s*=\s*(\[[^\]]*\])/m,
         'RENDER_ACTION_TYPES',
+      ),
+  },
+  {
+    // 渲染器的 GPU 偏好：浏览器在双显卡笔记本上默认可能挑核显（见条款 S31）。
+    key: 'RENDER_POWER_PREFERENCE',
+    source: RENDERING,
+    kind: 'string',
+    read: () =>
+      capture(
+        readText(RENDERING),
+        /^export\s+const\s+RENDER_POWER_PREFERENCE\s*=\s*'([^']+)'/m,
+        'RENDER_POWER_PREFERENCE',
       ),
   },
 ]

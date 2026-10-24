@@ -435,6 +435,7 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `RENDER_GROUND_HALF_Z` | `5` | 米 | `src/render/renderPage.ts` |
 | `RENDER_GROUND_BODY_Y` | `-0.1` | 米 | `src/render/renderPage.ts` |
 | `RENDER_ACTION_TYPES` | `addCube, addSphere, setCamera, setSpeed` | — | `src/render/renderPage.ts` |
+| `RENDER_POWER_PREFERENCE` | `high-performance` | — | `src/config/rendering.ts` |
 
 ### 6.1 接入线明细
 
@@ -671,6 +672,18 @@ AI 在这个系统里是**意图层**，不是物理层。
 
 - 验证：`src/components/three/ai/AiDebugPanel.test.ts`（断言渲染日志时不调用 `toLocaleTimeString`、渲染行数有上限）、`src/stores/aiStore.ts`（日志序号单调递增、单个代理日志封顶 100 条）
 
+### S31 渲染器一律请求高性能 GPU
+
+浏览器创建 WebGL 上下文时可以带一个 GPU 偏好。**不给提示时 Three.js 的默认值是 `'default'`**，也就是「由浏览器决定」——在核显 + 独显的双显卡笔记本上，浏览器经常把 WebGL 上下文交给核显，帧率直接掉一半。
+
+在浏览器里跑的渲染器**一律**显式请求 `'high-performance'`：场景编辑器（`useThree` / `useSceneEditor`）、AI 演武场（`SimulationLab`）、服务端渲染页（`src/render/main.ts`）三处，一个都不能漏。
+
+⚠️ 这是**请求**不是保证。浏览器也可能因为驱动被列入黑名单、系统「图形性能」设置成省电、或者页面落在软件渲染名单里而不给独显。要确认实际拿到哪块显卡，运行时读 `WEBGL_debug_renderer_info` 的渲染器型号——报性能数字时也要把这个前提一起交代。
+
+代价是插电时耗电略高。换来的是别人的机器上不至于默认跑在核显上。
+
+- 验证：`src/config/rendering.ts`（常量本身）、`src/config/rendering.test.ts`（扫描 `src/` 下每一处渲染器创建，漏一处就红）
+
 ## 8. 已知边界
 
 这些是**当前确实如此**，不是待办：
@@ -688,6 +701,7 @@ AI 在这个系统里是**意图层**，不是物理层。
 - **清单里的默认模型会过期。** 厂商改版、模型退役时清单不会自动跟——面板上的「拉取可用模型」能看出这把 key 实际还能调什么。
 - **真 key 验证只覆盖了 MiniMax 一家。** 脚本支持全部接入线，但只有 MiniMax 的订阅接入线真的用真 key 跑过（三轮共 30 次调用、30 次通过、0 次正文为空）。别的接入线要验证得各自准备一把 key。
 - **运行期数字不在构建链里。** 闸门能锁的是源码常量与[基线记录](#62-实测基线记录)本身；记录里的数字要靠 `scripts/verify-llm-live.mjs` 手动复现。厂商改版、换 key 或调了输出上限之后，记录会过期——闸门只会发现「记录与源码对不上」，不会替你重跑。
+- **离线缩略图脚本不受 [S31](#s31-渲染器一律请求高性能-gpu) 约束。** `scripts/render-model-thumbnails.mjs` 在无头 Chrome 里做一次性渲染，产物是静态 PNG，选哪块显卡没有用户可见的影响；它也不走应用源码（页面用 importmap 直接引 `node_modules` 里的 three），拿不到应用的常量。
 
 ## 9. 变更规则
 

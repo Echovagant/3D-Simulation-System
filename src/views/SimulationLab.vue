@@ -225,6 +225,7 @@ import SimulationBatchPanel from '@/components/simulations/SimulationBatchPanel.
 import RenderPanel from '@/components/simulations/RenderPanel.vue'
 import { usePhysics } from '@/composables/usePhysics'
 import { simulationConfig } from '@/config/simulation'
+import { RENDER_POWER_PREFERENCE } from '@/config/rendering'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
 import type { SceneDocumentObject, SceneIndexEntry } from '@/types'
 
@@ -393,7 +394,11 @@ const initThree = () => {
   camera.lookAt(0, 0, 0)
 
   // 创建渲染器
-  renderer = new THREE.WebGLRenderer({ antialias: true })
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    // 双显卡笔记本上不让浏览器默认挑核显（见 src/config/rendering.ts）
+    powerPreference: RENDER_POWER_PREFERENCE,
+  })
   renderer.setSize(viewportRef.value.clientWidth, viewportRef.value.clientHeight)
   renderer.setPixelRatio(window.devicePixelRatio)
   viewportRef.value.appendChild(renderer.domElement)
