@@ -41,8 +41,14 @@ for (const gate of gates) {
     if (out.trim()) console.log(out.trim())
   } catch (error) {
     console.error(`FAIL ${gate.name}`)
-    const text = (error.stdout ?? '') + (error.stderr ?? '')
-    console.error(text.slice(0, 4000))
+    const out = error.stdout ?? ''
+    const err = error.stderr ?? ''
+    // ⚠️ **输出不许截断**：排障时最关键的那几行常常在最后，
+    // 截掉前面 4000 字符会让 CI 上看不出到底哪一项、哪一行出的问题。
+    // 失败时 stdout 与 stderr 都要打全。
+    if (out.trim()) console.error(out.trim())
+    if (err.trim()) console.error(err.trim())
+    if (!out.trim() && !err.trim()) console.error(String(error.message ?? error))
     process.exit(1)
   }
 }

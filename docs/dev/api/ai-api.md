@@ -182,22 +182,37 @@
 
 ### 接入线：端点 × 凭证
 
-一家厂商可能有多条**互不兼容**的接入线。清单里每条线各占一个条目：
+清单里**每个条目就是一条接入线**，不是一家厂商。接入线 = 端点 × 凭证类型：
 
 | 维度 | 取值 | 区别 |
 | --- | --- | --- |
-| 端点 | `api.minimax.io` / `api.minimaxi.com` | 两套账号体系，key 不通用 |
-| 凭证 | `sk-api-` / `sk-cp-` | 按量计费 / 订阅，消耗不同的计费资源 |
+| 端点 | `api.minimax.io` / `api.minimaxi.com` / `open.bigmodel.cn` / `dashscope.aliyuncs.com` / `coding.dashscope.aliyuncs.com` / `ark.cn-beijing.volces.com` / `api.deepseek.com` | 不同域名可能是不同账号体系，key 不通用 |
+| 凭证 | `sk-api-` / `sk-cp-` / `sk-sp-` / 无固定前缀 | 按量计费与订阅消耗不同的计费资源 |
 
-`keyKind` 与 `keyPrefix` 字段让界面能认出用户贴的是哪一种——贴错时当场提示，
-而不是让它在调用时返回一个指不到真正原因上的错（401 看着像 key 错了，
-「模型不存在」看着像模型名错了）。
+当前 **11 条接入线、5 个厂商**，其中 5 条是订阅制。
+
+三个字段让界面能认出用户贴的是哪一种：
+
+| 字段 | 作用 |
+| --- | --- |
+| `keyKind` | `'standard'`（按量计费）或 `'subscription'`（订阅） |
+| `keyPrefix` | 凭证前缀，用于自动识别。**认不出就留空**（智谱、方舟两类 key 格式一样） |
+| `keyFamily` | 厂商标识——同厂商的接入线共用它，识别只在同厂商内比对 |
 
 ⚠️ **每条线必须单独占一个条目**：key 是按 providerId 分槽存的，
 一个槽位装不下两种互斥的凭证与端点组合。它们在故障转移时也**不互相顶替**。
 
+⚠️ **识别必须按前缀长度从长到短**：百炼的按量 key 是 `sk-`、套餐 key 是 `sk-sp-`——
+短的 `sk-` 正是长的 `sk-sp-` 的前缀，先匹配短的会把套餐 key 误判成按量 key。
+
+⚠️ **贴了别家厂商的 key 是另一类错误**，提示语要分开；而且**不该在托管入口就拦**——
+用户可能正打算换厂商。托管入口只拦**同厂商内**凭证类型不匹配的情况。
+
 模型能调哪些跟凭证绑定，所以 `fetchModels` 用这把 key 调 `GET {base_url}/models`，
 直接列出它实际能用的模型——这比让用户凭记忆手填模型名再撞 404 划算。
+
+⚠️ **不是每家都开放这个接口**：百炼的 Coding Plan 就没有。清单里用 `models: false` 标出来，
+界面不显示按钮、`loadModels()` 直接返回、`verify-llm-live` 跳过——不发一个必然失败的请求。
 
 ### `useLlmStore`
 
@@ -219,6 +234,7 @@
 | `loadModels()` | 用当前 key 调 `GET {base_url}/models`，列出它实际能用的模型 |
 | `applyModel(value)` | 从拉到的列表里选一个模型 |
 | `detectKeyKind(value)` / `keyKindMismatch` | 认出用户贴的是哪种凭证；与当前条目期望的不一致时给出提示 |
+| `keyFamilyMismatch` | 贴了别家厂商的 key 时给出提示（与「凭证类型不对」是两类错误） |
 | `testConnection()` | 发一个极短请求做连通性测试 |
 | `requestExplanation(snapshot)` | 请求一次解释，成功后写进 `explanation` |
 | `requestAction(snapshot)` | 请求一个动作；返回 `null` 表示"这次没有可用动作"，调用方必须回落规则式 |
