@@ -56,7 +56,7 @@
       <div class="ai-flex ai-justify-between ai-items-center ai-mb-1">
         <label class="ai-fs-xs ai-t-muted" for="llm-model">模型</label>
         <button
-          v-if="llm.hostingMode === 'direct'"
+          v-if="llm.hostingMode === 'direct' && llm.provider.models !== false"
           class="ai-fs-xs ai-bg-chip ai-r-sm ai-px-2 ai-py-05"
           :disabled="llm.loadingModels || !llm.configured"
           @click="onLoadModels"
@@ -96,6 +96,9 @@
       </ul>
       <p v-if="llm.keyKindMismatch" class="ai-fs-xs ai-t-amber-soft ai-mt-1">
         {{ llm.keyKindMismatch }}
+      </p>
+      <p v-if="llm.keyFamilyMismatch" class="ai-fs-xs ai-t-amber-soft ai-mt-1">
+        {{ llm.keyFamilyMismatch }}
       </p>
     </div>
 

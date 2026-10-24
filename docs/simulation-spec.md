@@ -286,16 +286,32 @@ AI 在这个系统里是**意图层**，不是物理层。
 
 ### 5.5 接入线：端点 × 凭证
 
-一家厂商可能有**多条互不兼容的接入线**。MiniMax 有两个维度：
+一家厂商可能有**多条互不兼容的接入线**。清单里的每个条目就是一条接入线，不是一家厂商。
 
-- **端点**：`api.minimax.io` 与 `api.minimaxi.com` 是两套账号体系；
-- **凭证**：`sk-api-`（按量计费）与 `sk-cp-`（订阅）消耗的是不同的计费资源。
+**接入线 = 端点 × 凭证类型**。两个维度各自独立：
 
-交叉起来就是**四种组合，彼此不通用**。实测：同一把 `sk-cp-` key 在 `api.minimaxi.com` 上列出 9 个模型，在 `api.minimax.io` 上直接 401。
+- **端点**：不同域名可能是不同账号体系，key 不通用；
+- **凭证**：`sk-api-` 这类按量计费 key 与 `sk-cp-` / `sk-sp-` 这类订阅 key，消耗的是不同的计费资源。
+
+当前清单里有 **11 条接入线，覆盖 5 个厂商**，其中 **5 条是订阅制**：
+
+| 厂商 | 按量计费 | 订阅制 | 凭证前缀 |
+| --- | --- | --- | --- |
+| MiniMax | `api.minimax.io` / `api.minimaxi.com`（两套账号体系） | 同左两个端点各有订阅线 | `sk-api-` / `sk-cp-` |
+| DeepSeek | `api.deepseek.com` | 无（只有一种凭证） | — |
+| 智谱 GLM | `open.bigmodel.cn/api/paas/v4` | `…/api/coding/paas/v4` | 两类**格式一样**，只能靠创建入口区分 |
+| 通义千问 | `dashscope.aliyuncs.com/compatible-mode/v1` | `coding.dashscope.aliyuncs.com/v1` | `sk-` / `sk-sp-` |
+| 火山方舟 | `ark.cn-beijing.volces.com/api/v3` | `…/api/coding/v3` | 两类**格式一样**，只能靠创建入口区分 |
 
 ⚠️ **每条接入线要单独占一个条目**，因为 key 是按 providerId 分槽存放的——一个槽位装不下两种互斥的凭证与端点组合。而且它们**不互相顶替**：故障转移时配了哪条线的 key 就用哪条线，换一家只会得到「这一家没配 key」。
 
-模型能调哪些也跟凭证绑定（订阅 Key 与按量计费 Key 的可用模型不是一套），所以界面必须能**列出这把 key 实际能用的模型**，而不是让用户凭记忆手填模型名再撞 404。
+⚠️ **凭证识别必须按前缀长度从长到短匹配**。百炼的按量 key 是 `sk-` 开头、套餐 key 是 `sk-sp-` 开头——短的 `sk-` 正是长的 `sk-sp-` 的前缀，先匹配短的会把套餐 key 误判成按量 key。
+
+⚠️ **有些厂商两种 key 格式一样**（智谱、方舟都是），那就没法靠前缀认出来。这种情况下 `keyPrefix` 留空，界面不显示凭证类型提示——**不硬猜**。用户贴错了只能靠端点返回的错误提示。
+
+模型能调哪些也跟凭证绑定（订阅 key 与按量计费 key 的可用模型不是一套），所以界面必须能**列出这把 key 实际能用的模型**，而不是让用户凭记忆手填模型名再撞 404。
+
+⚠️ **不是每家都开放模型列表接口**：百炼的 Coding Plan 不支持（拉它必然失败）。这种接入线要在清单里标出来，界面与验证脚本都要**跳过**而不是报一个必然失败的错。
 
 ### 5.6 可观测
 
@@ -346,6 +362,9 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `AI_EXPLAIN_MAX_TOKENS` | `400` | token | `src/config/llm.ts` |
 | `AI_MINIMAX_ACCESS_LINES` | `minimax, api.minimax.io, standard, minimax-subscription, api.minimax.io, subscription, minimax-cn, api.minimaxi.com, standard, minimax-cn-subscription, api.minimaxi.com, subscription` | — | `src/config/llmProviders.ts` |
 | `AI_MINIMAX_ACCESS_LINE_COUNT` | `4` | 条 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_COUNT` | `11` | 条 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_FAMILIES` | `minimax, deepseek, zhipu, qwen, ark` | — | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_SUBSCRIPTION_COUNT` | `5` | 条 | `src/config/llmProviders.ts` |
 | `AI_MAX_SPEED` | `8` | m/s | `src/composables/useAI.ts` |
 | `AI_AVOID_DISTANCE` | `3.5` | 米 | `src/composables/useAI.ts` |
 | `AI_DECISION_INTERVAL_MS` | `100` | 毫秒 | `src/composables/useAI.ts` |
@@ -526,7 +545,23 @@ AI 在这个系统里是**意图层**，不是物理层。
 
 用户填完 key 能拉到这把 key 实际可用的模型；拉不到就如实报错。模型名可以手填，但拉一次才知道这个凭证的真正能力边界。
 
+⚠️ **没有模型列表接口的接入线要显式标出来**（百炼的 Coding Plan 就是）——界面不显示按钮，验证脚本跳过它，不发一个必然失败的请求。
+
 - 验证：`src/stores/llmStore.test.ts`、`scripts/verify-llm-live.mjs`
+
+### S24 凭证识别按前缀长度倒序
+
+同一厂商内有两种凭证前缀、且短的是长的前缀时（百炼的 `sk-` 与 `sk-sp-`），识别必须**按长度从长到短**匹配，否则订阅 key 会被误判成按量 key。
+
+⚠️ 认不出前缀就**不提示**——前缀规则可能过时，不能因此拦下用户。贴了别家厂商的 key 也不算「凭证类型不对」，那是另一类错误。
+
+- 验证：`src/stores/llmStore.test.ts`、`backend/tests/test_llm_hosting.py`
+
+### S25 托管入口当场核对凭证类型
+
+自带 Key 那条路在界面上提示；托管那条路在**提交时**就拒绝类型不匹配的 key，并说明差在哪——存进去再等调用时报错，报错只会指不到真正原因上。
+
+- 验证：`backend/tests/test_llm_hosting.py`
 
 ## 8. 已知边界
 
@@ -540,7 +575,10 @@ AI 在这个系统里是**意图层**，不是物理层。
 - **一致性基准只覆盖立方体自由落体**这一条轨迹。它证明的是「参数没漂」，不是「所有场景都一致」。
 - **AI 侧的全部逻辑由替身模型测试**；真实厂商的返回格式只有 `verify:llm-live` 脚本覆盖，它**不在构建链里**，要手动跑。
 - **厂商会退役模型。** MiniMax 的 M2.5 / M2.7 已在退役流程中（官方公告 2026-11-18 退役）。清单里的默认模型是当前有效的，但**厂商改版时清单会过期**——面板上的「拉取可用模型」能看出这把 key 实际还能调什么。
-- **接入线会变。** 厂商新增端点或新凭证类型时，清单里的条目数会变；[参数表](#6-参数与常量表)里的 `AI_MINIMAX_ACCESS_LINE_COUNT` 会与它对不上，构建失败——这是故意的。
+- **接入线会变。** 厂商新增端点或新凭证类型时，清单里的条目数会变；[参数表](#6-参数与常量表)里的 `AI_ACCESS_LINE_COUNT` 会与它对不上，构建失败——这是故意的。
+- **有些厂商两类 key 格式一样**（智谱、方舟都是 `id.secret` 或无固定前缀），那就没法靠前缀认出凭证类型。这种接入线不显示类型提示，贴错了只能靠端点返回的错误提示。
+- **清单里的默认模型会过期。** 厂商改版、模型退役时清单不会自动跟——面板上的「拉取可用模型」能看出这把 key 实际还能调什么。
+- **真 key 验证只覆盖了 MiniMax 一家。** 脚本支持全部接入线，但只有 MiniMax 那条真的用真 key 跑过（12/12 通过）。别的接入线要验证得各自准备一把 key。
 
 ## 9. 变更规则
 

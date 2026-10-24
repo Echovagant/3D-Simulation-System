@@ -469,6 +469,45 @@ describe('LLM store · 凭证类型与模型列表', () => {
     store.applyKey('another-key')
     expect(store.availableModels).toEqual([])
   })
+
+  it('前缀要按长度从长到短匹配：sk-sp- 不能被 sk- 抢走', () => {
+    // ⚠️ 百炼的按量 key 是 `sk-` 开头、套餐 key 是 `sk-sp-` 开头——
+    // 短的 `sk-` 正是长的 `sk-sp-` 的前缀。先匹配短的会把套餐 key 误判成按量 key。
+    const store = useLlmStore()
+    store.selectProvider('qwen')
+    expect(store.detectKeyKind('sk-sp-example-value')).toBe('subscription') // secret-scan: allow
+    expect(store.detectKeyKind('sk-example-value')).toBe('standard')
+  })
+
+  it('认不出前缀的厂商不硬猜（智谱两类 key 格式一样）', () => {
+    const store = useLlmStore()
+    store.selectProvider('zhipu-coding')
+    expect(store.detectKeyKind('idpart.secretpart')).toBeNull()
+    expect(store.keyKindMismatch).toBe('')
+  })
+
+  it('贴了别家厂商的 key 要说「贴错了厂商」，而不是「凭证类型不对」', () => {
+    const store = useLlmStore()
+    store.selectProvider('qwen')
+    store.applyKey('sk-cp-example-value') // secret-scan: allow
+
+    expect(store.keyFamilyMismatch).toContain('minimax')
+    expect(store.keyKindMismatch).toBe('')
+  })
+
+  it('没有模型列表接口的接入线：不发请求，如实说明', async () => {
+    const store = useLlmStore()
+    store.selectProvider('qwen-coding')
+    store.applyKey(FAKE_KEY)
+    const mock = vi.fn()
+    vi.stubGlobal('fetch', mock)
+
+    const ok = await store.loadModels()
+
+    expect(ok).toBe(false)
+    expect(mock).not.toHaveBeenCalled()
+    expect(store.modelsError).toContain('没有开放模型列表接口')
+  })
 })
 
 /**

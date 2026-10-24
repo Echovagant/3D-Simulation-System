@@ -278,6 +278,43 @@ const CONTRACT = [
         'minimax 接入线',
       ),
   },
+  {
+    key: 'AI_ACCESS_LINE_COUNT',
+    source: PROVIDERS,
+    kind: 'number',
+    // 全部接入线（每个厂商的每条线各占一个条目）。
+    // 厂商新增端点或新凭证类型时这个数会变——规格对不上就构建失败。
+    read: () =>
+      captureMatchCount(
+        readText(PROVIDERS),
+        /id:\s*'[a-z0-9-]+'[\s\S]*?keyKind:\s*'\w+'[\s\S]*?keyFamily:\s*'([a-z]+)'/g,
+        '接入线',
+      ),
+  },
+  {
+    key: 'AI_ACCESS_LINE_FAMILIES',
+    source: PROVIDERS,
+    kind: 'list',
+    // 厂商清单：每个厂商一条（或多条）接入线。
+    read: () =>
+      captureList(
+        readText(PROVIDERS),
+        /id:\s*'[a-z0-9-]+'[\s\S]*?keyKind:\s*'\w+'[\s\S]*?keyFamily:\s*'([a-z]+)'/g,
+        '接入线厂商',
+      ),
+  },
+  {
+    key: 'AI_ACCESS_LINE_SUBSCRIPTION_COUNT',
+    source: PROVIDERS,
+    kind: 'number',
+    // 订阅制的接入线有几条——它们与按量计费的那一套互不通用。
+    read: () =>
+      captureMatchCount(
+        readText(PROVIDERS),
+        /id:\s*'[a-z0-9-]+'[\s\S]*?keyKind:\s*'subscription'[\s\S]*?keyFamily:\s*'([a-z]+)'/g,
+        '订阅接入线',
+      ),
+  },
 
   // ---- AI 演武场 ----
   {

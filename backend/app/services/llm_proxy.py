@@ -59,13 +59,18 @@ class LlmProvider:
     base_url: str
     model: str
     reasoning_effort: str | None = None
-    # 这条线要的凭证前缀（用于认出用户贴的是哪一种）
+    # 厂商的凭证前缀（用于认出用户贴的是哪一种）
     key_prefix: str | None = None
+    # 厂商标识——同一家厂商的多条接入线共用它（与前端 keyFamily 同源）
+    key_family: str | None = None
+    # 这条线没有模型列表接口（百炼 Coding Plan 就是）
+    models_supported: bool = True
 
 
 PROVIDERS: tuple[LlmProvider, ...] = (
     LlmProvider(
         id="minimax",
+        key_family="minimax",
         name="MiniMax",
         protocol="openai",
         base_url="https://api.minimax.io/v1",
@@ -75,6 +80,7 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="minimax-subscription",
+        key_family="minimax",
         name="MiniMax（订阅）",
         protocol="openai",
         base_url="https://api.minimax.io/v1",
@@ -84,6 +90,7 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="minimax-cn",
+        key_family="minimax",
         name="MiniMax（api.minimaxi.com）",
         protocol="openai",
         base_url="https://api.minimaxi.com/v1",
@@ -93,6 +100,7 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="minimax-cn-subscription",
+        key_family="minimax",
         name="MiniMax（api.minimaxi.com · 订阅）",
         protocol="openai",
         base_url="https://api.minimaxi.com/v1",
@@ -102,6 +110,7 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="deepseek",
+        key_family="deepseek",
         name="DeepSeek",
         protocol="openai",
         base_url="https://api.deepseek.com",
@@ -110,6 +119,7 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="zhipu",
+        key_family="zhipu",
         name="智谱 GLM",
         protocol="openai",
         base_url="https://open.bigmodel.cn/api/paas/v4",
@@ -117,6 +127,7 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="zhipu-coding",
+        key_family="zhipu",
         name="智谱 GLM（编码套餐）",
         protocol="openai",
         base_url="https://open.bigmodel.cn/api/coding/paas/v4",
@@ -124,14 +135,28 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="qwen",
+        key_family="qwen",
         name="通义千问 Qwen",
         protocol="openai",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         model="qwen3.8-max",
         reasoning_effort="low",
+        key_prefix="sk-",
+    ),
+    LlmProvider(
+        id="qwen-coding",
+        key_family="qwen",
+        name="通义千问 Qwen（编码套餐）",
+        protocol="openai",
+        base_url="https://coding.dashscope.aliyuncs.com/v1",
+        model="qwen3.8-max",
+        reasoning_effort="low",
+        key_prefix="sk-sp-",
+        models_supported=False,
     ),
     LlmProvider(
         id="ark",
+        key_family="ark",
         name="火山方舟",
         protocol="openai",
         base_url="https://ark.cn-beijing.volces.com/api/v3",
@@ -139,6 +164,7 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     ),
     LlmProvider(
         id="ark-coding",
+        key_family="ark",
         name="火山方舟（编码套餐）",
         protocol="openai",
         base_url="https://ark.cn-beijing.volces.com/api/coding/v3",
@@ -181,6 +207,59 @@ _BY_ID = {provider.id: provider for provider in PROVIDERS}
 def find_provider(provider_id: str) -> LlmProvider | None:
     """按 id 找厂商。不认识就是 None。"""
     return _BY_ID.get(provider_id)
+
+
+def detect_key_prefix(api_key: str, family: str | None = None) -> str | None:
+    """认出这把 key 属于哪条接入线的前缀。
+
+    ⚠️ **按前缀长度从长到短匹配**：百炼的按量 key 是 `sk-` 开头、
+    套餐 key 是 `sk-sp-` 开头——短的 `sk-` 正是长的 `sk-sp-` 的前缀。
+    先匹配短的会把套餐 key 误判成按量 key。
+
+    @param family 只在这个厂商内找。给了它就不会把别家厂商的 key 认成
+        本家的——那属于「贴错了厂商」，是另一类问题。
+    """
+    trimmed = (api_key or "").strip()
+    if not trimmed:
+        return None
+    candidates = sorted(
+        (
+            p
+            for p in PROVIDERS
+            if p.key_prefix and (family is None or _provider_family(p) == family)
+        ),
+        key=lambda p: (-len(p.key_prefix or ""), p.id),
+    )
+    for provider in candidates:
+        if trimmed.startswith(provider.key_prefix or ""):
+            return provider.key_prefix
+    return None
+
+
+def _provider_family(provider: LlmProvider) -> str:
+    """厂商标识——同一家厂商的多条接入线共用它（与前端 keyFamily 同源）。"""
+    return provider.key_family or provider.id.split("-")[0]
+
+
+def key_prefix_mismatch(provider_id: str, api_key: str) -> str | None:
+    """这把 key 与该接入线期望的凭证不匹配时，给出可读的原因。
+
+    ⚠️ 只在**同一厂商内**判断：拿别家厂商的 key 贴进来是「贴错了厂商」，
+    那要靠调用时的错误提示（换厂商要重新托管），不该在提交时就拦——
+    用户可能正打算换厂商。
+
+    ⚠️ 认不出前缀就返回 None——前缀规则可能过时，不能因此拦下用户。
+    """
+    provider = find_provider(provider_id)
+    if provider is None or not provider.key_prefix:
+        return None
+    detected = detect_key_prefix(api_key, family=_provider_family(provider))
+    if detected is None or detected == provider.key_prefix:
+        return None
+    return (
+        f"这把 key 的前缀是 {detected}，而「{provider.name}」这条接入线要的是 "
+        f"{provider.key_prefix}。同一家厂商的不同接入线的 key 不通用——请确认选对了接入线。"
+    )
 
 
 def get_transport() -> httpx.BaseTransport | None:

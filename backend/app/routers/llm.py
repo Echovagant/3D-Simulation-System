@@ -92,6 +92,15 @@ def upsert_key(
             code="llm_invalid_request",
             message=f"不认识的 providerId：{payload.provider_id}",
         )
+    # 凭证类型当场核对：贴错类型的 key 存进去，只会在调用时返回一个
+    # 指不到真正原因上的错（401 像 key 错了，「模型不存在」像模型名错了）。
+    mismatch = llm_proxy.key_prefix_mismatch(payload.provider_id, payload.api_key)
+    if mismatch:
+        raise ApiError(
+            status_code=422,
+            code="llm_key_kind_mismatch",
+            message=mismatch,
+        )
     row = key_vault.store_key(
         session,
         owner_token,

@@ -48,9 +48,9 @@ class Settings(BaseSettings):
     llm_quota_per_day: int = 100
 
     # 故障转移顺序（厂商 id 列表）。
-    # ⚠️ MiniMax 的四条接入线互不兼容：两个端点各是一套账号体系，
-    # 端点内又分「按量计费」与「订阅」两种凭证，各用各的 key。
-    # 它们**不互相顶替**——配了哪条线的 key 就用哪条线。
+    # ⚠️ 同一个 id 对应**一条接入线**，不是一家厂商：端点不同、凭证类型不同的
+    # 组合各自占一个 id，它们**不互相顶替**——配了哪条线的 key 就用哪条线，
+    # 换一家只会得到「这一家没配 key」。
     llm_fallback_order: list[str] = [
         "minimax",
         "minimax-subscription",
@@ -58,6 +58,11 @@ class Settings(BaseSettings):
         "minimax-cn-subscription",
         "deepseek",
         "zhipu",
+        "zhipu-coding",
+        "qwen",
+        "qwen-coding",
+        "ark",
+        "ark-coding",
     ]
 
     # 调厂商的超时（毫秒）。

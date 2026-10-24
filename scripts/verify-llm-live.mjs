@@ -27,7 +27,7 @@ import { resolve } from 'node:path'
 // ---------- 参数 ----------
 
 const parseArgs = (argv) => {
-  const args = { runs: 10, provider: 'minimax-cn-subscription', model: 'MiniMax-M3.1-Flash', timeoutMs: 60000 }
+  const args = { runs: 10, provider: 'minimax-cn-subscription', model: '', timeoutMs: 60000 }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     const next = () => {
@@ -54,10 +54,23 @@ if (args.help) {
   node scripts/verify-llm-live.mjs --key-env <环境变量名> [选项]
 
 选项：
-  --provider <id>     提供商 id（默认 minimax-cn-subscription）
-  --model <id>        模型 id（默认 MiniMax-M3.1-Flash）
+  --provider <id>     接入线 id（默认 minimax-cn-subscription）
+  --model <id>        模型 id（默认取该接入线的默认模型）
   --runs <n>          跑几次（默认 10）
   --timeout-ms <n>    单次超时（默认 60000）
+
+可用接入线：
+  minimax                     api.minimax.io                 按量计费
+  minimax-subscription        api.minimax.io                 订阅
+  minimax-cn                  api.minimaxi.com               按量计费
+  minimax-cn-subscription     api.minimaxi.com               订阅
+  deepseek                    api.deepseek.com               按量计费
+  zhipu                       open.bigmodel.cn               按量计费
+  zhipu-coding                open.bigmodel.cn               订阅
+  qwen                        dashscope.aliyuncs.com         按量计费
+  qwen-coding                 coding.dashscope.aliyuncs.com   订阅（无模型列表接口）
+  ark                         ark.cn-beijing.volces.com      按量计费
+  ark-coding                  ark.cn-beijing.volces.com      订阅
 
 密钥来源二选一：--key-file（文件里是裸 key，一行）与 --key-env（环境变量名）。`)
   process.exit(0)
@@ -93,14 +106,52 @@ if (!apiKey) {
 }
 
 // ---------- 提供商配置（与 src/config/llmProviders.ts 同源） ----------
+//
+// ⚠️ 这里**不从源码清单读**——那个文件是 TypeScript，含类型标注，
+// 正则解析它比重写一份更脆。两处各自维护，靠 `verify:spec` 闸门
+// 与规格文档对账（规格里记着接入线条数与每条线的端点）。
+//
+// `models: false` 表示这家**没有模型列表接口**——拉模型那一步会直接跳过，
+// 而不是拿一个必然失败的请求去报错。
 
 const PROVIDERS = {
-  minimax: { baseUrl: 'https://api.minimax.io/v1', reasoningEffort: 'low' },
-  'minimax-subscription': { baseUrl: 'https://api.minimax.io/v1', reasoningEffort: 'low' },
-  'minimax-cn': { baseUrl: 'https://api.minimaxi.com/v1', reasoningEffort: 'low' },
-  'minimax-cn-subscription': { baseUrl: 'https://api.minimaxi.com/v1', reasoningEffort: 'low' },
-  deepseek: { baseUrl: 'https://api.deepseek.com', reasoningEffort: 'high' },
-  zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoningEffort: null },
+  minimax: { baseUrl: 'https://api.minimax.io/v1', reasoningEffort: 'low', model: 'MiniMax-M3.1-Flash' },
+  'minimax-subscription': {
+    baseUrl: 'https://api.minimax.io/v1',
+    reasoningEffort: 'low',
+    model: 'MiniMax-M3.1-Flash',
+  },
+  'minimax-cn': { baseUrl: 'https://api.minimaxi.com/v1', reasoningEffort: 'low', model: 'MiniMax-M3.1-Flash' },
+  'minimax-cn-subscription': {
+    baseUrl: 'https://api.minimaxi.com/v1',
+    reasoningEffort: 'low',
+    model: 'MiniMax-M3.1-Flash',
+  },
+  deepseek: { baseUrl: 'https://api.deepseek.com', reasoningEffort: 'high', model: 'deepseek-flash' },
+  zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoningEffort: null, model: 'glm-5.3' },
+  'zhipu-coding': {
+    baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    reasoningEffort: null,
+    model: 'glm-5.2',
+  },
+  qwen: {
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    reasoningEffort: 'low',
+    model: 'qwen3.8-max',
+  },
+  'qwen-coding': {
+    baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+    reasoningEffort: 'low',
+    model: 'qwen3.8-max',
+    // 百炼 Coding Plan 不开放模型列表接口
+    models: false,
+  },
+  ark: { baseUrl: 'https://ark.cn-beijing.volces.com/api/v3', reasoningEffort: null, model: 'doubao-seed-2.1-pro' },
+  'ark-coding': {
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    reasoningEffort: null,
+    model: 'Doubao-Seed-Code',
+  },
 }
 
 const provider = PROVIDERS[args.provider]
@@ -109,6 +160,9 @@ if (!provider) {
   console.error(`   可用：${Object.keys(PROVIDERS).join(', ')}`)
   process.exit(1)
 }
+
+// 模型没指定就用这条接入线的默认模型——各家的默认模型不一样
+if (!args.model) args.model = provider.model
 
 // ---------- 控制器提示词（与 src/services/llm/prompts.ts 保持一致） ----------
 
@@ -280,8 +334,13 @@ const callOnce = async (scenario) => {
  *
  * 界面上的「拉取可用模型」按钮走的是同一条路径——
  * 这个脚本跑通了，界面上那个按钮就是通的。
+ *
+ * @returns `supported: false` 表示这家没有模型列表接口，跳过即可，不算失败。
  */
 const fetchModelList = async () => {
+  if (provider.models === false) {
+    return { ok: false, supported: false, models: [], error: '这家没有开放模型列表接口' }
+  }
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), args.timeoutMs)
   try {
@@ -292,7 +351,12 @@ const fetchModelList = async () => {
     })
     if (!response.ok) {
       const raw = await response.text().catch(() => '')
-      return { ok: false, models: [], error: `HTTP ${response.status}：${raw.slice(0, 120)}` }
+      return {
+        ok: false,
+        supported: true,
+        models: [],
+        error: `HTTP ${response.status}：${raw.slice(0, 120)}`,
+      }
     }
     const payload = await response.json()
     const list = Array.isArray(payload?.data) ? payload.data : []
@@ -302,7 +366,12 @@ const fetchModelList = async () => {
     return { ok: models.length > 0, models, error: models.length ? '' : '返回的列表是空的' }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    return { ok: false, models: [], error: controller.signal.aborted ? '请求超时' : message }
+    return {
+      ok: false,
+      supported: true,
+      models: [],
+      error: controller.signal.aborted ? '请求超时' : message,
+    }
   } finally {
     clearTimeout(timer)
   }
@@ -342,7 +411,9 @@ console.log(`  模型：${args.model}`)
 console.log(`  次数：${total}\n`)
 
 console.log('模型列表（界面「拉取可用模型」走的是同一条路径）：')
-if (modelList.ok) {
+if (modelList.supported === false) {
+  console.log(`  — ${modelList.error}（跳过，不算失败）`)
+} else if (modelList.ok) {
   console.log(`  ✓ 拉到 ${modelList.models.length} 个模型`)
   for (const id of modelList.models) {
     console.log(`      ${id}${id === args.model ? '   ← 当前用的' : ''}`)
@@ -382,8 +453,14 @@ if (empty.length > 0) {
 }
 if (rejected.length > 0) problems.push(`${rejected.length} 次返回了内容但过不了闸门（提示词或厂商返回格式对不上）`)
 if (passed.length === 0 && total > 0) problems.push('没有一次拿到可用动作——LLM 控制器完全不可用')
-if (!modelList.ok) problems.push(`拉不到模型列表：${modelList.error}（界面上的「拉取可用模型」按钮会同样失败）`)
-else if (!modelList.models.includes(args.model)) {
+if (!modelList.ok) {
+  // 「这家没有模型列表接口」不算失败——那是接口本身没有，不是 key 或配置错了
+  if (modelList.supported !== false) {
+    problems.push(
+      `拉不到模型列表：${modelList.error}（界面上的「拉取可用模型」按钮会同样失败）`,
+    )
+  }
+} else if (!modelList.models.includes(args.model)) {
   problems.push(
     `当前模型 ${args.model} 不在这把 key 的模型列表里（列表共 ${modelList.models.length} 个）——换模型或换 Key`,
   )

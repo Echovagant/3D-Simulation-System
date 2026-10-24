@@ -214,23 +214,45 @@ export const useLlmStore = defineStore('llm', () => {
    * （401 看着像 key 错了，「模型不存在」看着像模型名错了），
    * 所以在用户填的时候就告诉他「你这把是哪一种」。
    *
+   * ⚠️ **必须按前缀长度从长到短匹配**：百炼的按量 Key 是 `sk-` 开头、
+   * 套餐 Key 是 `sk-sp-` 开头——短的 `sk-` 是长的 `sk-sp-` 的前缀，
+   * 先匹配短的会把套餐 key 误判成按量 key。
+   *
+   * ⚠️ 只在**同一厂商内**比对：拿别家厂商的 key 贴进来是「贴错了厂商」，
+   * 不是「凭证类型不对」，两回事。
+   *
    * @returns 认出来是哪种；认不出返回 null（不该拦——前缀规则可能过时）
    */
   const detectKeyKind = (value: string): 'standard' | 'subscription' | null => {
     const trimmed = value.trim()
     if (!trimmed) return null
-    // 当前 provider 期望的前缀
-    const expected = provider.value.keyPrefix
-    if (expected && trimmed.startsWith(expected)) {
-      return provider.value.keyKind ?? null
+    const family = provider.value.keyFamily
+    if (!family) return null
+    // 同一厂商里，声明了前缀的接入线；按前缀长度倒序（长的先试）
+    const siblings = llmProviders
+      .filter((item) => item.keyFamily === family && item.keyPrefix)
+      .sort((a, b) => (b.keyPrefix?.length ?? 0) - (a.keyPrefix?.length ?? 0))
+    for (const sibling of siblings) {
+      if (trimmed.startsWith(sibling.keyPrefix as string)) {
+        return sibling.keyKind ?? null
+      }
     }
-    // 同一厂商的另一种前缀：这是最常踩的坑——贴了订阅 Key 却选了按量计费的条目
-    const sibling = llmProviders.find(
-      (item) => item.keyPrefix && item.keyPrefix !== expected && trimmed.startsWith(item.keyPrefix),
-    )
-    if (sibling) return sibling.keyKind ?? null
     return null
   }
+
+  /** 用户贴的 key 属于别家厂商吗（提示语与「凭证类型不对」不同） */
+  const keyFamilyMismatch = computed<string>(() => {
+    const trimmed = getApiKey(providerId.value).trim()
+    if (!trimmed) return ''
+    const family = provider.value.keyFamily
+    if (!family) return ''
+    // 别家有前缀、且这把 key 命中了别家的前缀 → 是别家的 key
+    const others = llmProviders.filter((item) => item.keyFamily !== family && item.keyPrefix)
+    const hit = others.find((item) => trimmed.startsWith(item.keyPrefix as string))
+    if (!hit) return ''
+    const name = llmProviders.find((item) => item.id === providerId.value)?.name ?? '当前服务商'
+    return `这把 key 看起来是 ${hit.keyFamily} 的，不是 ${name} 的——key 按厂商分槽存放，换厂商要重新粘贴。`
+  })
 
   /** 用户贴的 key 与当前条目期望的是否一致 */
   const keyKindMismatch = computed<string>(() => {
@@ -524,6 +546,12 @@ export const useLlmStore = defineStore('llm', () => {
    */
   const loadModels = async (): Promise<boolean> => {
     if (loadingModels.value) return false
+    // 这条线没有模型列表接口（百炼 Coding Plan 就是）——直接跳过，
+    // 不发一个必然失败的请求。
+    if (provider.value.models === false) {
+      modelsError.value = '这条接入线没有开放模型列表接口，模型名需要手填'
+      return false
+    }
     loadingModels.value = true
     modelsError.value = ''
     try {
@@ -721,6 +749,7 @@ export const useLlmStore = defineStore('llm', () => {
     applyModel,
     detectKeyKind,
     keyKindMismatch,
+    keyFamilyMismatch,
     requestExplanation,
     requestAction,
     markDegraded,

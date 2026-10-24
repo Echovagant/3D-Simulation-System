@@ -34,6 +34,9 @@ export type LlmProtocol = 'openai' | 'anthropic' | 'gemini'
  * ⚠️ 厂商常发好几种凭证，彼此**不通用**：拿错了要么 401，要么
  * 「模型不存在」——错误信息完全指不到真正的原因上。
  * 认得出 key 的前缀就能在填之前先说清楚。
+ *
+ * ⚠️ 有些厂商两种 key **前缀一样**（智谱都是 `id.secret` 两段十六进制），
+ * 那时 `keyPrefix` 留空——前缀认不出来就不认，不硬猜。
  */
 export type LlmKeyKind = 'standard' | 'subscription'
 
@@ -71,6 +74,20 @@ export interface LlmProvider {
   keyKind?: LlmKeyKind
   /** key 前缀（用于自动认出用户贴的是哪一种） */
   keyPrefix?: string
+  /**
+   * 厂商标识——同一家厂商的多条接入线共用它。
+   *
+   * ⚠️ 凭证识别只在**同一厂商内**比对：拿别家厂商的 key 贴进来是另一类错误
+   * （贴错了厂商），不该报成「凭证类型不对」。
+   */
+  keyFamily?: string
+  /**
+   * 这条线**没有**模型列表接口。
+   *
+   * ⚠️ 百炼的 Coding Plan 就是这样：拉 `GET {base}/models` 必然失败。
+   * 标出来，界面与验证脚本就**跳过**它——而不是让用户点一下按钮就看到一个错。
+   */
+  models?: false
   /** 这一家的特别之处（界面上会显示） */
   note?: string
 }
@@ -86,6 +103,7 @@ export const llmProviders: LlmProvider[] = [
     docsUrl: 'https://platform.minimax.io/docs/guides/text-generation',
     reasoningEffort: 'low',
     keyKind: 'standard',
+    keyFamily: 'minimax',
     keyPrefix: 'sk-api-',
     note: '按量计费的 API Key。M3.1-Flash 不允许关闭思考，只能把 reasoning_effort 调低。',
   },
@@ -98,6 +116,7 @@ export const llmProviders: LlmProvider[] = [
     docsUrl: 'https://platform.minimax.io/docs/token-plan/intro',
     reasoningEffort: 'low',
     keyKind: 'subscription',
+    keyFamily: 'minimax',
     keyPrefix: 'sk-cp-',
     note: '订阅 Key（Token Plan / Credits）。它与按量计费的 Key 不通用——订阅 Key 只能调订阅覆盖的模型。',
   },
@@ -110,6 +129,7 @@ export const llmProviders: LlmProvider[] = [
     docsUrl: 'https://platform.minimaxi.com/document/guides/text-generation',
     reasoningEffort: 'low',
     keyKind: 'standard',
+    keyFamily: 'minimax',
     keyPrefix: 'sk-api-',
     note: 'api.minimaxi.com 与 api.minimax.io 是两套账号体系，key 不通用：拿错会返回 401。',
   },
@@ -122,6 +142,7 @@ export const llmProviders: LlmProvider[] = [
     docsUrl: 'https://platform.minimaxi.com/document/token-plan/intro',
     reasoningEffort: 'low',
     keyKind: 'subscription',
+    keyFamily: 'minimax',
     keyPrefix: 'sk-cp-',
     note: '订阅 Key + api.minimaxi.com 端点。端点与凭证类型都对上才调得通。',
   },
@@ -133,7 +154,9 @@ export const llmProviders: LlmProvider[] = [
     model: 'deepseek-flash',
     docsUrl: 'https://api-docs.deepseek.com/quick_start/pricing',
     reasoningEffort: 'high',
-    note: 'deepseek-flash 对应 DeepSeek-V4.1-Flash-1017；同代还有 deepseek-v4-pro（V4-Pro-0813）。旧的 deepseek-v4-flash 已退役。',
+    keyKind: 'standard',
+    keyFamily: 'deepseek',
+    note: '只有按量计费一种凭证，没有套餐线。deepseek-flash 对应 DeepSeek-V4.1-Flash-1017；同代还有 deepseek-v4-pro（V4-Pro-0813）。旧的 deepseek-v4-flash 已退役。',
   },
   {
     id: 'zhipu',
@@ -142,6 +165,9 @@ export const llmProviders: LlmProvider[] = [
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     model: 'glm-5.3',
     docsUrl: 'https://docs.bigmodel.cn/',
+    keyKind: 'standard',
+    keyFamily: 'zhipu',
+    note: '按量计费的标准 API Key。',
   },
   {
     id: 'zhipu-coding',
@@ -149,8 +175,10 @@ export const llmProviders: LlmProvider[] = [
     protocol: 'openai',
     baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
     model: 'glm-5.2',
-    docsUrl: 'https://docs.bigmodel.cn/',
-    note: 'Coding Plan 套餐有专属端点，和通用端点不通用。',
+    docsUrl: 'https://docs.bigmodel.cn/cn/coding-plan/quick-start',
+    keyKind: 'subscription',
+    keyFamily: 'zhipu',
+    note: 'Coding Plan 有专属端点，与标准 API 不通用。⚠️ 标准 Key、套餐 Key 的**格式一样**，只能靠创建入口区分——贴错了这里只能靠端点返回的错误提示。',
   },
   {
     id: 'qwen',
@@ -160,7 +188,24 @@ export const llmProviders: LlmProvider[] = [
     model: 'qwen3.8-max',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/',
     reasoningEffort: 'low',
-    note: '百炼平台也提供 Anthropic 协议端点，模型名相同。',
+    keyKind: 'standard',
+    keyFamily: 'qwen',
+    keyPrefix: 'sk-',
+    note: '按量计费的标准 Key（`sk-` 开头）。百炼平台也提供 Anthropic 协议端点，模型名相同。',
+  },
+  {
+    id: 'qwen-coding',
+    name: '通义千问 Qwen（编码套餐）',
+    protocol: 'openai',
+    baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+    model: 'qwen3.8-max',
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/coding-plan',
+    reasoningEffort: 'low',
+    keyKind: 'subscription',
+    keyFamily: 'qwen',
+    keyPrefix: 'sk-sp-',
+    models: false,
+    note: 'Coding Plan 专属 Key（`sk-sp-` 开头）与专属端点，与按量计费的那一套完全不通。这条线没有模型列表接口。',
   },
   {
     id: 'ark',
@@ -169,7 +214,9 @@ export const llmProviders: LlmProvider[] = [
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     model: 'doubao-seed-2.1-pro',
     docsUrl: 'https://www.volcengine.com/docs/82379/1099320',
-    note: '同系列还有 doubao-seed-2.1-lite / 2.1-turbo 与 2.0-code；模型 id 以控制台给出的接入点为准，可直接在下面改。',
+    keyKind: 'standard',
+    keyFamily: 'ark',
+    note: '按量计费的方舟 API Key。同系列还有 doubao-seed-2.1-lite / 2.1-turbo 与 2.0-code；模型 id 以控制台给出的接入点为准，可直接在下面改。',
   },
   {
     id: 'ark-coding',
@@ -177,8 +224,10 @@ export const llmProviders: LlmProvider[] = [
     protocol: 'openai',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
     model: 'Doubao-Seed-Code',
-    docsUrl: 'https://www.volcengine.com/docs/82379',
-    note: 'Coding Plan 有独立域名，配错会直接 403；额度也只认套餐里的 key。',
+    docsUrl: 'https://www.volcengine.com/docs/82379/1925114',
+    keyKind: 'subscription',
+    keyFamily: 'ark',
+    note: 'Coding Plan 有独立端点与专属 key，配错会直接 403；额度也只认套餐里的 key。',
   },
   {
     id: 'openai',

@@ -341,6 +341,147 @@ def test_minimax_has_four_independent_access_lines() -> None:
     assert len(order) == len(set(order))
 
 
+def test_every_access_line_has_its_own_entry() -> None:
+    """每条接入线（端点 × 凭证）各自占一个条目。
+
+    ⚠️ 同一个 id 装不下两种互斥的凭证与端点组合——key 是按 provider_id 分槽存的。
+    """
+    by_id = {provider.id: provider for provider in llm_proxy.PROVIDERS}
+    expected = {
+        # MiniMax：两个端点 × 两种凭证
+        "minimax": ("api.minimax.io", "sk-api-"),
+        "minimax-subscription": ("api.minimax.io", "sk-cp-"),
+        "minimax-cn": ("api.minimaxi.com", "sk-api-"),
+        "minimax-cn-subscription": ("api.minimaxi.com", "sk-cp-"),
+        # DeepSeek：只有按量计费一种凭证
+        "deepseek": ("api.deepseek.com", None),
+        # 智谱：两类 key 格式一样，只能靠创建入口区分
+        "zhipu": ("open.bigmodel.cn", None),
+        "zhipu-coding": ("open.bigmodel.cn", None),
+        # 百炼：前缀能区分
+        "qwen": ("dashscope.aliyuncs.com", "sk-"),
+        "qwen-coding": ("coding.dashscope.aliyuncs.com", "sk-sp-"),
+        # 方舟：两类 key 格式一样
+        "ark": ("ark.cn-beijing.volces.com", None),
+        "ark-coding": ("ark.cn-beijing.volces.com", None),
+    }
+    for provider_id, (host, prefix) in expected.items():
+        provider = by_id[provider_id]
+        assert host in provider.base_url
+        assert provider.key_prefix == prefix
+
+    # 故障转移顺序要覆盖全部接入线，且不重复
+    order = settings.llm_fallback_order
+    for provider_id in expected:
+        assert provider_id in order, f"{provider_id} 不在故障转移顺序里"
+    assert len(order) == len(set(order))
+
+
+def test_access_line_prefixes_may_overlap_but_must_be_ordered() -> None:
+    """前缀可以有包含关系，但识别时必须按长度倒序。
+
+    ⚠️ 百炼的按量 key 是 `sk-`、套餐 key 是 `sk-sp-`——`sk-` 是 `sk-sp-` 的前缀。
+    这是**允许的配置**（厂商自己定的），但识别逻辑必须按长度倒序匹配，
+    否则套餐 key 会被误判成按量 key。
+
+    这条测试锁的是「同一厂商内，短前缀不能排在长前缀前面」——
+    也就是倒序匹配时短的必须后试。
+    """
+    by_family: dict[str, list[str]] = {}
+    for provider in llm_proxy.PROVIDERS:
+        if not provider.key_prefix:
+            continue
+        by_family.setdefault(provider.id.split("-")[0], []).append(provider.key_prefix)
+
+    for family, prefixes in by_family.items():
+        # 倒序匹配时，长前缀先试；短前缀必须排在它后面
+        ordered = sorted(prefixes, key=lambda p: (-len(p), p))
+        for i, outer in enumerate(ordered):
+            for inner in ordered[i + 1 :]:
+                if inner != outer:
+                    assert not outer.startswith(inner) or len(outer) > len(inner), (
+                        f"{family}：倒序匹配时 {inner!r} 会先于 {outer!r} 命中，"
+                        f"但 {inner!r} 是 {outer!r} 的前缀"
+                    )
+
+
+def test_qwen_prefixes_are_distinguishable_by_length() -> None:
+    """百炼两类 key 的前缀有包含关系——识别必须按长度倒序才不出错。
+
+    ⚠️ 这不是「配置有问题」，是「识别逻辑必须处理这种配置」：
+    `sk-sp-` 以 `sk-` 开头，先匹配短的会把套餐 key 误判成按量 key。
+    """
+    by_id = {provider.id: provider for provider in llm_proxy.PROVIDERS}
+    short = by_id["qwen"].key_prefix
+    long = by_id["qwen-coding"].key_prefix
+    assert short == "sk-"
+    assert long == "sk-sp-"
+    # 包含关系成立 → 识别必须靠长度倒序
+    assert long.startswith(short)
+    assert len(long) > len(short)
+
+
+def test_qwen_coding_has_no_model_list_endpoint() -> None:
+    """百炼 Coding Plan 不开放模型列表接口——标出来，别发必然失败的请求。"""
+    by_id = {provider.id: provider for provider in llm_proxy.PROVIDERS}
+    assert by_id["qwen-coding"].models_supported is False
+    assert by_id["qwen"].models_supported is True
+
+
+def test_key_prefix_matched_longest_first() -> None:
+    """`sk-sp-` 是 `sk-` 的前缀——必须按长度倒序识别。
+
+    ⚠️ 先匹配短的会把百炼的套餐 key 误判成按量 key。
+    """
+    assert llm_proxy.detect_key_prefix("sk-sp-example-value") == "sk-sp-"  # secret-scan: allow
+    assert llm_proxy.detect_key_prefix("sk-example-value") == "sk-"
+
+
+def test_key_prefix_mismatch_within_same_family() -> None:
+    """同一家厂商内贴错凭证类型，当场说清楚。"""
+    reason = llm_proxy.key_prefix_mismatch("qwen", "sk-sp-example-value")  # secret-scan: allow
+    assert reason is not None
+    assert "sk-sp-" in reason
+    assert "sk-" in reason
+
+
+def test_key_prefix_mismatch_across_families_is_not_rejected() -> None:
+    """⚠️ 贴了别家厂商的 key **不在提交时拦**。
+
+    用户可能正打算换厂商——那是「贴错了厂商」，该靠调用时的错误提示，
+    不是在托管入口就拒收。
+    """
+    assert (
+        llm_proxy.key_prefix_mismatch("minimax", "sk-sp-example-value") is None  # secret-scan: allow
+    )
+
+
+def test_unknown_prefix_is_accepted() -> None:
+    """认不出前缀就放行——前缀规则可能过时，不能因此拦下用户。"""
+    assert llm_proxy.key_prefix_mismatch("minimax", "some-unknown-credential") is None
+
+
+def test_storing_wrong_credential_kind_is_rejected(client: TestClient) -> None:
+    """托管入口当场拒绝凭证类型不匹配的 key。"""
+    response = client.post(
+        "/api/llm/keys",
+        json={"providerId": "qwen", "apiKey": "sk-sp-example-value"},  # secret-scan: allow
+        headers=_headers(),
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "llm_key_kind_mismatch"
+
+
+def test_storing_matching_credential_kind_is_accepted(client: TestClient) -> None:
+    """凭证类型对得上就正常托管。"""
+    response = client.post(
+        "/api/llm/keys",
+        json={"providerId": "qwen", "apiKey": "sk-plain-example-value"},  # secret-scan: allow
+        headers=_headers(),
+    )
+    assert response.status_code == 201
+
+
 def test_finish_reason_is_reported(client: TestClient, fake_provider: FakeProvider) -> None:
     """结束原因要透传给前端：正文为空时它区分了「被截断」与「模型没给」。"""
     fake_provider.install(
