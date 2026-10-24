@@ -68,6 +68,14 @@ PROVIDERS: tuple[LlmProvider, ...] = (
         reasoning_effort="low",
     ),
     LlmProvider(
+        id="minimax-alt",
+        name="MiniMax（api.minimaxi.com）",
+        protocol="openai",
+        base_url="https://api.minimaxi.com/v1",
+        model="MiniMax-M3.1-Flash",
+        reasoning_effort="low",
+    ),
+    LlmProvider(
         id="deepseek",
         name="DeepSeek",
         protocol="openai",
@@ -170,6 +178,8 @@ class ProviderAttempt:
     content: str = ""
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
+    # 厂商的结束原因。正文为空时它区分「输出预算被用光（正文被截断）」与「模型没给正文」。
+    finish_reason: str | None = None
     error_code: str | None = None
     error_message: str | None = None
     upstream_status: int | None = None
@@ -279,6 +289,33 @@ def extract_content(protocol: LlmProtocol, payload: Any) -> str:
         return ""
     content = message.get("content")
     return content.strip() if isinstance(content, str) else ""
+
+
+def extract_finish_reason(protocol: LlmProtocol, payload: Any) -> str | None:
+    """取厂商的结束原因。与前端 ``extractFinishReason()`` 一致。
+
+    ⚠️ 正文为空时它区分了两种情况：``length`` 表示**输出预算被用光**
+    （推理 token 吃掉了预算、正文被截断），其余值表示模型确实没给正文。
+    前端据此给出可执行的提示，而不是笼统的「无法解析」。
+    """
+    if not isinstance(payload, dict):
+        return None
+    if protocol == "openai":
+        choices = payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return None
+        first = choices[0]
+        if not isinstance(first, dict):
+            return None
+        reason = first.get("finish_reason")
+        return reason if isinstance(reason, str) else None
+    if protocol == "anthropic":
+        reason = payload.get("stop_reason")
+        return reason if isinstance(reason, str) else None
+    if protocol == "gemini":
+        reason = payload.get("finish_reason")
+        return reason if isinstance(reason, str) else None
+    return None
 
 
 def extract_usage(payload: Any) -> tuple[int | None, int | None]:
@@ -424,6 +461,7 @@ def _call_provider(
         content=extract_content(provider.protocol, payload),
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        finish_reason=extract_finish_reason(provider.protocol, payload),
     )
 
 
@@ -563,6 +601,7 @@ def complete(
                 usage=usage,
                 provider_id=attempt.provider_id,
                 model=attempt.model,
+                finish_reason=attempt.finish_reason,
             )
 
         if not attempt.retryable:

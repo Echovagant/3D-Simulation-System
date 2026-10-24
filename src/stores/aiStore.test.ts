@@ -162,4 +162,31 @@ describe('useAiStore', () => {
 
     expect(store.resetToken).toBe(before + 1)
   })
+
+  it('resetSimulation 会把 LLM 拍数计数一起归零', () => {
+    const store = useAiStore()
+    store.llmTicks = 12
+    store.llmApplied = 3
+    store.llmRejected = 2
+    store.llmPending = 4
+    store.llmFallbacks = 5
+
+    store.resetSimulation()
+
+    expect(store.llmTicks).toBe(0)
+    expect(store.llmApplied).toBe(0)
+    expect(store.llmRejected).toBe(0)
+    expect(store.llmPending).toBe(0)
+    expect(store.llmFallbacks).toBe(0)
+  })
+
+  it('llmApplyRatio 没有拍数时是 null（界面据此显示「—」而不是 NaN）', () => {
+    const store = useAiStore()
+    expect(store.llmApplyRatio).toBeNull()
+
+    store.llmTicks = 8
+    store.llmApplied = 1
+
+    expect(store.llmApplyRatio).toBeCloseTo(0.125, 10)
+  })
 })

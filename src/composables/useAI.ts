@@ -861,22 +861,36 @@ export function useAI() {
    * - 请求还在飞 → 这一拍什么都不做，智能体沿用上一次的期望速度
    * - 上次失败 → 这一拍回落到规则式，并把智能体标记为"已降级"
    *
+   * ⚠️ 这一拍的五种结果都记进 aiStore 的计数器（llmTicks / llmApplied /
+   * llmRejected / llmPending / llmFallbacks）——面板只读那些数字，
+   * 「模型到底有没有在起作用」不能靠猜。
+   *
    * @returns true 表示这一拍已经处理了（不需要再走规则式）
    */
   const handleLlmDecision = (agentId: string): boolean => {
+    // 进了这个函数 = 这一拍有机会用 LLM（规则式模式根本到不了这里）
+    aiStore.llmTicks += 1
+
     const ready = llmDecisions.get(agentId)
     if (ready) {
       llmDecisions.delete(agentId)
       applyDecision(ready)
+      aiStore.llmApplied += 1
       return true
     }
 
     if (llmFallbacks.has(agentId)) {
       llmFallbacks.delete(agentId)
+      // 规则式接管：这一拍由规则式控制器出主意
+      aiStore.llmFallbacks += 1
       return false
     }
 
-    if (llmInFlight.has(agentId)) return true
+    if (llmInFlight.has(agentId)) {
+      // 请求还在飞：这一拍什么都不做，智能体沿用上一次的期望速度
+      aiStore.llmPending += 1
+      return true
+    }
 
     // 频率限制：LLM 再快也不该比这个频率更密
     const now = Date.now()
@@ -892,6 +906,11 @@ export function useAI() {
       .then((action) => {
         llmInFlight.delete(agentId)
         if (!action) {
+          // ⚠️ `!action` 同时覆盖两种情况：调用失败（网络/冷却/次数上限）
+          // 与返回结果解析不过（厂商格式不匹配）。对控制器来说是同一件事——
+          // 这一拍没有可用动作——所以都记在 `llmRejected` 上，
+          // 这个数字的含义是「模型这一拍没给出可用动作」。
+          aiStore.llmRejected += 1
           // 没拿到可用动作 → 这一拍回落到规则式，并把降级状态亮出来
           llmFallbacks.add(agentId)
           llm.markDegraded(llm.lastError || 'LLM 控制器不可用，已回落到规则式')
@@ -902,6 +921,8 @@ export function useAI() {
       })
       .catch(() => {
         llmInFlight.delete(agentId)
+        // 兜底路径：请求本身抛异常，同样是「这一拍没有可用动作」
+        aiStore.llmRejected += 1
         llmFallbacks.add(agentId)
         llm.markDegraded('LLM 控制器调用异常，已回落到规则式')
       })

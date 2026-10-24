@@ -48,7 +48,9 @@ class Settings(BaseSettings):
     llm_quota_per_day: int = 100
 
     # 故障转移顺序（厂商 id 列表）。
-    llm_fallback_order: list[str] = ["minimax", "deepseek", "zhipu"]
+    # ⚠️ MiniMax 的两个端点（api.minimax.io / api.minimaxi.com）是两套账号体系，
+    # 各用各的 key；配了哪家的 key 就用哪家，别指望它们互相顶替。
+    llm_fallback_order: list[str] = ["minimax", "minimax-alt", "deepseek", "zhipu"]
 
     # 调厂商的超时（毫秒）。
     llm_upstream_timeout_ms: int = 30000

@@ -94,6 +94,23 @@ const jsonResponse = (content: string): Response =>
     text: async () => '',
   }) as unknown as Response
 
+/** 造一个永远不返回的 fetch 替身——用来模拟「模型还在想」 */
+const hangingFetch = (): void => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise<Response>(() => {})),
+  )
+}
+
+/**
+ * 推进一拍决策循环（决策循环每 100 毫秒一拍）。
+ *
+ * ⚠️ 一次只推进一拍：一次推多拍就分不清「是哪一拍」让计数涨了。
+ */
+const advanceDecisionTick = async (): Promise<void> => {
+  await vi.advanceTimersByTimeAsync(100)
+}
+
 describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -106,6 +123,7 @@ describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
     wrapper?.unmount()
     wrapper = null
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('智能体是真正的动态刚体：有质量、位置来自物理世界', async () => {
@@ -427,5 +445,139 @@ describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
     api.updateAgents(0.2)
 
     expect(mesh.position.distanceTo(start)).toBeGreaterThan(0)
+  })
+})
+
+describe('useAI —— LLM 拍数计数（面板上「LLM 到底有没有在起作用」的那几个数字）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    const three = useThree()
+    three.disposeThree()
+    three.initThree()
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  /** 起一个演武场，并把控制器切到 LLM 模式 */
+  const setupLlmArena = async (): Promise<ReturnType<typeof useAiStore>> => {
+    const { store } = await setupArena()
+    store.agents[0].status = 'running'
+
+    const llm = useLlmStore()
+    llm.applyKey('unit-test-key')
+    llm.mode = 'llm'
+    return store
+  }
+
+  it('规则式模式下不产生任何 LLM 拍数计数', async () => {
+    const { store } = await setupArena()
+    store.agents[0].status = 'running'
+
+    vi.useFakeTimers()
+    store.simulationActive = true
+    await nextTick()
+
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(store.llmTicks).toBe(0)
+    expect(store.llmApplied).toBe(0)
+    expect(store.llmRejected).toBe(0)
+    expect(store.llmPending).toBe(0)
+    expect(store.llmFallbacks).toBe(0)
+  })
+
+  it('决策到货的那一拍：生效拍数 +1、总拍数 +1', async () => {
+    const store = await setupLlmArena()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse('{"action":"rotate","angle":3.14159}')),
+    )
+
+    vi.useFakeTimers()
+    store.simulationActive = true
+    await nextTick()
+
+    // 第一拍：把请求发出去（这一拍还没有动作可执行）
+    await advanceDecisionTick()
+    expect(store.llmTicks).toBe(1)
+    expect(store.llmApplied).toBe(0)
+
+    // 第二拍：回复已到货，执行它
+    const ticksBefore = store.llmTicks
+    const appliedBefore = store.llmApplied
+    await advanceDecisionTick()
+
+    expect(store.llmApplied).toBe(appliedBefore + 1)
+    expect(store.llmTicks).toBe(ticksBefore + 1)
+  })
+
+  it('请求还在飞时：记为在飞跳过，生效拍数不变', async () => {
+    const store = await setupLlmArena()
+    hangingFetch()
+
+    vi.useFakeTimers()
+    store.simulationActive = true
+    await nextTick()
+
+    // 第一拍：请求发出去了，还没回来
+    await advanceDecisionTick()
+    expect(store.llmTicks).toBe(1)
+    expect(store.llmPending).toBe(0)
+    expect(store.llmApplied).toBe(0)
+
+    // 第二拍：还在飞——这一拍什么都不做
+    const appliedBefore = store.llmApplied
+    await advanceDecisionTick()
+    expect(store.llmPending).toBe(1)
+    expect(store.llmApplied).toBe(appliedBefore)
+  })
+
+  it('模型返回的动作解析不过时：记为没给出可用动作，生效拍数不变', async () => {
+    const store = await setupLlmArena()
+    // 返回的 JSON 里没有合法动作——这正是「厂商格式不匹配」时的样子
+    vi.stubGlobal('fetch', vi.fn(async () => jsonResponse('{"foo":"bar"}')))
+
+    vi.useFakeTimers()
+    store.simulationActive = true
+    await nextTick()
+
+    await advanceDecisionTick()
+    expect(store.llmRejected).toBe(1)
+    expect(store.llmApplied).toBe(0)
+
+    // 下一拍：上一拍失败 → 规则式接管
+    const fallbacksBefore = store.llmFallbacks
+    await advanceDecisionTick()
+    expect(store.llmFallbacks).toBe(fallbacksBefore + 1)
+    expect(store.llmApplied).toBe(0)
+  })
+
+  it('resetSimulation 之后所有 LLM 拍数计数归零', async () => {
+    const store = await setupLlmArena()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse('{"action":"rotate","angle":3.14159}')),
+    )
+
+    vi.useFakeTimers()
+    store.simulationActive = true
+    await nextTick()
+
+    await advanceDecisionTick()
+    await advanceDecisionTick()
+    expect(store.llmTicks).toBeGreaterThan(0)
+
+    store.resetSimulation()
+
+    expect(store.llmTicks).toBe(0)
+    expect(store.llmApplied).toBe(0)
+    expect(store.llmRejected).toBe(0)
+    expect(store.llmPending).toBe(0)
+    expect(store.llmFallbacks).toBe(0)
   })
 })

@@ -294,7 +294,7 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `AI_MAX_CALLS_PER_SESSION` | `60` | 次 | `src/config/llm.ts` |
 | `AI_COOLDOWN_MS` | `5000` | 毫秒 | `src/config/llm.ts` |
 | `AI_TIMEOUT_MS` | `15000` | 毫秒 | `src/config/llm.ts` |
-| `AI_CONTROLLER_MAX_TOKENS` | `256` | token | `src/config/llm.ts` |
+| `AI_CONTROLLER_MAX_TOKENS` | `512` | token | `src/config/llm.ts` |
 | `AI_EXPLAIN_MAX_TOKENS` | `400` | token | `src/config/llm.ts` |
 | `AI_MAX_SPEED` | `8` | m/s | `src/composables/useAI.ts` |
 | `AI_AVOID_DISTANCE` | `3.5` | 米 | `src/composables/useAI.ts` |

@@ -378,7 +378,16 @@ export const useLlmStore = defineStore('llm', () => {
       })
       lastHostedProvider.value = result.providerId
       if (isCurrent()) lastError.value = ''
-      return { ok: true as const, content: result.content, error: '' }
+      const emptyReason: 'truncated' | 'empty' =
+        result.finishReason === 'length' ? 'truncated' : 'empty'
+      return {
+        ok: true as const,
+        content: result.content,
+        error: '',
+        // 正文空时把「被截断」与「真空」区分开，与自带 Key 那条路保持同一套口径
+        ...(result.content ? {} : { emptyReason }),
+        ...(result.finishReason ? { finishReason: result.finishReason } : {}),
+      }
     } catch (error) {
       const unavailable = isApiUnavailable(error)
       if (unavailable) hostedAvailable.value = false
@@ -528,6 +537,17 @@ export const useLlmStore = defineStore('llm', () => {
     }
     const result = await invoke(buildDecisionMessages(snapshot), llmConfig.controllerMaxTokens)
     if (!result.ok) return null
+
+    // 正文空要先说清是哪一种空：
+    // 「被输出预算截断」调大上限就能救，「模型真没给」调大也没用——
+    // 两者都报「无法解析」的话，用户既不知道怎么修，也无从判断该不该重试。
+    if (!result.content) {
+      lastError.value =
+        result.emptyReason === 'truncated'
+          ? '模型输出被长度上限截断（推理占用了输出预算），已回落到规则式'
+          : '模型返回了空内容，已回落到规则式'
+      return null
+    }
 
     const action = parseLlmAction(result.content, snapshot.maxSpeed)
     if (!action) {

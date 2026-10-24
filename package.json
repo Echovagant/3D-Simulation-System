@@ -37,7 +37,8 @@
     "gen:brand": "node scripts/generate-brand-assets.mjs",
     "gen:docs": "node scripts/generate-docs-assets.mjs",
     "record:demo": "node scripts/record-demo.mjs",
-    "verify:no-secrets": "node scripts/check-no-secrets.mjs"
+    "verify:no-secrets": "node scripts/check-no-secrets.mjs",
+    "verify:llm-live": "node scripts/verify-llm-live.mjs"
   },
   "dependencies": {
     "@dimforge/rapier3d": "^0.19.3",

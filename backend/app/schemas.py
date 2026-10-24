@@ -129,6 +129,10 @@ class LlmCompletionResponse(ApiModel):
     # 实际答上那家——故障转移时可能不是请求里指定的那家
     provider_id: str
     model: str
+    # 厂商的结束原因。正文为空时它区分了两种情况：
+    # `length` = 输出预算被用光（正文被截断），其余 = 模型真没给正文。
+    # 前端据此给出可执行的提示，而不是笼统的「无法解析」。
+    finish_reason: str | None = None
 
 
 class LlmKeyUpsertRequest(ApiModel):

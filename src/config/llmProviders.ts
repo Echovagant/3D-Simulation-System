@@ -42,6 +42,10 @@ export interface LlmProvider {
    *
    * ⚠️ 只有官方文档明确写了 `reasoning_effort` 的服务商才带这个字段——
    * 往不认识这个参数的接口上发，多半会被判成非法参数。
+   *
+   * ⚠️ 对**推理型模型**它还是必需的：实测 MiniMax-M3.1-Flash 不带这个参数时，
+   * 推理 token 会涨到 242/256 把正文截断（`finish_reason=length`），
+   * 返回的 JSON 变成半截，闸门必然拒收。带上 `low` 后推理稳定在 0~150 token。
    */
   reasoningEffort?: 'low' | 'medium' | 'high'
   /** 这一家的特别之处（界面上会显示） */
@@ -59,6 +63,16 @@ export const llmProviders: LlmProvider[] = [
     docsUrl: 'https://platform.minimax.io/docs/guides/text-generation',
     reasoningEffort: 'low',
     note: 'M3.1-Flash 不允许关闭思考，只能把 reasoning_effort 调低。',
+  },
+  {
+    id: 'minimax-alt',
+    name: 'MiniMax（api.minimaxi.com）',
+    protocol: 'openai',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    model: 'MiniMax-M3.1-Flash',
+    docsUrl: 'https://platform.minimaxi.com/document/guides/text-generation',
+    reasoningEffort: 'low',
+    note: '与 api.minimax.io 是两套账号体系，key 不通用：拿错会返回 401。',
   },
   {
     id: 'deepseek',

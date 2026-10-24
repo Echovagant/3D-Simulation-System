@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="45 test files / 413 cases" src="https://img.shields.io/badge/test-45%20files%20%2F%20413%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="46 test files / 425 cases" src="https://img.shields.io/badge/test-46%20files%20%2F%20425%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>255.09 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>413</b><br><sub>测试用例 · 45 个文件</sub></td>
+    <td align="center"><b>425</b><br><sub>测试用例 · 46 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -190,12 +190,13 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（45 个测试文件 / 413 个用例） |
+| `npm test` | Vitest 全量用例（46 个测试文件 / 425 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
 | `npm run gen:api-contract` | 从后端代码重新生成 API 契约文档 |
 | `npm run verify:offline` | 离线降级闸门：拔掉后端，7 个页面逐个走一遍（需要 Chrome） |
+| `npm run verify:llm-live` | 真厂商连通性验证：用自己的 key 跑一遍控制器提示词（需要 key 与网络，不在构建链里） |
 | `npm run build:all` | 前后端一起跑（前端构建 + 后端闸门） |
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
 | `npm run gen:docs` | 重新生成封面与页面截图 |
@@ -262,6 +263,26 @@ npm run verify:backend   # ruff + 格式 + mypy + pytest
 
 后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（21 个端点）是**生成物**：
 它由后端代码生成，改了接口却没重新生成，CI 会直接红。
+
+<details>
+<summary><b>用真 key 验证 LLM 控制器</b>（可选）</summary>
+
+AI 演武场的 LLM 逻辑全部由替身模型测试，**没有一条用例跑过真实厂商**。
+真实厂商返回的格式只要对不上，整套逻辑会「看起来完全正常」——仿真照跑、
+智能体照动，只是每一次决策都悄悄回落到了规则式控制器。
+
+`verify:llm-live` 用真 key 把这件事变成可测的：
+
+```bash
+# key 放在仓库外的文件里（文件内容就是裸 key，一行）
+npm run verify:llm-live -- --key-file /path/to/key.env --provider minimax-alt --runs 12
+```
+
+它会跑 N 次控制器提示词，统计**正文为空率**、**闸门通过率**、**推理 token 分布**，
+并区分两种「空」：输出被长度上限截断（调大上限能救）与模型真没给（调大也没用）。
+
+密钥只从命令行给的仓库外文件或环境变量读，**不打印、不落盘、不进仓库**。
+这道检查要真 key、要花钱、还要网络，所以**不在构建链里**。
 
 </details>
 

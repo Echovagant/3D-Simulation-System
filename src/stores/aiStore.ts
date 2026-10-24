@@ -99,8 +99,36 @@ export const useAiStore = defineStore('ai', () => {
    */
   const resetToken = ref(0)
 
+  /**
+   * LLM 决策的拍数计数——「模型到底有没有在起作用」的唯一可观测口径。
+   *
+   * ⚠️ 口径（动这些数字之前先想清楚，界面与测试都按这套口径断言）：
+   * - `llmTicks`：每一拍**有机会**用 LLM 的次数。只在 LLM 模式且确实进了
+   *   控制器的 LLM 一拍时递增——规则式模式下恒为 0。
+   * - `llmApplied`：真正执行了模型给出的动作的拍数。
+   * - `llmRejected`：模型这一拍**没给出可用动作**的拍数（含调用失败与返回解析不过）。
+   * - `llmPending`：请求还在飞、这一拍什么都没做的拍数。
+   * - `llmFallbacks`：上一次失败导致这一拍回落到规则式的拍数。
+   *
+   * ⚠️ 只有控制器（useAI）写这些数字，界面只读。
+   */
+  const llmTicks = ref(0)
+  const llmApplied = ref(0)
+  const llmRejected = ref(0)
+  const llmPending = ref(0)
+  const llmFallbacks = ref(0)
+
   // 计算属性
   const activeAgents = computed(() => agents.value.filter(agent => agent.active))
+  /**
+   * 生效拍数占比（0 ~ 1）。
+   *
+   * ⚠️ 一拍都还没有时返回 `null`，界面据此显示「—」——
+   * 直接做除法会得到 NaN，界面不能出现 NaN。
+   */
+  const llmApplyRatio = computed<number | null>(() =>
+    llmTicks.value === 0 ? null : llmApplied.value / llmTicks.value,
+  )
   const selectedAgent = computed(() =>
     selectedAgentId.value ? agents.value.find(agent => agent.id === selectedAgentId.value) : null
   )
@@ -193,6 +221,12 @@ export const useAiStore = defineStore('ai', () => {
     simulationTime.value = 0
     // 通知物理层把智能体送回出生点
     resetToken.value += 1
+    // LLM 拍数统计一起归零：重置之后界面上的占比不能还指着上一段仿真
+    llmTicks.value = 0
+    llmApplied.value = 0
+    llmRejected.value = 0
+    llmPending.value = 0
+    llmFallbacks.value = 0
 
     agents.value.forEach(agent => {
       agent.status = 'idle'
@@ -253,8 +287,14 @@ export const useAiStore = defineStore('ai', () => {
     simulationTime,
     selectedAgentId,
     resetToken,
+    llmTicks,
+    llmApplied,
+    llmRejected,
+    llmPending,
+    llmFallbacks,
     activeAgents,
     selectedAgent,
+    llmApplyRatio,
     scenarioOptions,
     selectableScenarioOptions,
     createAgent,

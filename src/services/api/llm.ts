@@ -63,6 +63,13 @@ export interface LlmCompleteResult {
   /** 实际答上那家（后端可能故障转移过，不一定是请求里指定的那家） */
   providerId: string
   model: string
+  /**
+   * 厂商的结束原因。
+   *
+   * ⚠️ 正文为空时它区分了两种情况：``length`` = 输出预算被用光（正文被截断，
+   * 调大上限能救），其余 = 模型确实没给正文（调大也没用）。
+   */
+  finishReason?: string
 }
 
 /** 今日配额 */
@@ -158,6 +165,7 @@ export const completeLlm = async (
     usage?: RawUsage
     providerId?: string
     model?: string
+    finishReason?: string
   }>('/api/llm/complete', {
     method: 'POST',
     headers: ownerHeaders(ownerToken),
@@ -174,6 +182,7 @@ export const completeLlm = async (
     content: typeof raw.content === 'string' ? raw.content : '',
     providerId: typeof raw.providerId === 'string' ? raw.providerId : '',
     model: typeof raw.model === 'string' ? raw.model : '',
+    ...(typeof raw.finishReason === 'string' ? { finishReason: raw.finishReason } : {}),
     ...(usage ? { usage } : {}),
   }
 }

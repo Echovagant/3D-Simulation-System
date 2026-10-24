@@ -241,6 +241,35 @@
       </p>
     </div>
 
+    <!-- 拍数统计：模型到底有没有在起作用 -->
+    <!-- ⚠️ 只在 LLM 模式下显示：规则式模式下这些数字恒为 0，是噪声 -->
+    <div v-if="llm.mode === 'llm'" class="ai-mb-3">
+      <div class="ai-flex ai-justify-between ai-items-center ai-mb-1">
+        <span class="ai-fs-xs ai-t-amber">拍数统计</span>
+        <span class="ai-fs-xs ai-t-faint">生效 {{ appliedRatio }}</span>
+      </div>
+      <p class="ai-fs-xs ai-t-faint">
+        LLM 生效 {{ ai.llmApplied }} / {{ ai.llmTicks }} 拍（{{ appliedRatio }}）
+      </p>
+      <ul class="ai-space-y-1 ai-mt-1 ai-fs-xs ai-t-faint">
+        <li class="ai-flex ai-justify-between ai-items-center">
+          <span>请求在飞（这一拍没动作）</span>
+          <span>{{ ai.llmPending }} 拍</span>
+        </li>
+        <li class="ai-flex ai-justify-between ai-items-center">
+          <span>没给出可用动作</span>
+          <span>{{ ai.llmRejected }} 拍</span>
+        </li>
+        <li class="ai-flex ai-justify-between ai-items-center">
+          <span>规则式接管</span>
+          <span>{{ ai.llmFallbacks }} 拍</span>
+        </li>
+      </ul>
+      <p v-if="ai.llmTicks > 0 && ai.llmApplied === 0" class="ai-fs-xs ai-t-amber-soft ai-mt-1">
+        一拍都没生效：模型的动作没通过校验，或请求一直没回来。
+      </p>
+    </div>
+
     <!-- 错误与降级 -->
     <p v-if="llm.lastError" class="ai-fs-xs ai-t-red ai-mb-2">
       {{ llm.lastError }}
@@ -258,6 +287,7 @@
 <script lang="ts" setup>
 import { computed, ref } from 'vue'
 import { useLlmStore } from '@/stores/llmStore'
+import { useAiStore } from '@/stores/aiStore'
 import { llmConfig } from '@/config/llm'
 import { llmProviders } from '@/config/llmProviders'
 import type { AgentSnapshot } from '@/services/llm/prompts'
@@ -277,6 +307,12 @@ const props = defineProps<{
 }>()
 
 const llm = useLlmStore()
+/**
+ * 拍数计数从 aiStore 读——控制器（useAI）写，面板只读。
+ *
+ * ⚠️ 面板不能自己去碰计数器，也不能调 useAI()（见上面的说明）。
+ */
+const ai = useAiStore()
 const keyInput = ref('')
 const hostedKeyInput = ref('')
 const hostedPassphrase = ref('')
@@ -286,6 +322,16 @@ const providers = llmProviders
 const maxCalls = llmConfig.maxCallsPerSession
 
 const canExplain = computed(() => llm.configured && !llm.explaining && Boolean(props.agentId))
+
+/**
+ * 生效拍数占比。
+ *
+ * ⚠️ 一拍都还没有时显示「—」：直接做除法会得到 NaN，界面不能出现 NaN。
+ */
+const appliedRatio = computed<string>(() => {
+  const ratio = ai.llmApplyRatio
+  return ratio === null ? '—' : `${(ratio * 100).toFixed(1)}%`
+})
 
 /** 服务端密钥库里各家的配置状态（只有「配没配」，没有明文） */
 const hostedRows = computed(() =>

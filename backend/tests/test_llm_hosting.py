@@ -283,6 +283,79 @@ def test_complete_openai_success(client: TestClient, fake_provider: FakeProvider
     ]
 
 
+def test_minimax_alt_uses_its_own_endpoint(client: TestClient, fake_provider: FakeProvider) -> None:
+    """api.minimaxi.com 是另一套账号体系 —— 拿 api.minimax.io 的 key 会在这里被判 401。"""
+    fake_provider.install(lambda request: _ok_openai())
+    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+
+    response = _complete(
+        client,
+        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["providerId"] == "minimax-alt"
+
+    request = fake_provider.requests[0]
+    assert request.url.host == "api.minimaxi.com"
+    assert request.url.path == "/v1/chat/completions"
+
+
+def test_minimax_alt_sends_reasoning_effort(
+    client: TestClient, fake_provider: FakeProvider
+) -> None:
+    """推理型模型不带 reasoning_effort 时，推理 token 会吃光输出预算、正文被截断。"""
+    fake_provider.install(lambda request: _ok_openai())
+    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+
+    _complete(
+        client,
+        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+    )
+
+    assert fake_provider.bodies[0]["reasoning_effort"] == "low"
+
+
+def test_finish_reason_is_reported(client: TestClient, fake_provider: FakeProvider) -> None:
+    """结束原因要透传给前端：正文为空时它区分了「被截断」与「模型没给」。"""
+    fake_provider.install(
+        lambda request: _json_response(
+            {
+                "choices": [{"message": {"content": ""}, "finish_reason": "length"}],
+            }
+        )
+    )
+    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+
+    response = _complete(
+        client,
+        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["content"] == ""
+    assert body["finishReason"] == "length"
+
+
+def test_finish_reason_absent_when_vendor_omits_it(
+    client: TestClient, fake_provider: FakeProvider
+) -> None:
+    """厂商没给结束原因时不要瞎编一个。"""
+    fake_provider.install(
+        lambda request: _json_response({"choices": [{"message": {"content": "hi"}}]})
+    )
+    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+
+    response = _complete(
+        client,
+        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json().get("finishReason") is None
+
+
 def test_reasoning_effort_only_for_flagged_providers(
     client: TestClient, fake_provider: FakeProvider
 ) -> None:

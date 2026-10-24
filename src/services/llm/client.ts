@@ -34,6 +34,18 @@ export interface LlmCallResult {
   requestId?: string
   /** token 用量 */
   usage?: { promptTokens?: number; completionTokens?: number }
+  /**
+   * 「正文为空」的原因。
+   *
+   * ⚠️ 推理型模型有两种「空」：
+   * - `truncated`：推理 token 把输出预算吃光，正文被截断（`finish_reason=length`）——
+   *   模型其实想给动作，但预算不够，**调大输出上限就能解决**。
+   * - `empty`：模型真的什么都没给（正文与推理都空）——调大上限也没用。
+   * 这两种混在一起报「无法解析」，用户既不知道怎么修，也无从判断该不该重试。
+   */
+  emptyReason?: 'truncated' | 'empty'
+  /** 厂商返回的结束原因（`stop` / `length` / …），排障用 */
+  finishReason?: string
 }
 
 /** 各家错误信封的公共形状：`{ error: { message } }` */
@@ -168,6 +180,30 @@ const extractContent = (protocol: LlmProtocol, payload: unknown): string => {
 }
 
 /**
+ * 取出「结束原因」。
+ *
+ * ⚠️ OpenAI 兼容协议把 `finish_reason` 放在 `choices[0]` 上，不在 message 里。
+ * `length` 表示**输出预算被用光**（正文被截断）——这与「模型什么都没给」是两回事。
+ */
+const extractFinishReason = (protocol: LlmProtocol, payload: unknown): string | undefined => {
+  if (!payload || typeof payload !== 'object') return undefined
+  const data = payload as Record<string, any>
+  if (protocol === 'openai') {
+    const reason = data.choices?.[0]?.finish_reason
+    return typeof reason === 'string' ? reason : undefined
+  }
+  if (protocol === 'anthropic') {
+    const reason = data.stop_reason
+    return typeof reason === 'string' ? reason : undefined
+  }
+  if (protocol === 'gemini') {
+    const reason = data.finish_reason
+    return typeof reason === 'string' ? reason : undefined
+  }
+  return undefined
+}
+
+/**
  * 调用 LLM。
  *
  * 这个函数**永不抛异常**：失败也返回结果对象（`ok: false`），
@@ -232,10 +268,18 @@ export const callLlm = async (options: LlmCallOptions): Promise<LlmCallResult> =
     const payload = await response.json()
     const usage = (payload as Record<string, any>)?.usage
 
+    const content = extractContent(provider.protocol, payload)
+    const finishReason = extractFinishReason(provider.protocol, payload)
+    const emptyReason: 'truncated' | 'empty' = finishReason === 'length' ? 'truncated' : 'empty'
+
     return {
       ok: true,
-      content: extractContent(provider.protocol, payload),
+      content,
       requestId: requestId ?? (payload as Record<string, any>)?.id,
+      // 正文空时把原因带上：被输出预算截断（调大上限能救）与模型真没给（调大也没用）
+      // 是两回事，混报「无法解析」用户没法处置。
+      ...(content ? {} : { emptyReason }),
+      ...(finishReason ? { finishReason } : {}),
       usage: usage
         ? {
             promptTokens: usage.prompt_tokens ?? usage.input_tokens,
