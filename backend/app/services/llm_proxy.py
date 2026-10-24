@@ -47,7 +47,10 @@ class LlmProvider:
     """一个厂商的协议与默认参数。
 
     与前端 ``src/config/llmProviders.ts`` 同源：id / name / protocol / baseUrl /
-    model / reasoningEffort 一一对应。
+    model / reasoningEffort / keyPrefix 一一对应。
+
+    ⚠️ 一个 id 对应**一条接入线**，不是一家厂商：同一家厂商可能有多个端点、
+    多种凭证，它们互不通用，各自占一个 id。
     """
 
     id: str
@@ -56,6 +59,8 @@ class LlmProvider:
     base_url: str
     model: str
     reasoning_effort: str | None = None
+    # 这条线要的凭证前缀（用于认出用户贴的是哪一种）
+    key_prefix: str | None = None
 
 
 PROVIDERS: tuple[LlmProvider, ...] = (
@@ -66,14 +71,34 @@ PROVIDERS: tuple[LlmProvider, ...] = (
         base_url="https://api.minimax.io/v1",
         model="MiniMax-M3.1-Flash",
         reasoning_effort="low",
+        key_prefix="sk-api-",
     ),
     LlmProvider(
-        id="minimax-alt",
+        id="minimax-subscription",
+        name="MiniMax（订阅）",
+        protocol="openai",
+        base_url="https://api.minimax.io/v1",
+        model="MiniMax-M3.1-Flash",
+        reasoning_effort="low",
+        key_prefix="sk-cp-",
+    ),
+    LlmProvider(
+        id="minimax-cn",
         name="MiniMax（api.minimaxi.com）",
         protocol="openai",
         base_url="https://api.minimaxi.com/v1",
         model="MiniMax-M3.1-Flash",
         reasoning_effort="low",
+        key_prefix="sk-api-",
+    ),
+    LlmProvider(
+        id="minimax-cn-subscription",
+        name="MiniMax（api.minimaxi.com · 订阅）",
+        protocol="openai",
+        base_url="https://api.minimaxi.com/v1",
+        model="MiniMax-M3.1-Flash",
+        reasoning_effort="low",
+        key_prefix="sk-cp-",
     ),
     LlmProvider(
         id="deepseek",

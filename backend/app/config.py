@@ -48,9 +48,17 @@ class Settings(BaseSettings):
     llm_quota_per_day: int = 100
 
     # 故障转移顺序（厂商 id 列表）。
-    # ⚠️ MiniMax 的两个端点（api.minimax.io / api.minimaxi.com）是两套账号体系，
-    # 各用各的 key；配了哪家的 key 就用哪家，别指望它们互相顶替。
-    llm_fallback_order: list[str] = ["minimax", "minimax-alt", "deepseek", "zhipu"]
+    # ⚠️ MiniMax 的四条接入线互不兼容：两个端点各是一套账号体系，
+    # 端点内又分「按量计费」与「订阅」两种凭证，各用各的 key。
+    # 它们**不互相顶替**——配了哪条线的 key 就用哪条线。
+    llm_fallback_order: list[str] = [
+        "minimax",
+        "minimax-subscription",
+        "minimax-cn",
+        "minimax-cn-subscription",
+        "deepseek",
+        "zhipu",
+    ]
 
     # 调厂商的超时（毫秒）。
     llm_upstream_timeout_ms: int = 30000

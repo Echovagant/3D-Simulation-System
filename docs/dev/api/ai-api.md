@@ -156,10 +156,10 @@
 
 | 模块 | 职责 |
 | --- | --- |
-| `src/config/llmProviders.ts` | 服务商清单：id、名称、**协议**、默认 base_url、默认模型、官方文档地址。每家的默认值都对着官方文档核过 |
+| `src/config/llmProviders.ts` | 服务商清单：id、名称、**协议**、默认 base_url、默认模型、官方文档地址、**凭证类型**。每家的默认值都对着官方文档核过 |
 | `src/config/llm.ts` | 与提供商无关的公共配置：超时、输出上限、调用频次与额度 |
 | `src/services/llm/secret.ts` | API key 的**唯一**存放点：模块作用域，按服务商分槽，不进响应式、不落盘；另有 `redactSecrets` 负责把密钥样式的片段从错误信息里抹掉 |
-| `src/services/llm/client.ts` | `callLlm(options)`：按协议分派请求。**永不抛异常**，失败也返回 `{ ok: false, error }` |
+| `src/services/llm/client.ts` | `callLlm(options)`：按协议分派请求。**永不抛异常**，失败也返回 `{ ok: false, error }`；另有 `fetchModels(options)` 拉一把 key 实际可用的模型 |
 | `src/services/llm/prompts.ts` | 提示词构造（`buildDecisionMessages` / `buildExplainMessages`）与动作解析（`parseLlmAction`） |
 | `src/stores/llmStore.ts` | 对外的状态与动作：服务商选择、模型与端点覆盖、`configured` / `mode` / `explanation` / `degraded` / `callCount`；另有 `hostingMode` 决定 Key 来自浏览器还是服务端 |
 | `src/services/api/llm.ts` | 托管模式的六个端点（密钥库、提交、删除、完成、配额、审计）。复用 `src/services/api/client.ts` 的 `apiRequest`，**不再按协议拼请求**——归一化的形状发给后端，协议差别由后端处理 |
@@ -177,6 +177,28 @@
 `reasoning_effort` **只发给官方文档明确写了它的服务商**（清单里的 `reasoningEffort` 字段）——
 往不认识的接口上乱发会被判成非法参数。
 
+⚠️ 对**推理型模型**它还是**必需项**，不只是优化：输出上限同时管着推理与正文，
+不传它时推理 token 会把正文挤空，返回的半截 JSON 必然过不了闸门。
+
+### 接入线：端点 × 凭证
+
+一家厂商可能有多条**互不兼容**的接入线。清单里每条线各占一个条目：
+
+| 维度 | 取值 | 区别 |
+| --- | --- | --- |
+| 端点 | `api.minimax.io` / `api.minimaxi.com` | 两套账号体系，key 不通用 |
+| 凭证 | `sk-api-` / `sk-cp-` | 按量计费 / 订阅，消耗不同的计费资源 |
+
+`keyKind` 与 `keyPrefix` 字段让界面能认出用户贴的是哪一种——贴错时当场提示，
+而不是让它在调用时返回一个指不到真正原因上的错（401 看着像 key 错了，
+「模型不存在」看着像模型名错了）。
+
+⚠️ **每条线必须单独占一个条目**：key 是按 providerId 分槽存的，
+一个槽位装不下两种互斥的凭证与端点组合。它们在故障转移时也**不互相顶替**。
+
+模型能调哪些跟凭证绑定，所以 `fetchModels` 用这把 key 调 `GET {base_url}/models`，
+直接列出它实际能用的模型——这比让用户凭记忆手填模型名再撞 404 划算。
+
 ### `useLlmStore`
 
 | 成员 | 说明 |
@@ -190,9 +212,13 @@
 | `degraded` | LLM 控制器是否已降级回规则式 |
 | `callCount` | 本次会话已发出的调用次数（上限见 `llmConfig.maxCallsPerSession`） |
 | `lastError` | 最近一次错误（已脱敏） |
+| `availableModels` / `loadingModels` / `modelsError` / `modelsLoaded` | 这把 key 实际可用的模型、查询状态与失败原因 |
 | `selectProvider(id)` | 换服务商：换 key 槽位，载入它自己的默认模型与端点 |
 | `setModel(value)` / `setBaseUrl(value)` | 覆盖当前提供商的模型 / 端点 |
 | `applyKey(value)` / `clearKey()` | 写入 / 清除 key（只在内存里，按提供商分槽） |
+| `loadModels()` | 用当前 key 调 `GET {base_url}/models`，列出它实际能用的模型 |
+| `applyModel(value)` | 从拉到的列表里选一个模型 |
+| `detectKeyKind(value)` / `keyKindMismatch` | 认出用户贴的是哪种凭证；与当前条目期望的不一致时给出提示 |
 | `testConnection()` | 发一个极短请求做连通性测试 |
 | `requestExplanation(snapshot)` | 请求一次解释，成功后写进 `explanation` |
 | `requestAction(snapshot)` | 请求一个动作；返回 `null` 表示"这次没有可用动作"，调用方必须回落规则式 |

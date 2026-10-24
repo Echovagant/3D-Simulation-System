@@ -70,6 +70,44 @@ const capture = (text, regex, label) => {
   return m[1]
 }
 
+/**
+ * 用全局正则抓多组匹配，合成一个 token 集合。
+ *
+ * 与 `capture` 的区别：它返回**所有**匹配，而不是第一个——
+ * 像「有几条接入线」这种问题，答案本身就是一组。
+ */
+const captureList = (text, regex, label) => {
+  const out = new Set()
+  let m
+  const re = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : `${regex.flags}g`)
+  while ((m = re.exec(text)) !== null) {
+    for (let i = 1; i < m.length; i += 1) {
+      if (m[i]) out.add(m[i].trim())
+    }
+    if (m[0].length === 0) re.lastIndex += 1
+  }
+  if (out.size === 0) throw new Error(`匹配不到 ${label}`)
+  return [...out]
+}
+
+/**
+ * 数「有几条匹配」，而不是把匹配内容摊平。
+ *
+ * ⚠️ `captureList` 返回的是 token 集合（一条接入线贡献 id/host/kind 三个 token），
+ * 用它数条目会数出三倍。条目数要按**匹配次数**算。
+ */
+const captureMatchCount = (text, regex, label) => {
+  let count = 0
+  let m
+  const re = new RegExp(regex.source, regex.flags.includes('g') ? regex.flags : `${regex.flags}g`)
+  while ((m = re.exec(text)) !== null) {
+    count += 1
+    if (m[0].length === 0) re.lastIndex += 1
+  }
+  if (count === 0) throw new Error(`匹配不到 ${label}`)
+  return count
+}
+
 /** 按路径读 JSON 里的值 */
 const jsonValue = (relPath, path) => {
   const data = readJson(relPath)
@@ -98,6 +136,7 @@ const SIM = 'src/config/simulation.ts'
 const LLM = 'src/config/llm.ts'
 const AI = 'src/composables/useAI.ts'
 const PROMPTS = 'src/services/llm/prompts.ts'
+const PROVIDERS = 'src/config/llmProviders.ts'
 const ACC = 'src/utils/fixedStepAccumulator.ts'
 const BASELINE = 'backend/tests/fixtures/browser_baseline.json'
 const SIMPY = 'backend/app/services/simulator.py'
@@ -214,6 +253,30 @@ const CONTRACT = [
     kind: 'number',
     read: () =>
       capture(llmBlock(), new RegExp(`explainMaxTokens:\\s*(${NUM})`), 'llmConfig.explainMaxTokens'),
+  },
+  {
+    key: 'AI_MINIMAX_ACCESS_LINES',
+    source: PROVIDERS,
+    kind: 'list',
+    // 四条接入线：两个端点 × 两种凭证。它们互不通用，
+    // 每条要单独占一个条目（key 是按 providerId 分槽的）。
+    read: () =>
+      captureList(
+        readText(PROVIDERS),
+        /id:\s*'(minimax[^']*)'[\s\S]*?baseUrl:\s*'https:\/\/([^/']+)\/v1'[\s\S]*?keyKind:\s*'(\w+)'/g,
+        'minimax 接入线',
+      ),
+  },
+  {
+    key: 'AI_MINIMAX_ACCESS_LINE_COUNT',
+    source: PROVIDERS,
+    kind: 'number',
+    read: () =>
+      captureMatchCount(
+        readText(PROVIDERS),
+        /id:\s*'(minimax[^']*)'[\s\S]*?baseUrl:\s*'https:\/\/([^/']+)\/v1'[\s\S]*?keyKind:\s*'(\w+)'/g,
+        'minimax 接入线',
+      ),
   },
 
   // ---- AI 演武场 ----

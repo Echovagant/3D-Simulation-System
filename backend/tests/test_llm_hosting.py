@@ -283,37 +283,62 @@ def test_complete_openai_success(client: TestClient, fake_provider: FakeProvider
     ]
 
 
-def test_minimax_alt_uses_its_own_endpoint(client: TestClient, fake_provider: FakeProvider) -> None:
+def test_minimax_cn_uses_its_own_endpoint(client: TestClient, fake_provider: FakeProvider) -> None:
     """api.minimaxi.com 是另一套账号体系 —— 拿 api.minimax.io 的 key 会在这里被判 401。"""
     fake_provider.install(lambda request: _ok_openai())
-    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+    _store_key(client, "minimax-cn", api_key="sk-cn-test")
 
     response = _complete(
         client,
-        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+        {"providerId": "minimax-cn", "messages": [{"role": "user", "content": "hi"}]},
     )
 
     assert response.status_code == 200
-    assert response.json()["providerId"] == "minimax-alt"
+    assert response.json()["providerId"] == "minimax-cn"
 
     request = fake_provider.requests[0]
     assert request.url.host == "api.minimaxi.com"
     assert request.url.path == "/v1/chat/completions"
 
 
-def test_minimax_alt_sends_reasoning_effort(
-    client: TestClient, fake_provider: FakeProvider
-) -> None:
+def test_minimax_cn_sends_reasoning_effort(client: TestClient, fake_provider: FakeProvider) -> None:
     """推理型模型不带 reasoning_effort 时，推理 token 会吃光输出预算、正文被截断。"""
     fake_provider.install(lambda request: _ok_openai())
-    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+    _store_key(client, "minimax-cn", api_key="sk-cn-test")
 
     _complete(
         client,
-        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+        {"providerId": "minimax-cn", "messages": [{"role": "user", "content": "hi"}]},
     )
 
     assert fake_provider.bodies[0]["reasoning_effort"] == "low"
+
+
+def test_minimax_has_four_independent_access_lines() -> None:
+    """MiniMax 的四条接入线要各自独立：两个端点 × 两种凭证。
+
+    端点不同是账号体系不同，凭证不同是计费资源不同——
+    两者交叉组合起来就是四种互不兼容的接入方式，各用各的 key。
+    """
+    by_id = {provider.id: provider for provider in llm_proxy.PROVIDERS}
+    expected = {
+        "minimax": ("api.minimax.io", "sk-api-"),
+        "minimax-subscription": ("api.minimax.io", "sk-cp-"),
+        "minimax-cn": ("api.minimaxi.com", "sk-api-"),
+        "minimax-cn-subscription": ("api.minimaxi.com", "sk-cp-"),
+    }
+    for provider_id, (host, prefix) in expected.items():
+        provider = by_id[provider_id]
+        assert provider.base_url == f"https://{host}/v1"
+        assert provider.model == "MiniMax-M3.1-Flash"
+        # 每条线要一种凭证：前缀不能重复，也不能为空
+        assert provider.key_prefix == prefix
+
+    # 故障转移顺序里四条都要在，且不重复
+    order = settings.llm_fallback_order
+    for provider_id in expected:
+        assert provider_id in order
+    assert len(order) == len(set(order))
 
 
 def test_finish_reason_is_reported(client: TestClient, fake_provider: FakeProvider) -> None:
@@ -325,11 +350,11 @@ def test_finish_reason_is_reported(client: TestClient, fake_provider: FakeProvid
             }
         )
     )
-    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+    _store_key(client, "minimax-cn", api_key="sk-cn-test")
 
     response = _complete(
         client,
-        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+        {"providerId": "minimax-cn", "messages": [{"role": "user", "content": "hi"}]},
     )
 
     assert response.status_code == 200
@@ -345,11 +370,11 @@ def test_finish_reason_absent_when_vendor_omits_it(
     fake_provider.install(
         lambda request: _json_response({"choices": [{"message": {"content": "hi"}}]})
     )
-    _store_key(client, "minimax-alt", api_key="sk-cn-test")
+    _store_key(client, "minimax-cn", api_key="sk-cn-test")
 
     response = _complete(
         client,
-        {"providerId": "minimax-alt", "messages": [{"role": "user", "content": "hi"}]},
+        {"providerId": "minimax-cn", "messages": [{"role": "user", "content": "hi"}]},
     )
 
     assert response.status_code == 200

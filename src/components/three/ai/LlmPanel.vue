@@ -53,7 +53,17 @@
 
     <!-- 模型 -->
     <div class="ai-mb-2">
-      <label class="ai-fs-xs ai-t-muted ai-mb-1" for="llm-model">模型</label>
+      <div class="ai-flex ai-justify-between ai-items-center ai-mb-1">
+        <label class="ai-fs-xs ai-t-muted" for="llm-model">模型</label>
+        <button
+          v-if="llm.hostingMode === 'direct'"
+          class="ai-fs-xs ai-bg-chip ai-r-sm ai-px-2 ai-py-05"
+          :disabled="llm.loadingModels || !llm.configured"
+          @click="onLoadModels"
+        >
+          {{ llm.loadingModels ? '查询中…' : '拉取可用模型' }}
+        </button>
+      </div>
       <input
         id="llm-model"
         class="ai-w-full"
@@ -62,6 +72,31 @@
         autocomplete="off"
         @input="onModelInput"
       />
+      <p v-if="llm.modelsError" class="ai-fs-xs ai-t-red ai-mt-1">
+        {{ llm.modelsError }}
+      </p>
+      <ul
+        v-else-if="llm.availableModels.length > 0"
+        class="ai-space-y-1 ai-mt-1 ai-fs-xs ai-t-faint"
+      >
+        <li
+          v-for="item in llm.availableModels"
+          :key="item"
+          class="ai-flex ai-justify-between ai-items-center"
+        >
+          <span>{{ item }}</span>
+          <button
+            v-if="item !== llm.model"
+            class="ai-bg-chip ai-r-sm ai-px-2 ai-py-05"
+            @click="llm.applyModel(item)"
+          >
+            用这个
+          </button>
+        </li>
+      </ul>
+      <p v-if="llm.keyKindMismatch" class="ai-fs-xs ai-t-amber-soft ai-mt-1">
+        {{ llm.keyKindMismatch }}
+      </p>
     </div>
 
     <!-- 端点（自带 Key 模式：托管模式下端点由后端决定） -->
@@ -96,6 +131,13 @@
       />
       <p class="ai-fs-xs ai-t-faint ai-mt-1">
         只存在当前页面的内存里，刷新即失效；不写磁盘、不进仓库、不会出现在日志里。
+      </p>
+      <p v-if="llm.provider.keyKind" class="ai-fs-xs ai-t-faint ai-mt-1">
+        这一条要的是
+        <template v-if="llm.provider.keyKind === 'subscription'">订阅 Key</template>
+        <template v-else>按量计费的 API Key</template>
+        （前缀 <code>{{ llm.provider.keyPrefix }}</code
+        >）。两种凭证不通用，贴错了换 Key 也调不通。
       </p>
       <div class="ai-flex ai-gap-2 ai-mt-2">
         <button
@@ -350,6 +392,11 @@ const onSelectProvider = (event: Event): void => {
 
 const onModelInput = (event: Event): void => {
   llm.setModel((event.target as HTMLInputElement).value)
+}
+
+/** 拉一把 key 实际能用的模型列表 */
+const onLoadModels = async (): Promise<void> => {
+  await llm.loadModels()
 }
 
 const onBaseUrlInput = (event: Event): void => {

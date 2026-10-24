@@ -3,7 +3,7 @@
  * 真厂商连通性验证：用真 key 跑一遍控制器的真实提示词，统计「有多少次真的拿到了可用动作」。
  *
  * 用法：
- *   node scripts/verify-llm-live.mjs --key-file <路径> [--provider minimax-alt] [--runs 10]
+ *   node scripts/verify-llm-live.mjs --key-file <路径> [--provider minimax-cn-subscription] [--runs 10]
  *   node scripts/verify-llm-live.mjs --key-env MINIMAX_API_KEY [--runs 10]
  *
  * 退出码：全部通过为 0，否则为 1。
@@ -27,7 +27,7 @@ import { resolve } from 'node:path'
 // ---------- 参数 ----------
 
 const parseArgs = (argv) => {
-  const args = { runs: 10, provider: 'minimax-alt', model: 'MiniMax-M3.1-Flash', timeoutMs: 60000 }
+  const args = { runs: 10, provider: 'minimax-cn-subscription', model: 'MiniMax-M3.1-Flash', timeoutMs: 60000 }
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i]
     const next = () => {
@@ -54,7 +54,7 @@ if (args.help) {
   node scripts/verify-llm-live.mjs --key-env <环境变量名> [选项]
 
 选项：
-  --provider <id>     提供商 id（默认 minimax-alt）
+  --provider <id>     提供商 id（默认 minimax-cn-subscription）
   --model <id>        模型 id（默认 MiniMax-M3.1-Flash）
   --runs <n>          跑几次（默认 10）
   --timeout-ms <n>    单次超时（默认 60000）
@@ -96,7 +96,9 @@ if (!apiKey) {
 
 const PROVIDERS = {
   minimax: { baseUrl: 'https://api.minimax.io/v1', reasoningEffort: 'low' },
-  'minimax-alt': { baseUrl: 'https://api.minimaxi.com/v1', reasoningEffort: 'low' },
+  'minimax-subscription': { baseUrl: 'https://api.minimax.io/v1', reasoningEffort: 'low' },
+  'minimax-cn': { baseUrl: 'https://api.minimaxi.com/v1', reasoningEffort: 'low' },
+  'minimax-cn-subscription': { baseUrl: 'https://api.minimaxi.com/v1', reasoningEffort: 'low' },
   deepseek: { baseUrl: 'https://api.deepseek.com', reasoningEffort: 'high' },
   zhipu: { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoningEffort: null },
 }
@@ -271,7 +273,45 @@ const callOnce = async (scenario) => {
   }
 }
 
+// ---------- 拉模型列表 ----------
+
+/**
+ * 拉一把 key 实际能用的模型。
+ *
+ * 界面上的「拉取可用模型」按钮走的是同一条路径——
+ * 这个脚本跑通了，界面上那个按钮就是通的。
+ */
+const fetchModelList = async () => {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), args.timeoutMs)
+  try {
+    const response = await fetch(`${provider.baseUrl}/models`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    })
+    if (!response.ok) {
+      const raw = await response.text().catch(() => '')
+      return { ok: false, models: [], error: `HTTP ${response.status}：${raw.slice(0, 120)}` }
+    }
+    const payload = await response.json()
+    const list = Array.isArray(payload?.data) ? payload.data : []
+    const models = list
+      .map((entry) => (typeof entry?.id === 'string' ? entry.id.trim() : ''))
+      .filter(Boolean)
+    return { ok: models.length > 0, models, error: models.length ? '' : '返回的列表是空的' }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, models: [], error: controller.signal.aborted ? '请求超时' : message }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // ---------- 跑 ----------
+
+// 先拉模型列表：界面上的「拉取可用模型」按钮走的是同一条路径
+const modelList = await fetchModelList()
 
 const results = []
 for (let i = 0; i < args.runs; i += 1) {
@@ -300,6 +340,17 @@ console.log('\n真厂商连通性验证')
 console.log(`  提供商：${args.provider}（${provider.baseUrl}）`)
 console.log(`  模型：${args.model}`)
 console.log(`  次数：${total}\n`)
+
+console.log('模型列表（界面「拉取可用模型」走的是同一条路径）：')
+if (modelList.ok) {
+  console.log(`  ✓ 拉到 ${modelList.models.length} 个模型`)
+  for (const id of modelList.models) {
+    console.log(`      ${id}${id === args.model ? '   ← 当前用的' : ''}`)
+  }
+} else {
+  console.log(`  ❌ 拉取失败：${modelList.error}`)
+}
+console.log('')
 
 for (const [index, r] of results.entries()) {
   const state = !r.ok
@@ -331,6 +382,12 @@ if (empty.length > 0) {
 }
 if (rejected.length > 0) problems.push(`${rejected.length} 次返回了内容但过不了闸门（提示词或厂商返回格式对不上）`)
 if (passed.length === 0 && total > 0) problems.push('没有一次拿到可用动作——LLM 控制器完全不可用')
+if (!modelList.ok) problems.push(`拉不到模型列表：${modelList.error}（界面上的「拉取可用模型」按钮会同样失败）`)
+else if (!modelList.models.includes(args.model)) {
+  problems.push(
+    `当前模型 ${args.model} 不在这把 key 的模型列表里（列表共 ${modelList.models.length} 个）——换模型或换 Key`,
+  )
+}
 
 if (problems.length) {
   console.error('\n❌ 未通过：')

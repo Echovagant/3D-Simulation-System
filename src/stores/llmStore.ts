@@ -14,7 +14,7 @@ import {
   type LlmKeyStatus,
   type LlmQuota,
 } from '@/services/api/llm'
-import { callLlm } from '@/services/llm/client'
+import { callLlm, fetchModels } from '@/services/llm/client'
 import {
   buildDecisionMessages,
   buildExplainMessages,
@@ -22,7 +22,7 @@ import {
   type AgentSnapshot,
   type LlmAction,
 } from '@/services/llm/prompts'
-import { clearApiKey, hasApiKey, redactSecrets, setApiKey } from '@/services/llm/secret'
+import { clearApiKey, getApiKey, hasApiKey, redactSecrets, setApiKey } from '@/services/llm/secret'
 
 /** 控制器模式：规则式（默认，不出网）还是 LLM */
 export type LlmControllerMode = 'rule' | 'llm'
@@ -197,11 +197,51 @@ export const useLlmStore = defineStore('llm', () => {
   const applyKey = (value: string): void => {
     setApiKey(providerId.value, value)
     syncConfigured()
+    // 换了 key 就作废上一次的模型列表——那是上一把 key 的能力边界
+    availableModels.value = []
+    modelsLoaded.value = false
+    modelsError.value = ''
     if (configured.value) {
       lastError.value = ''
       degraded.value = false
     }
   }
+
+  /**
+   * 认出用户贴的是哪一种凭证。
+   *
+   * ⚠️ 厂商常发好几种凭证，彼此不通用。贴错了的报错完全指不到真正原因上
+   * （401 看着像 key 错了，「模型不存在」看着像模型名错了），
+   * 所以在用户填的时候就告诉他「你这把是哪一种」。
+   *
+   * @returns 认出来是哪种；认不出返回 null（不该拦——前缀规则可能过时）
+   */
+  const detectKeyKind = (value: string): 'standard' | 'subscription' | null => {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    // 当前 provider 期望的前缀
+    const expected = provider.value.keyPrefix
+    if (expected && trimmed.startsWith(expected)) {
+      return provider.value.keyKind ?? null
+    }
+    // 同一厂商的另一种前缀：这是最常踩的坑——贴了订阅 Key 却选了按量计费的条目
+    const sibling = llmProviders.find(
+      (item) => item.keyPrefix && item.keyPrefix !== expected && trimmed.startsWith(item.keyPrefix),
+    )
+    if (sibling) return sibling.keyKind ?? null
+    return null
+  }
+
+  /** 用户贴的 key 与当前条目期望的是否一致 */
+  const keyKindMismatch = computed<string>(() => {
+    const expected = provider.value.keyKind
+    if (!expected) return ''
+    const current = detectKeyKind(getApiKey(providerId.value))
+    if (!current) return ''
+    return current === expected ? '' : expected === 'subscription'
+      ? '这把是按量计费的 Key，当前条目要的是订阅 Key——两者不通用，请换条目或换 Key。'
+      : '这把是订阅 Key，当前条目要的是按量计费的 Key——两者不通用，请换条目或换 Key。'
+  })
 
   /** 清掉当前提供商的 key */
   const clearKey = (): void => {
@@ -463,6 +503,53 @@ export const useLlmStore = defineStore('llm', () => {
     return result.ok
   }
 
+  // ------------------------------------------------------------------------
+  // 模型列表
+  // ------------------------------------------------------------------------
+
+  /** 这把 key 实际能用的模型 id */
+  const availableModels = ref<string[]>([])
+  /** 正在拉模型列表 */
+  const loadingModels = ref(false)
+  /** 拉模型列表失败的原因 */
+  const modelsError = ref('')
+  /** 已经拉过一次（避免重复点按钮重复发请求） */
+  const modelsLoaded = ref(false)
+
+  /**
+   * 拉一把 key 实际能用的模型列表。
+   *
+   * ⚠️ 模型 id 跟账号绑定：订阅 Key 与按量计费 Key 能调的模型不是一套。
+   * 拉一次就能看到这把 key 的能力边界，比手填模型名再撞 404 划算。
+   */
+  const loadModels = async (): Promise<boolean> => {
+    if (loadingModels.value) return false
+    loadingModels.value = true
+    modelsError.value = ''
+    try {
+      const result = await fetchModels({
+        provider: provider.value,
+        baseUrl: baseUrl.value,
+      })
+      if (!result.ok) {
+        availableModels.value = []
+        modelsError.value = result.error ?? '查询模型列表失败'
+        modelsLoaded.value = true
+        return false
+      }
+      availableModels.value = result.models
+      modelsLoaded.value = true
+      return true
+    } finally {
+      loadingModels.value = false
+    }
+  }
+
+  /** 换模型（从拉到的列表里选） */
+  const applyModel = (value: string): void => {
+    setModel(value)
+  }
+
   /**
    * 让在途的解释请求作废。
    *
@@ -626,6 +713,14 @@ export const useLlmStore = defineStore('llm', () => {
     refreshAudit,
     canCall,
     testConnection,
+    availableModels,
+    loadingModels,
+    modelsError,
+    modelsLoaded,
+    loadModels,
+    applyModel,
+    detectKeyKind,
+    keyKindMismatch,
     requestExplanation,
     requestAction,
     markDegraded,

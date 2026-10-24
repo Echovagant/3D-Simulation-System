@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="46 test files / 425 cases" src="https://img.shields.io/badge/test-46%20files%20%2F%20425%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="46 test files / 432 cases" src="https://img.shields.io/badge/test-46%20files%20%2F%20432%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="11 build gates" src="https://img.shields.io/badge/build%20gates-11%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>255.09 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>425</b><br><sub>测试用例 · 46 个文件</sub></td>
+    <td align="center"><b>432</b><br><sub>测试用例 · 46 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -190,7 +190,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（46 个测试文件 / 425 个用例） |
+| `npm test` | Vitest 全量用例（46 个测试文件 / 432 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -210,7 +210,7 @@ npm run preview    # 预览生产产物
 | 能力 | 说明 |
 | --- | --- |
 | 跨设备场景库 | 在 A 设备保存的场景，B 设备打开就能看到 |
-| LLM 托管 | Key 交给服务端加密保管；后端做**配额、调用审计与故障转移**（一家厂商不通会自动换下一家） |
+| LLM 托管 | Key 交给服务端加密保管；后端做**配额、调用审计与故障转移**（一家不通会自动换下一家，但**各家的 key 互不通用**） |
 | 批量仿真 | 同一场景按参数网格批量跑；用**与前端同一个物理引擎**，结果与浏览器逐位对得上 |
 | 服务端渲染 | 提交场景，服务端产出 MP4；同一场景重跑两次的帧数完全一致 |
 | 错误上报 | 前端的错误现场收进后端，不只是控制台里滚过去就没了 |
@@ -275,7 +275,7 @@ AI 演武场的 LLM 逻辑全部由替身模型测试，**没有一条用例跑�
 
 ```bash
 # key 放在仓库外的文件里（文件内容就是裸 key，一行）
-npm run verify:llm-live -- --key-file /path/to/key.env --provider minimax-alt --runs 12
+npm run verify:llm-live -- --key-file /path/to/key.env --provider minimax-cn-subscription --runs 12
 ```
 
 它会跑 N 次控制器提示词，统计**正文为空率**、**闸门通过率**、**推理 token 分布**，
@@ -283,6 +283,27 @@ npm run verify:llm-live -- --key-file /path/to/key.env --provider minimax-alt --
 
 密钥只从命令行给的仓库外文件或环境变量读，**不打印、不落盘、不进仓库**。
 这道检查要真 key、要花钱、还要网络，所以**不在构建链里**。
+
+</details>
+
+<details>
+<summary><b>接入线：端点 × 凭证</b></summary>
+
+同一家厂商可能有多条**互不兼容**的接入线。MiniMax 有两个维度：
+
+| 维度 | 两条线 | 区别 |
+| --- | --- | --- |
+| 端点 | `api.minimax.io` / `api.minimaxi.com` | 两套账号体系，key 不通用 |
+| 凭证 | `sk-api-` / `sk-cp-` | 按量计费 / 订阅，消耗不同的计费资源 |
+
+交叉起来就是四种组合。实测：同一把 `sk-cp-` key 在 `api.minimaxi.com` 上
+能列出 9 个模型，在 `api.minimax.io` 上直接 401。
+
+所以清单里**每条接入线各占一个条目**（key 是按条目分槽存的，一个槽位装不下两种互斥的组合），
+界面会提示当前要的是哪一种凭证，贴错了当场就能看出来。
+
+模型能调哪些也跟凭证绑定——面板上的**「拉取可用模型」**按钮会用你这把 key
+调 `GET {base_url}/models`，直接列出它实际能用的模型，而不是让用户凭记忆手填再撞 404。
 
 </details>
 

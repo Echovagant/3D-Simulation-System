@@ -347,6 +347,131 @@ describe('LLM store', () => {
 })
 
 /**
+ * 凭证类型与模型列表。
+ *
+ * ⚠️ 厂商常发好几种凭证，彼此不通用；模型能调哪些也跟凭证绑定。
+ * 认错凭证类型 → 401 或「模型不存在」，报错完全指不到真正原因上。
+ */
+describe('LLM store · 凭证类型与模型列表', () => {
+  /** 订阅 Key 的前缀样例（只测前缀识别，不是真 key） */
+  const SUBSCRIPTION_KEY = 'sk-cp-example-value' // secret-scan: allow
+  /** 按量计费 Key 的前缀样例 */
+  const STANDARD_KEY = 'sk-api-example-value' // secret-scan: allow
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    for (const id of ['minimax', 'minimax-subscription', 'minimax-cn', 'minimax-cn-subscription']) {
+      clearApiKey(id)
+    }
+  })
+
+  it('认出订阅 Key 与按量计费 Key', () => {
+    const store = useLlmStore()
+    store.selectProvider('minimax-subscription')
+    expect(store.detectKeyKind(SUBSCRIPTION_KEY)).toBe('subscription')
+    expect(store.detectKeyKind(STANDARD_KEY)).toBe('standard')
+  })
+
+  it('认不出前缀时返回 null，不硬猜', () => {
+    const store = useLlmStore()
+    store.selectProvider('minimax-subscription')
+    expect(store.detectKeyKind('some-other-credential')).toBeNull()
+  })
+
+  it('贴了另一种凭证时给出提示，而不是让它在调用时才报错', () => {
+    const store = useLlmStore()
+    store.selectProvider('minimax-subscription')
+    store.applyKey(STANDARD_KEY)
+
+    expect(store.keyKindMismatch).toContain('不通用')
+  })
+
+  it('凭证对得上时没有提示', () => {
+    const store = useLlmStore()
+    store.selectProvider('minimax-subscription')
+    store.applyKey(SUBSCRIPTION_KEY)
+
+    expect(store.keyKindMismatch).toBe('')
+  })
+
+  it('拉模型列表：拿到这把 key 能用的模型', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    const requested: string[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        requested.push(String(url))
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: { get: () => null },
+          json: async () => ({
+            data: [{ id: 'model-a' }, { id: 'model-b' }],
+          }),
+          text: async () => '',
+        } as unknown as Response
+      }),
+    )
+
+    const ok = await store.loadModels()
+
+    expect(ok).toBe(true)
+    expect(store.availableModels).toEqual(['model-a', 'model-b'])
+    expect(store.modelsError).toBe('')
+    expect(requested[0]).toContain('/models')
+  })
+
+  it('拉模型列表失败时如实报错，不静默', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        ({
+          ok: false,
+          status: 401,
+          statusText: 'Unauthorized',
+          headers: { get: () => null },
+          json: async () => ({ error: { message: 'invalid api key' } }),
+          text: async () => '{"error":{"message":"invalid api key"}}',
+        }) as unknown as Response,
+      ),
+    )
+
+    const ok = await store.loadModels()
+
+    expect(ok).toBe(false)
+    expect(store.availableModels).toEqual([])
+    expect(store.modelsError).toContain('401')
+  })
+
+  it('换 key 之后上一次的模型列表作废', async () => {
+    const store = useLlmStore()
+    store.applyKey(FAKE_KEY)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        ({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: { get: () => null },
+          json: async () => ({ data: [{ id: 'model-a' }] }),
+          text: async () => '',
+        }) as unknown as Response,
+      ),
+    )
+    await store.loadModels()
+    expect(store.availableModels).toHaveLength(1)
+
+    store.applyKey('another-key')
+    expect(store.availableModels).toEqual([])
+  })
+})
+
+/**
  * 托管模式：请求改走后端。
  *
  * ⚠️ 自带 Key 那条路的行为一个字都不能变——这些用例就是守着这条线的。

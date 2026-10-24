@@ -297,3 +297,111 @@ export const callLlm = async (options: LlmCallOptions): Promise<LlmCallResult> =
     clearTimeout(timer)
   }
 }
+
+// --------------------------------------------------------------------------
+// 模型列表
+// --------------------------------------------------------------------------
+
+export interface LlmModelsResult {
+  /** 是否成功 */
+  ok: boolean
+  /** 这把 key 能用的模型 id（厂商返回的顺序） */
+  models: string[]
+  /** 失败原因（已脱敏） */
+  error?: string
+}
+
+/**
+ * 拉一把 key 实际能用的模型列表。
+ *
+ * ⚠️ 为什么要它：模型 id 迭代很快，而且**跟账号绑定**——
+ * 订阅 Key 能调的模型与按量计费 Key 能调的模型不是一套，
+ * 手填模型名填错时报的错还完全指不到真正原因上（404 看着像模型不存在，
+ * 实际是凭证不对）。让用户填完 key 点一下，直接看到这把 key 的能力边界。
+ *
+ * ⚠️ 只支持 OpenAI 兼容协议——它是唯一有模型发现接口的那一族。
+ * Anthropic 与 Gemini 的 `/models` 路径与解析方式都不同，
+ * 那两家这里直接说明不支持，不猜。
+ */
+export const fetchModels = async (options: {
+  provider: LlmProvider
+  /** 覆盖 base_url */
+  baseUrl?: string
+  /** 覆盖超时（毫秒） */
+  timeoutMs?: number
+  /** 注入 fetch —— 测试用，生产走全局 fetch */
+  fetchImpl?: typeof fetch
+}): Promise<LlmModelsResult> => {
+  const { provider } = options
+  if (provider.protocol !== 'openai') {
+    return {
+      ok: false,
+      models: [],
+      error: `${provider.name} 没有开放模型列表接口，模型名需要手填`,
+    }
+  }
+
+  const key = getApiKey(provider.id)
+  if (!key) {
+    return { ok: false, models: [], error: `未配置 ${provider.name} 的 API Key` }
+  }
+
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch
+  if (typeof fetchImpl !== 'function') {
+    return { ok: false, models: [], error: '当前环境没有 fetch，无法查询模型列表' }
+  }
+
+  const controller = new AbortController()
+  const timeoutMs = options.timeoutMs ?? llmConfig.timeoutMs
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const base = (options.baseUrl ?? provider.baseUrl).replace(/\/+$/, '')
+
+  try {
+    const response = await fetchImpl(`${base}/models`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${key}` },
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      let raw = ''
+      try {
+        raw = await response.text()
+      } catch {
+        raw = ''
+      }
+      let parsed: unknown = null
+      try {
+        parsed = raw ? JSON.parse(raw) : null
+      } catch {
+        parsed = null
+      }
+      const body = parsed as { error?: { message?: string } } | null
+      const detail = body?.error?.message ?? raw.slice(0, 160) ?? response.statusText
+      return {
+        ok: false,
+        models: [],
+        error: redactSecrets(`HTTP ${response.status}：${detail}`).slice(0, 240),
+      }
+    }
+
+    const payload = (await response.json()) as { data?: unknown }
+    const list = Array.isArray(payload?.data) ? payload.data : []
+    const models: string[] = []
+    for (const entry of list) {
+      const id = (entry as { id?: unknown })?.id
+      if (typeof id === 'string' && id.trim()) models.push(id.trim())
+    }
+
+    if (models.length === 0) {
+      return { ok: false, models: [], error: '厂商返回的模型列表是空的' }
+    }
+    return { ok: true, models }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const reason = controller.signal.aborted ? `请求超时（${timeoutMs}ms）` : `请求失败：${message}`
+    return { ok: false, models: [], error: redactSecrets(reason).slice(0, 240) }
+  } finally {
+    clearTimeout(timer)
+  }
+}
