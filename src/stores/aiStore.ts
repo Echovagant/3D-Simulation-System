@@ -13,10 +13,35 @@ export type AiAgentType = 'basic' | 'advanced' | 'custom'
  */
 let agentSequence = 0
 
+/**
+ * 单个代理的日志上限。
+ *
+ * ⚠️ 面板要把所有代理的日志合起来渲染，条数不封顶的话，
+ * 代理一多，面板就会重到拖不动（实测 3 个代理就能堆出 200 多行）。
+ */
+const MAX_AGENT_LOGS = 100
+
+/** 日志序号：全局单调递增，给面板当稳定的 key 用 */
+let logSequence = 0
+
 /** 胜利条件——当前只实现了一种，用字面量类型挡住无法判定的自由文本 */
 export type AiWinCondition = '到达目标点'
 
 // AI代理状态
+export interface AiAgentLog {
+  /**
+   * 稳定序号——面板渲染时当 key 用。
+   *
+   * ⚠️ 时间戳不能当 key：同一毫秒里可能写进好几条日志，
+   * 而日志列表是按时间排序的，排序一变，按下标做的 key 就整片错位，
+   * Vue 会把每一行都当成新行重建。
+   */
+  seq: number
+  timestamp: number
+  message: string
+  type: 'info' | 'warning' | 'error'
+}
+
 export interface AiAgent {
   id: string
   name: string
@@ -24,7 +49,7 @@ export interface AiAgent {
   active: boolean
   parameters: Record<string, number | string | boolean>
   status: 'idle' | 'running' | 'paused' | 'error'
-  logs: Array<{ timestamp: number; message: string; type: 'info' | 'warning' | 'error' }>
+  logs: AiAgentLog[]
 }
 
 // 环境设置
@@ -151,6 +176,24 @@ export const useAiStore = defineStore('ai', () => {
   )
 
   // 方法
+
+  /**
+   * 往某个代理的日志里追加一条——所有写日志的地方都走这里。
+   *
+   * ⚠️ 上限在这里统一管：每条日志最终都要进面板的 DOM，
+   * 不封顶的话代理一多，面板就会重到拖不动。
+   */
+  const appendLog = (
+    agent: AiAgent,
+    message: string,
+    type: 'info' | 'warning' | 'error'
+  ): void => {
+    agent.logs.push({ seq: logSequence++, timestamp: Date.now(), message, type })
+    if (agent.logs.length > MAX_AGENT_LOGS) {
+      agent.logs.shift()
+    }
+  }
+
   // 创建新AI代理
   const createAgent = (name: string, type: AiAgentType = 'basic'): AiAgent => {
     const newAgent: AiAgent = {
@@ -191,11 +234,7 @@ export const useAiStore = defineStore('ai', () => {
     // 重置所有代理状态
     agents.value.forEach(agent => {
       agent.status = 'running'
-      agent.logs.push({
-        timestamp: Date.now(),
-        message: '仿真开始',
-        type: 'info'
-      })
+      appendLog(agent, '仿真开始', 'info')
     })
   }
 
@@ -206,11 +245,7 @@ export const useAiStore = defineStore('ai', () => {
     agents.value.forEach(agent => {
       if (agent.status === 'running') {
         agent.status = 'paused'
-        agent.logs.push({
-          timestamp: Date.now(),
-          message: '仿真暂停',
-          type: 'info'
-        })
+        appendLog(agent, '仿真暂停', 'info')
       }
     })
   }
@@ -230,11 +265,7 @@ export const useAiStore = defineStore('ai', () => {
 
     agents.value.forEach(agent => {
       agent.status = 'idle'
-      agent.logs.push({
-        timestamp: Date.now(),
-        message: '仿真重置',
-        type: 'info'
-      })
+      appendLog(agent, '仿真重置', 'info')
     })
   }
 
@@ -243,11 +274,7 @@ export const useAiStore = defineStore('ai', () => {
     const agent = agents.value.find(a => a.id === id)
     if (agent) {
       agent.parameters = { ...agent.parameters, ...parameters }
-      agent.logs.push({
-        timestamp: Date.now(),
-        message: '参数已更新',
-        type: 'info'
-      })
+      appendLog(agent, '参数已更新', 'info')
     }
   }
 
@@ -255,16 +282,7 @@ export const useAiStore = defineStore('ai', () => {
   const addAgentLog = (id: string, message: string, type: 'info' | 'warning' | 'error' = 'info') => {
     const agent = agents.value.find(a => a.id === id)
     if (agent) {
-      agent.logs.push({
-        timestamp: Date.now(),
-        message,
-        type
-      })
-
-      // 限制日志数量，保持性能
-      if (agent.logs.length > 100) {
-        agent.logs.shift()
-      }
+      appendLog(agent, message, type)
     }
   }
 

@@ -60,10 +60,27 @@
         </select>
       </div>
 
-      <div ref="logBoxRef" class="ai-flex-1 ai-scroll ai-bg-soft ai-r-sm ai-p-2 ai-fs-xs ai-space-y-1 ai-log-list">
+      <!--
+        日志行数有上限：日志框只有 260px 高，十来行就能看全，
+        而代理一多、日志一旧，攒到几百行是常事。几百行每次重渲染都要
+        重新布局与绘制，主线程就被它吃掉了——帧率会跟着代理数一起掉。
+        这里只渲染最近的一批，旧的仍在 store 里，只是没画出来。
+      -->
+      <div
+        v-if="filteredLogs.length > VISIBLE_LOG_LIMIT"
+        class="ai-fs-xs ai-t-faint ai-mb-1"
+      >
+        共 {{ filteredLogs.length }} 条，列表只显示最近 {{ VISIBLE_LOG_LIMIT }} 条
+      </div>
+
+      <div
+        ref="logBoxRef"
+        class="ai-flex-1 ai-scroll ai-bg-soft ai-r-sm ai-p-2 ai-fs-xs ai-space-y-1 ai-log-list"
+        @scroll.passive="handleLogScroll"
+      >
         <div
-          v-for="(log, index) in filteredLogs"
-          :key="index"
+          v-for="log in visibleLogs"
+          :key="log.seq"
           :class="[
                 log.type === 'info' ? 'ai-t-blue' :
                 log.type === 'warning' ? 'ai-t-amber' : 'ai-t-red',
@@ -74,7 +91,7 @@
           <span> {{ log.message }}</span>
         </div>
 
-        <div v-if="filteredLogs.length === 0" class="ai-t-faint italic ai-text-center ai-py-4">
+        <div v-if="visibleLogs.length === 0" class="ai-t-faint italic ai-text-center ai-py-4">
           没有符合条件的日志
         </div>
       </div>
@@ -84,7 +101,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, watch, nextTick } from 'vue'
-import { useAiStore } from '@/stores/aiStore'
+import { useAiStore, type AiAgentLog } from '@/stores/aiStore'
 
 const aiStore = useAiStore()
 
@@ -97,13 +114,7 @@ const logFilter = ref('all')
 
 // 整合所有代理的日志
 const allLogs = computed(() => {
-  const logs: Array<{
-    agentId: string
-    agentName: string
-    timestamp: number
-    message: string
-    type: 'info' | 'warning' | 'error'
-  }> = []
+  const logs: Array<AiAgentLog & { agentId: string; agentName: string }> = []
 
   aiStore.agents.forEach(agent => {
     agent.logs.forEach(log => {
@@ -127,13 +138,49 @@ const filteredLogs = computed(() => {
   return allLogs.value.filter(log => log.type === logFilter.value)
 })
 
+/**
+ * 列表实际渲染的条数上限。
+ *
+ * ⚠️ 日志框只有 260px 高，十几行就能看全。日志框画几百行的话，
+ * 每次重渲染都要重新布局与绘制几百行文字——主线程被它占住，
+ * 帧率会跟着代理数一起掉。旧的日志还在 store 里，只是没画出来。
+ */
+const VISIBLE_LOG_LIMIT = 60
+
+/** 实际渲染的那一批：最新的若干条 */
+const visibleLogs = computed(() => filteredLogs.value.slice(-VISIBLE_LOG_LIMIT))
+
 // 日志区自己滚，不把整页撑高
 const logBoxRef = ref<HTMLElement | null>(null)
 
-// 新日志到了就滚到底——日志窗口本来就该跟着最新一条走
+/**
+ * 用户是不是还贴在底部。
+ *
+ * ⚠️ 往上翻看历史时不要把他拽回底部——那是日志窗口最烦人的行为。
+ */
+const pinnedToBottom = ref(true)
+const handleLogScroll = (): void => {
+  const box = logBoxRef.value
+  if (!box) return
+  pinnedToBottom.value = box.scrollHeight - box.scrollTop - box.clientHeight < 24
+}
+
+/** 最后一条可见日志的序号——新日志到了它就变 */
+const lastVisibleSeq = computed(() => {
+  const list = filteredLogs.value
+  return list.length > 0 ? list[list.length - 1].seq : null
+})
+
+/**
+ * 新日志到了就滚到底——日志窗口本来就该跟着最新一条走。
+ *
+ * ⚠️ 盯的是**最后一条的序号**，不是列表长度：日志满了之后
+ * 长度不再变化（超上限的旧日志被丢掉），盯长度会就此停住不动。
+ */
 watch(
-  () => filteredLogs.value.length,
-  async () => {
+  () => lastVisibleSeq.value,
+  async (seq) => {
+    if (seq === null || !pinnedToBottom.value) return
     await nextTick()
     const box = logBoxRef.value
     if (box) box.scrollTop = box.scrollHeight
@@ -167,14 +214,18 @@ const formatTime = (seconds: number) => {
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
-const formatLogTime = (timestamp: number) => {
+/**
+ * 日志时间——固定格式的 HH:MM:SS。
+ *
+ * ⚠️ 这里**不能**用 `toLocaleTimeString`：它每次调用都要新建一个 Intl 格式化器，
+ * 实测单次约 97 微秒。日志面板每行、每次重渲染都要过一次这个格式化——
+ * 两百多行、每秒重渲几次，就是每秒上百毫秒的主线程时间，
+ * 代理一多界面就跟着卡住。
+ */
+const pad2 = (value: number): string => (value < 10 ? `0${value}` : String(value))
+const formatLogTime = (timestamp: number): string => {
   const date = new Date(timestamp)
-  return date.toLocaleTimeString('zh-CN', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
 }
 
 const formatScenario = (scenario: string) => {

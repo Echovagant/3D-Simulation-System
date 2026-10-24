@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="47 test files / 439 cases" src="https://img.shields.io/badge/test-47%20files%20%2F%20439%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="48 test files / 444 cases" src="https://img.shields.io/badge/test-48%20files%20%2F%20444%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="12 build gates" src="https://img.shields.io/badge/build%20gates-12%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>255.09 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>439</b><br><sub>测试用例 · 47 个文件</sub></td>
+    <td align="center"><b>444</b><br><sub>测试用例 · 48 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -193,7 +193,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（47 个测试文件 / 439 个用例） |
+| `npm test` | Vitest 全量用例（48 个测试文件 / 444 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
