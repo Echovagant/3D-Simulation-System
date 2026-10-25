@@ -438,8 +438,10 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `RENDER_POWER_PREFERENCE` | `high-performance` | — | `src/config/rendering.ts` |
 | `AI_MAX_TOTAL_LOGS` | `5000` | 条 | `src/stores/aiStore.ts` |
 | `AI_LOG_ROW_HEIGHT` | `18` | 像素 | `src/components/three/ai/AiDebugPanel.vue` |
-| `AI_CAMERA_POSITION` | `0, 27, 34` | — | `src/views/AIPlayground.vue` |
-| `AI_CAMERA_FOV` | `50` | 度 | `src/views/AIPlayground.vue` |
+| `LAB_CAMERA_POSITION` | `0, 6, 6` | — | `src/config/sceneFraming.ts` |
+| `LAB_CAMERA_FOV` | `60` | 度 | `src/config/sceneFraming.ts` |
+| `ARENA_CAMERA_POSITION` | `0, 27, 34` | — | `src/config/sceneFraming.ts` |
+| `ARENA_CAMERA_FOV` | `50` | 度 | `src/config/sceneFraming.ts` |
 | `AI_GROUND_COLOR` | `0x2a3340` | — | `src/composables/useAI.ts` |
 | `AI_WALL_OPACITY` | `0.6` | — | `src/composables/useAI.ts` |
 
@@ -712,15 +714,20 @@ AI 在这个系统里是**意图层**，不是物理层。
 
 - 验证：`src/utils/agentLogExport.test.ts`（`formatLogParameters` 取整、`serializeAgentLogs` 序列化成 JSONL）
 
-### S34 演武场的取景要正对场地
+### S34 3D 场景的取景要正对场地
 
-相机**正对场地中心**，不站在一角斜看。站在 +x/+z 那一角时，网格的两条边在画面里成了对角线，看起来就是「网格斜铺」；配上 `75°` 的广角，近处拉变形、远处压扁，斜得更厉害。
+两个 3D 页面（仿真实验室、AI 演武场）的相机都要**正对场地中心**，不能站在一角斜看。站在 +x/+z 那一角时，网格的两条边在画面里成了对角线，看起来就是「网格斜铺」；配上 75° 的广角，近处拉变形、远处压扁，斜得更厉害。
 
-现在的取景是：位置 `(0, 27, 34)`、视野角 `50°`。`48×48` 米的场地整块收进画面，围墙读得出来，智能体在画面中部看得清。
+- 仿真实验室：位置 `(0, 6, 6)`、视野 `60°`——20×20 米的地面整块铺进画面，物体够大，上半屏不留一片黑
+- AI 演武场：位置 `(0, 27, 34)`、视野 `50°`——48×48 米的场地整块收进画面，围墙读得出来
+
+⚠️ **相机的 `lookAt` 点与轨道控制器的 `target` 必须是同一个点。** 不一致时不会报错——控制器会在第一次 `update()` 时把相机改瞄到 target 那个点，画面里的内容整体被压偏（就是「场景偏下」那一下）。仿真实验室之前就踩过：相机 `lookAt(0,0,0)`，控制器 `target.set(0,2,0)`。
+
+所以这两个值必须**取自同一份配置**（`src/config/sceneFraming.ts`），而不是各写各的字面量——同源就不会再对不上。
 
 配套两条：地面颜色要比背景亮一档（`0x2a3340`），场地才看得出是块地板而不是一片黑；围墙不透明度 `0.6`——围墙只有 1.2 米高，二十几米外太淡就等于没有，场地边界读不出来，智能体像是在无边无际的虚空里跑。
 
-- 验证：`src/views/AIPlayground.vue`、`src/composables/useAI.ts`（由 `scripts/check-simulation-spec.mjs` 对账）
+- 验证：`src/config/sceneFraming.ts`（参数本身）、`src/config/sceneFraming.test.ts`（参数值 + 两个页面的轨道中心都取自配置、没有写字面量）、`src/composables/useAI.ts`（地面色与围墙不透明度，由 `scripts/check-simulation-spec.mjs` 对账）
 
 ## 8. 已知边界
 

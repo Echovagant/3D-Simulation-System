@@ -149,6 +149,42 @@ const AI_STORE = 'src/stores/aiStore.ts'
 const AI_PANEL = 'src/components/three/ai/AiDebugPanel.vue'
 const AI_PLAYGROUND = 'src/views/AIPlayground.vue'
 const AI_COMPOSABLE = 'src/composables/useAI.ts'
+const FRAMING = 'src/config/sceneFraming.ts'
+
+/**
+ * 从 `src/config/sceneFraming.ts` 里取一组取景参数。
+ *
+ * ⚠️ 取的是**导出对象**里的值，不是源码里的字面量——
+ * 页面引用的是 `labFraming.position` 这种，源码里没有数字。
+ */
+const framingBlock = (exportName) => {
+  const src = readText(FRAMING)
+  const start = src.indexOf(`export const ${exportName}`)
+  if (start < 0) throw new Error(`${FRAMING} 里找不到 export const ${exportName}`)
+  const brace = src.indexOf('{', start)
+  if (brace < 0) throw new Error(`${exportName} 后面没有对象字面量`)
+  let depth = 0
+  for (let i = brace; i < src.length; i += 1) {
+    if (src[i] === '{') depth += 1
+    else if (src[i] === '}') {
+      depth -= 1
+      if (depth === 0) return src.slice(brace, i + 1)
+    }
+  }
+  throw new Error(`${exportName} 的对象字面量没有闭合`)
+}
+
+/** 取一组取景参数里的某个标量字段 */
+const framingNumber = (exportName, field) =>
+  capture(framingBlock(exportName), new RegExp(`${field}:\\s*(${NUM})`), `${exportName}.${field}`)
+
+/** 取一组取景参数里的三维向量（x / y / z），按顺序返回 */
+const framingNumbers = (exportName, field) => {
+  const block = capture(framingBlock(exportName), new RegExp(`${field}:\\s*\\{([^}]*)\\}`), `${exportName}.${field}`)
+  const numbers = [...block.matchAll(new RegExp(`(${NUM})`, 'g'))].map((m) => m[1])
+  if (numbers.length !== 3) throw new Error(`${exportName}.${field} 不是三个数`)
+  return numbers.join(', ')
+}
 const PROXY = 'backend/app/services/llm_proxy.py'
 const BASELINE_RECORD = 'docs/simulation-baseline.json'
 
@@ -1005,26 +1041,29 @@ const CONTRACT = [
   },
   {
     // 演武场相机初始位置：正对场地中心，不站一角（条款 S34）。
-    key: 'AI_CAMERA_POSITION',
-    source: AI_PLAYGROUND,
+    key: 'ARENA_CAMERA_POSITION',
+    source: FRAMING,
     kind: 'ordered-list',
-    read: () => {
-      const block = capture(
-        readText(AI_PLAYGROUND),
-        /DEFAULT_CAMERA_POSITION\s*=\s*\{([^}]*)\}/m,
-        'DEFAULT_CAMERA_POSITION',
-      )
-      const numbers = [...block.matchAll(new RegExp(`(${NUM})`, 'g'))].map((m) => m[1])
-      if (numbers.length !== 3) throw new Error('DEFAULT_CAMERA_POSITION 不是三个数')
-      return numbers.join(', ')
-    },
+    read: () => framingNumbers('arenaFraming', 'position'),
   },
   {
-    key: 'AI_CAMERA_FOV',
-    source: AI_PLAYGROUND,
+    key: 'ARENA_CAMERA_FOV',
+    source: FRAMING,
     kind: 'number',
-    read: () =>
-      capture(readText(AI_PLAYGROUND), new RegExp(`DEFAULT_CAMERA_FOV\\s*=\\s*(${NUM})`), 'DEFAULT_CAMERA_FOV'),
+    read: () => framingNumber('arenaFraming', 'fov'),
+  },
+  {
+    // 仿真实验室的取景：地面整块铺进画面，上半屏不留黑。
+    key: 'LAB_CAMERA_POSITION',
+    source: FRAMING,
+    kind: 'ordered-list',
+    read: () => framingNumbers('labFraming', 'position'),
+  },
+  {
+    key: 'LAB_CAMERA_FOV',
+    source: FRAMING,
+    kind: 'number',
+    read: () => framingNumber('labFraming', 'fov'),
   },
   {
     key: 'AI_GROUND_COLOR',

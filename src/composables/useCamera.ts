@@ -9,7 +9,18 @@ import { useThree } from './useThree'
  */
 export interface CameraInstance {
   activeCamera: ShallowRef<THREE.PerspectiveCamera | null>
-  setCameraPosition: (x: number, y: number, z: number) => void
+  /**
+   * 摆相机。
+   *
+   * ⚠️ `target` 是相机要瞄的点，必须与轨道控制器的 `target` **是同一个点**。
+   * 不传时默认瞄原点——只有当轨道中心也就是原点时才可以省略。
+   */
+  setCameraPosition: (
+    x: number,
+    y: number,
+    z: number,
+    target?: { x: number; y: number; z: number },
+  ) => void
   setCameraFov: (fov: number) => void
   lookAt: (x: number, y: number, z: number) => void
 }
@@ -17,10 +28,16 @@ export interface CameraInstance {
 export function useCamera(): CameraInstance {
   const { camera } = useThree()
 
-  const setCameraPosition = (x: number, y: number, z: number): void => {
+  const setCameraPosition = (
+    x: number,
+    y: number,
+    z: number,
+    target?: { x: number; y: number; z: number },
+  ): void => {
     if (!camera.value) return
     camera.value.position.set(x, y, z)
-    camera.value.lookAt(0, 0, 0)
+    if (target) camera.value.lookAt(target.x, target.y, target.z)
+    else camera.value.lookAt(0, 0, 0)
   }
 
   /**

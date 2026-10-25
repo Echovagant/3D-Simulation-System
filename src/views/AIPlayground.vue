@@ -343,6 +343,7 @@ import { useCamera } from '@/composables/useCamera'
 import { useScene } from '@/composables/useScene'
 import { useRenderer } from '@/composables/useRenderer'
 import { useControls } from '@/composables/useControls'
+import { arenaFraming } from '@/config/sceneFraming'
 import { useAI } from '@/composables/useAI'
 import { useAiStore } from '@/stores/aiStore'
 import { useLlmStore } from '@/stores/llmStore'
@@ -395,12 +396,12 @@ const clock = new THREE.Clock()
  * 网格的两条边在画面里成了对角线，看起来就是「网格斜铺」；
  * 配上 75° 的广角，近处拉变形、远处压扁，斜得更厉害。
  *
- * 现在这组参数（正对、俯角约 38°、50° 视野）能把 48×48 米的场地
- * 整块收进画面，围墙也读得出来。
+ * 参数在 `src/config/sceneFraming.ts` 里，与仿真实验室共用一份口径；
+ * 目标点也取自同一份，相机 lookAt 与轨道控制器的 target 不会对不上。
  */
-const DEFAULT_CAMERA_POSITION = { x: 0, y: 27, z: 34 }
+const DEFAULT_CAMERA_POSITION = arenaFraming.position
 /** 视野角：75° 太广，收窄到 50° 后透视畸变小得多 */
-const DEFAULT_CAMERA_FOV = 50
+const DEFAULT_CAMERA_FOV = arenaFraming.fov
 /** 键盘移动相机的速度（米/秒） */
 const CAMERA_KEY_SPEED = 14
 
@@ -468,15 +469,22 @@ const initializeScene = async () => {
 
   try {
     three.initThree()
+    // 相机瞄的点与轨道中心取**同一个** arenaFraming.target
     camera.setCameraPosition(
       DEFAULT_CAMERA_POSITION.x,
       DEFAULT_CAMERA_POSITION.y,
       DEFAULT_CAMERA_POSITION.z,
+      arenaFraming.target,
     )
     camera.setCameraFov(DEFAULT_CAMERA_FOV)
     scene.initScene()
     renderer.initRenderer(viewportRef.value)
     controls.initControls()
+    controls.setTarget(
+      arenaFraming.target.x,
+      arenaFraming.target.y,
+      arenaFraming.target.z,
+    )
     // 建出智能体与障碍物（场景对象由 useAI 持有）
     ai.syncScene()
     // 建物理世界：地面、围墙、智能体与障碍物的刚体。

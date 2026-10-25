@@ -7,6 +7,14 @@ export interface ControlsInstance {
   controls: Ref<OrbitControls | null>
   initControls: () => void
   updateControls: () => void
+  /**
+   * 设置轨道中心。
+   *
+   * ⚠️ 轨道中心必须与相机的 `lookAt` 点**是同一个点**：
+   * 不一致时控制器会在第一次 `update()` 时把相机改瞄到 target 那个点，
+   * 画面里的内容整体被压偏。所以它要能和相机的目标点取自同一份配置。
+   */
+  setTarget: (x: number, y: number, z: number) => void
   disposeControls: () => void
 }
 
@@ -41,6 +49,12 @@ export function useControls(): ControlsInstance {
     }
   }
 
+  const setTarget = (x: number, y: number, z: number): void => {
+    if (controls.value) {
+      controls.value.target.set(x, y, z)
+    }
+  }
+
   // 渲染器就绪后自动补建控制器（渲染器晚于组件挂载创建时也能生效）
   watch(renderer, (current) => {
     if (current) initControls()
@@ -54,5 +68,5 @@ export function useControls(): ControlsInstance {
     disposeControls()
   })
 
-  return { controls, initControls, updateControls, disposeControls }
+  return { controls, initControls, updateControls, setTarget, disposeControls }
 }

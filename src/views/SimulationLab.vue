@@ -226,6 +226,7 @@ import RenderPanel from '@/components/simulations/RenderPanel.vue'
 import { usePhysics } from '@/composables/usePhysics'
 import { simulationConfig } from '@/config/simulation'
 import { RENDER_POWER_PREFERENCE } from '@/config/rendering'
+import { labFraming } from '@/config/sceneFraming'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
 import type { SceneDocumentObject, SceneIndexEntry } from '@/types'
 
@@ -384,14 +385,16 @@ const initThree = () => {
   scene.background = new THREE.Color(0x1a1a1a)
 
   // 创建相机
+  // ⚠️ 位置、视野角、目标点都从 labFraming 取——相机 lookAt 的点和
+  // 轨道控制器 target 的点**必须是同一个**，两者都取自同一份配置就不会再对不上。
   camera = new THREE.PerspectiveCamera(
-    75,
+    labFraming.fov,
     viewportRef.value.clientWidth / viewportRef.value.clientHeight,
     0.1,
     1000,
   )
-  camera.position.set(5, 5, 10)
-  camera.lookAt(0, 0, 0)
+  camera.position.set(labFraming.position.x, labFraming.position.y, labFraming.position.z)
+  camera.lookAt(labFraming.target.x, labFraming.target.y, labFraming.target.z)
 
   // 创建渲染器
   renderer = new THREE.WebGLRenderer({
@@ -411,7 +414,15 @@ const initThree = () => {
   orbitControls = new OrbitControls(camera, renderer.domElement)
   orbitControls.enableDamping = true
   orbitControls.dampingFactor = 0.05
-  orbitControls.target.set(0, 2, 0)
+  // 轨道控制器的目标点：与相机的 lookAt 取**同一个** labFraming.target。
+  // ⚠️ 之前这里写的是 (0, 2, 0)，而相机 lookAt 的是 (0, 0, 0)：
+  // 控制器第一次 update 就会把相机改瞄到 2 米高的原点上方，
+  // 于是地面和物体整体被压到画面下半，上半屏空着——就是「场景偏下」的那一下。
+  orbitControls.target.set(
+    labFraming.target.x,
+    labFraming.target.y,
+    labFraming.target.z,
+  )
 
   // 添加光源
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6)
@@ -426,7 +437,9 @@ const initThree = () => {
   scene.add(pointLight)
 
   // 添加网格辅助线
-  const gridHelper = new THREE.GridHelper(20, 20, 0x444444, 0x222222)
+  // 网格线比物理地面（0x2c3e50）亮一档才读得出「这是地板」；
+  // 配色与 AI 演武场保持一致，两个 3D 页面看起来是同一套。
+  const gridHelper = new THREE.GridHelper(20, 20, 0x6f7c8c, 0x39414f)
   scene.add(gridHelper)
 
   // 添加坐标轴辅助线
