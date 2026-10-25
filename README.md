@@ -23,7 +23,7 @@
 
 <table>
   <tr>
-    <td align="center"><b>255.09 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>255.34 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>473</b><br><sub>测试用例 · 51 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>

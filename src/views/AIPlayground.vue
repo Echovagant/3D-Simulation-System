@@ -835,9 +835,11 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  /* 一屏占满：扣掉应用顶栏(30px)与内容区上下内边距(各30px)。
+  /* 一屏占满：高度跟着页面容器走。
+     普通布局要扣掉顶栏(30px)与内容区上下内边距(各30px)——这一页因此矮 90px；
+     页面进入「铺满」模式时这 90px 全部让掉，3D 场景直接占满整个窗口。
      锁定高度后，这一页不再出现整页滚动条——高度由下面的栅格分配。 */
-  height: calc(100vh - 90px);
+  height: calc(100vh - var(--page-content-block, 90px));
   min-height: 520px;
   overflow: hidden;
   /* 深色底：SVG 顶部是透明的，必须由容器兜底，否则页头白字会浮在浅色应用底上 */

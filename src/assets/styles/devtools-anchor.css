@@ -1,0 +1,34 @@
+/**
+ * Vue DevTools 悬浮按钮的观感。
+ *
+ * ⚠️ 这个按钮是 vite-plugin-vue-devtools 注入的，**只在开发模式存在**。
+ * 所以这份样式也只在开发模式被引入（见 main.ts），不进生产包。
+ *
+ * 三件事：
+ * 1. **默认几乎看不见**（opacity 0.22）——它常驻在屏幕正中下沿，
+ *    不该抢 3D 场景的注意力。
+ * 2. **鼠标移上去才显形**（opacity 0.95）——要用的时候一眼能找到。
+ * 3. **位置随用户拖**：插件本身就支持拖动（拖完写进 inline style），
+ *    这里不碰它的 left / top，只调观感，免得把拖动功能弄坏。
+ */
+.vue-devtools__anchor-btn.panel-entry-btn {
+  opacity: 0.22 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+/* 悬停时显形：按钮和它所在的整块面板一起变清晰 */
+.vue-devtools__anchor-btn.panel-entry-btn:hover,
+.vue-devtools__anchor:hover .vue-devtools__anchor-btn.panel-entry-btn {
+  opacity: 0.95 !important;
+}
+
+/* 面板底板也跟着淡下去：默认几乎看不见，悬停才实体化 */
+.vue-devtools__panel {
+  opacity: 0.55 !important;
+  transition: opacity 0.2s ease !important;
+}
+
+.vue-devtools__anchor:hover .vue-devtools__panel,
+.vue-devtools__panel:hover {
+  opacity: 1 !important;
+}

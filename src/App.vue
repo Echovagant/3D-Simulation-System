@@ -92,7 +92,7 @@
 
       <main class="main-container">
         <Header />
-        <div class="page-content">
+        <div class="page-content" :class="{ 'page-content--full': isFullBleed }">
           <RouterView />
         </div>
       </main>
@@ -106,7 +106,7 @@
 <script lang="ts" setup name="App">
 import Header from './components/layout/Header.vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { defineAsyncComponent, ref, watch, onMounted, onUnmounted } from 'vue'
+import { defineAsyncComponent, ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import '@/assets/styles/app-global.css'
 
 // 背景是纯装饰组件，用异步组件加载：即使它只有几 KB，也不该阻塞首屏渲染。
@@ -130,6 +130,16 @@ const sidebarShow = ref(false)
 const showNavigate = () => {
   return !['/home', '/ai_star', '/ai-2'].includes($route.path)
 }
+
+/**
+ * 3D 场景要铺满，不受页面容器限制。
+ *
+ * 页面容器默认有 `max-width: 1400px` + 居中留白 + 30px 内边距，
+ * 在 1600px 的屏上，演武场的 3D 视口被压到 754px 宽、上下还各空一截。
+ * 这些页面要让 3D 场景占满可用区域——**不论父容器怎么限制**。
+ */
+const FULL_BLEED_ROUTES = ['/ai-playground', '/simulation-lab', '/scene-editor']
+const isFullBleed = computed(() => FULL_BLEED_ROUTES.includes($route.path))
 
 // 设置导航激活状态
 const setActiveNav = (key: string) => {
