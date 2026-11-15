@@ -5,9 +5,6 @@
  * 留着它们只会拖慢安装、撑大 lockfile、给 `npm audit` 添噪音。没有护栏的话，
  * 半年后一次 `npm i echarts` 就会把清理成果全部抹掉。
  *
- * 同时守住幽灵依赖：`@fortawesome/fontawesome-svg-core` 被 `src/main.ts` import，
- * 却只靠 npm 提升侥幸解析到顶层，必须在 package.json 里显式声明。
- *
  * 零依赖，Node ESM。退出码：0 = 未回归；1 = 发现回归。
  */
 import { readdirSync, readFileSync } from 'node:fs'
@@ -36,6 +33,11 @@ const DEAD = [
   // 计划 016 删除 ParticlesBackground.vue 之后，这三个也变成了零引用依赖
   '@tsparticles/vue3',
   'tsparticles',
+  // Font Awesome 的 svg-core 通道整体下线后（2026-11），这三个包零引用：
+  // 图标只走 fontawesome-free 的 webfont CSS 通道，不需要 JS 侧注册
+  '@fortawesome/fontawesome-svg-core',
+  '@fortawesome/free-solid-svg-icons',
+  '@fortawesome/vue-fontawesome',
 ]
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
@@ -71,8 +73,8 @@ const declared = { ...pkg.dependencies, ...pkg.devDependencies }
 for (const name of DEAD) {
   if (name in declared) failures.push(`package.json 重新声明了 ${name}`)
 }
-if (!('@fortawesome/fontawesome-svg-core' in (pkg.dependencies ?? {}))) {
-  failures.push('package.json 缺少 @fortawesome/fontawesome-svg-core 的显式声明')
+if (!('@fortawesome/fontawesome-free' in (pkg.dependencies ?? {}))) {
+  failures.push('package.json 缺少 @fortawesome/fontawesome-free 的显式声明')
 }
 
 if (failures.length > 0) {

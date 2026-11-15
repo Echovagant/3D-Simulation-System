@@ -732,7 +732,8 @@ const CONTRACT = [
     read: () =>
       capture(
         readText(PROMPTS),
-        /export\s+type\s+LlmActionName\s*=\s*([^;\n]+)/,
+        // 该类型可能收敛为模块内声明（无 export），两种写法都要能读到
+        /(?:export\s+)?type\s+LlmActionName\s*=\s*([^;\n]+)/,
         'LlmActionName',
       ),
   },
