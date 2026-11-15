@@ -36,6 +36,9 @@ export default {
     this.startTyping();
   },
   methods: {
+    // 打字机效果：一个 setTimeout 递归循环，自己驱动自己。
+    // ⚠️ 组件卸载时这个循环没有被清掉——离开首页后还会空转几轮，
+    // 好在它只改本组件的 data，无副作用。要修就先把定时器句柄存下来再 clear。
     startTyping() {
       const { text, index, isDeleting } = this;
 

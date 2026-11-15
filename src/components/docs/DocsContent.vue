@@ -27,6 +27,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const renderedContent = ref('')
 
+/** 按章节加载并渲染 markdown。未知章节、文档为空、渲染失败三种情况都落成错误文案，不会白屏 */
 const loadDocument = async (section: string) => {
   loading.value = true
   error.value = null

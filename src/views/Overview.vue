@@ -112,7 +112,7 @@ const tags = ref([
 ])
 
 const handleScrollDown = () => {
-  // 1. ：这里定义下滑目标定位到“核心特性区域”
+  // 「快速了解」按钮：平滑滚到「核心特性」区域；目标不存在就不动
   const targetSection = document.querySelector('.features-section') as HTMLElement;
   if (!targetSection) return; // 若目标区域不存在，避免报错
   if (targetSection) {

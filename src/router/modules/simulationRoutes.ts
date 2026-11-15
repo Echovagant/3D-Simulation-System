@@ -1,3 +1,5 @@
+// 仿真实验室的路由：同一个页面提供两种深链接入口——query 参数（/simulation-lab?preset=…）
+// 与路径参数（/simulation-lab/:presetId），都通过 props 传给页面。
 import type { RouteRecordRaw } from 'vue-router'
 
 const simulationRoutes: RouteRecordRaw[] = [

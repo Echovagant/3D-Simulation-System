@@ -133,6 +133,9 @@ import { useAiStore } from '@/stores/aiStore'
 
 const aiStore = useAiStore()
 
+// 代理管理面板：增删代理、调参数。
+// 注意参数滑块是 v-model 直接绑在 store 的代理对象上（界面即时反馈），
+// @change 再调 updateAgentParameters 把变更记账并传导到智能体行为。
 // 状态
 const agents = computed(() => aiStore.agents)
 const selectedAgentId = computed({

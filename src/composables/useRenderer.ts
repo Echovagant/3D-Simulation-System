@@ -19,12 +19,20 @@ export function useRenderer(): RendererInstance {
   const { renderer, camera, initRenderer: initThreeRenderer } = useThree()
 
   const initRenderer = (container: HTMLElement): THREE.WebGLRenderer | null => {
+    // canvas 由这里创建：display:block 去掉行内元素底部的空隙，
+    // 否则容器会比画面多出几像素，出现滚动条
     const canvas = document.createElement('canvas')
     canvas.style.display = 'block'
     container.appendChild(canvas)
     return initThreeRenderer(canvas, container.clientWidth, container.clientHeight)
   }
 
+  /**
+   * 跟随窗口尺寸调整渲染器与相机比例。
+   *
+   * 画布还没挂进容器时（初始化早期）退回窗口尺寸；
+   * Math.max(height, 1) 是防极端布局下除以 0。
+   */
   const handleResize = (): void => {
     const current = renderer.value
     if (!current) return

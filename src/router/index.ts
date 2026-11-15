@@ -50,7 +50,7 @@ const router = createRouter({
   ],
 })
 
-// 保持原有的标题设置方式
+// 每次导航用 meta.title 更新浏览器标签页标题——标题跟着路由走，页面自己不用管
 router.beforeEach((to, from, next) => {
   if (to.meta.title) {
     document.title = to.meta.title as string;

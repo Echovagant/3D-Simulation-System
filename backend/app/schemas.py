@@ -1,3 +1,9 @@
+"""对外请求 / 响应的数据契约。
+
+字段命名与前端 TS 类型逐个对齐（camelCase 由 ``ApiModel`` 统一生成），
+改这里的任何字段都要同步 ``src/services/`` 下对应的接口层。
+"""
+
 from datetime import datetime
 from typing import Any, Literal
 

@@ -1,4 +1,10 @@
 // src/composables/useAI.ts
+/**
+ * AI 演武场：智能体的建场、感知、决策与物理推进。
+ *
+ * 规则式与 LLM 两条控制路共用同一套执行层（决策 → 期望速度 → 冲量 → Rapier）：
+ * 模型只决定「往哪走」，位移永远由物理引擎积分。LLM 挂了就回落规则式，仿真不断。
+ */
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as THREE from 'three'
 import type * as RapierModule from '@dimforge/rapier3d'
@@ -644,6 +650,7 @@ export function useAI() {
     }
   }
 
+  /** 读取一个智能体此刻的真实状态：坐标来自场景网格，感知与碰撞来自物理引擎 */
   const getAgentCurrentState = (agentId: string): AiAgentState => {
     const object = agentObjects.get(agentId)
     const runtime = agentRuntimes.get(agentId)
@@ -951,6 +958,7 @@ export function useAI() {
     aiStore.simulationActive = false
   }
 
+  /** 决策循环：每 100ms 一拍，拍内依次处理时间上限、LLM 决策与规则式决策 */
   const startSimulationLoop = (): void => {
     stopSimulationLoop()
     let lastTime = Date.now()
@@ -1043,6 +1051,7 @@ export function useAI() {
     }
   }
 
+  /** 清场：停掉决策循环，把智能体、障碍物、围墙从场景与物理世界里摘干净 */
   const cleanup = (): void => {
     stopSimulationLoop()
     const currentScene = three.scene.value

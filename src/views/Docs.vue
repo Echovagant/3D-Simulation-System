@@ -26,7 +26,10 @@ import DocsContent from '@/components/docs/DocsContent.vue';
 const route = useRoute();
 const router = useRouter();
 
-// 获取当前文档章节，默认为介绍页
+// 获取当前文档章节，默认为介绍页。
+// 章节只认 query 参数（?section=…，侧边栏点击就是这么带的）；
+// 路由里的路径参数（/docs/guide/:section?）这里没有消费——
+// 用路径深链接打开时会落在默认章节，而不是 URL 指的那一章。
 const currentSection = ref(route.query.section as string || 'guide/overview');
 
 // 处理章节变更

@@ -27,6 +27,7 @@ const ERROR_SHAPE = `\`\`\`json
 { "error": { "code": "scene_not_found", "message": "场景不存在：s1", "detail": null } }
 \`\`\``
 
+/** 把整份 OpenAPI 规格渲染成最终的契约 markdown 文本 */
 export const renderContract = (spec) => {
   const rows = []
   for (const [path, methods] of Object.entries(spec.paths ?? {})) {

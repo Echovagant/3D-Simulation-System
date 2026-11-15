@@ -1,3 +1,10 @@
+/**
+ * AI 演武场的数据中枢：代理清单、环境设置、仿真开关与全局日志表。
+ *
+ * 物理层的真值（刚体位置、期望速度）不在这里，由 useAI 持有；
+ * store 只管「意图」与可观测的计数（LLM 决策的那组计数器），
+ * 重置物理靠 resetToken 通知 useAI，不直接改场景对象。
+ */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
@@ -63,6 +70,10 @@ export interface AiAgent {
   type: AiAgentType
   active: boolean
   parameters: Record<string, number | string | boolean>
+  /**
+   * 运行状态。决策循环只给 `running` 的代理出主意；
+   * 其余状态期望速度为 0，冲量控制器会把它们刹停在原地。
+   */
   status: 'idle' | 'running' | 'paused' | 'error'
 }
 

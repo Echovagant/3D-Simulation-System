@@ -98,7 +98,8 @@ const store = useSceneEditorStore();
 const router = useRouter();
 const modelStore = useModelStore();
 
-// 从父组件注入的方法（修改后）
+// 从父组件注入的方法。兜底成「返回 false」的空实现：
+// 没有上游提供时按钮点了不炸，只提示失败
 const addCube = inject('addCube') ?? (() => false);
 const addSphere = inject('addSphere') ?? (() => false);
 const importModel = inject('importModel') ?? (async () => false);

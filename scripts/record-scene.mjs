@@ -5,6 +5,11 @@
  * 用法：node scripts/record-scene.mjs <输入JSON路径> <输出MP4路径> <输出摘要JSON路径>
  * 退出码：0 = 成功；非 0 = 失败（原因写在 stderr 上）
  *
+ * 这是生产渲染链路上的一环：后端渲染服务（backend/app/services/render_service.py）
+ * 用 subprocess 直接拉起 `node` 调它，按上面三个参数传约定好的路径。
+ * 它不在 package.json 的 scripts 里注册——调用方不是 npm 而是后端进程，
+ * 静态分析看不见这条调用链，容易把它当成死代码误删；删之前先看那个调用点。
+ *
  * 做法：起一个静态服务器服务**生产产物** → 无头 Chrome 打开渲染页
  * （场景在打开前注入）→ 逐物理步推进、逐帧抓图 → 顺序喂给 ffmpeg 编码成 MP4。
  *

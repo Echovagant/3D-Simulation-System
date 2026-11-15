@@ -1,7 +1,14 @@
+/**
+ * 自带 Key 直连厂商的 LLM 客户端（与后端托管通道 `services/api/llm.ts` 相对应）。
+ *
+ * key 只从 `services/llm/secret.ts` 的内存槽位取；请求按协议分族拼装（见 buildRequest），
+ * 且**永不抛异常**——所有失败都以 `ok: false` 的结果对象返回，调用方据此安静降级。
+ */
 import { llmConfig } from '@/config/llm'
 import type { LlmProvider, LlmProtocol } from '@/config/llmProviders'
 import { getApiKey, redactSecrets } from './secret'
 
+/** 一条对话消息：system 提示词或用户输入 */
 interface LlmMessage {
   role: 'system' | 'user' | 'assistant'
   content: string

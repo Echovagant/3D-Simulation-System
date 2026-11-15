@@ -126,7 +126,8 @@ const activeNavKey = ref('overview')
 // 新增：移动端侧边栏显示控制
 const sidebarShow = ref(false)
 
-// 原有导航显示逻辑保留
+// 原有导航显示逻辑保留。注意：'/home'、'/ai_star'、'/ai-2' 是历史遗留路径，
+// 当前路由表里已经没有对应页面——这个判断实际恒为真，导航始终显示。
 const showNavigate = () => {
   return !['/home', '/ai_star', '/ai-2'].includes($route.path)
 }

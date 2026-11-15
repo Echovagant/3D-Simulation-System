@@ -35,6 +35,7 @@ const hexToRgb = (hex) => {
   return [0, 2, 4].map((i) => parseInt(c.slice(i, i + 2), 16))
 }
 const rgbToHex = (rgb) => '#' + rgb.map((n) => Math.round(n).toString(16).padStart(2, '0')).join('')
+/** WCAG 2.1 相对亮度：0.03928 以下是线性段，其余走 gamma 展开 */
 const luminance = (hex) => {
   const v = hexToRgb(hex)
     .map((n) => n / 255)
@@ -45,6 +46,7 @@ const contrast = (a, b) => {
   const [hi, lo] = [luminance(a), luminance(b)].sort((m, n) => n - m)
   return (hi + 0.05) / (lo + 0.05)
 }
+/** 只认 #hex 与 rgba()/rgb() 两种写法；项目里出现其他颜色函数（如 hsl）时这里返回 null，调用方按「无法核对」处理 */
 const parseColor = (value) => {
   const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i)
   if (hex) return { rgb: hexToRgb(value), a: 1 }

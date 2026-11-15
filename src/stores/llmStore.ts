@@ -1,3 +1,10 @@
+/**
+ * LLM 接入中枢：提供商选择、key 状态、两种托管模式与统一的出网口。
+ *
+ * 出网只走 `invoke`（自带 Key 直连厂商）或 `invokeHosted`（经后端），
+ * 次数上限、冷却期与错误脱敏都收在出网口里——旁路调用（解释、测试连接）绕不过去。
+ * key 本体不在这里：直连在 `services/llm/secret.ts` 的内存槽位，托管在后端密钥库。
+ */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { llmConfig } from '@/config/llm'

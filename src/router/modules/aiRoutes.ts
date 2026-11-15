@@ -1,3 +1,4 @@
+// AI 演武场的路由。目前只有一个页面，独立成模块是给后续 AI 页面留位置。
 import type { RouteRecordRaw } from 'vue-router'
 
 const aiRoutes: RouteRecordRaw[] = [

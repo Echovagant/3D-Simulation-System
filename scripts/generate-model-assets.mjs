@@ -192,6 +192,7 @@ if (!wsImpl) {
 }
 
 const sock = new wsImpl(ws)
+// 最小内联 CDP 客户端：命令拿自增 id，响应按 id 配对回来
 let msgId = 0
 const pending = new Map()
 await new Promise((resolve, reject) => {

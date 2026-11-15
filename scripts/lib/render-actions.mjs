@@ -1,5 +1,10 @@
 /**
- * 录制器输入的校验与归一化。
+ * 录制器输入的校验与归一化——`scripts/record-scene.mjs` 的专用输入库。
+ *
+ * 动作（addCube / addSphere / setCamera / setSpeed）真正被执行是在渲染页里，
+ * 这个文件守的是门：record-scene.mjs 读进输入 JSON 后先交这里全量校验，
+ * 过了才值得去拉 Chrome。它同样不在 package.json scripts 里，由录制器 import 引用，
+ * 动作类型变了要和渲染页那份校验一起改。
  *
  * 渲染页（`src/render/renderPage.ts`）里也有一份动作校验：
  * 那份管的是「动作真的被执行时」不能炸；这份管的是「文件还没打开浏览器就报错」。

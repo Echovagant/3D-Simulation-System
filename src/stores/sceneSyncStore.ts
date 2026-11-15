@@ -1,3 +1,9 @@
+/**
+ * 场景云端同步：把本地场景文档推到后端、拉取与删除远端场景。
+ *
+ * 后端是**可选增强**：所有方法失败都不抛错，只把 `state` 落到
+ * offline（后端不在）或 error（真错误），界面据此决定要不要提示。
+ */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { ApiError, isApiUnavailable } from '@/services/api/client'
@@ -37,6 +43,7 @@ export const useSceneSyncStore = defineStore('sceneSync', () => {
     remoteScenes.value = [summary, ...remoteScenes.value.filter((item) => item.id !== summary.id)]
   }
 
+  /** 拉取远端场景列表；后端不在时落回 offline，列表清空 */
   const refresh = async (): Promise<void> => {
     state.value = 'syncing'
     try {
@@ -79,6 +86,7 @@ export const useSceneSyncStore = defineStore('sceneSync', () => {
     }
   }
 
+  /** 删除远端场景；失败不抛错，返回是否成功 */
   const removeScene = async (id: string): Promise<boolean> => {
     try {
       await deleteRemoteScene(id)
@@ -92,6 +100,7 @@ export const useSceneSyncStore = defineStore('sceneSync', () => {
     }
   }
 
+  /** 探测后端是否在线：只更新 state，不动本地数据 */
   const probe = async (): Promise<boolean> => {
     try {
       await listScenes()

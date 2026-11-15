@@ -187,6 +187,7 @@ export function usePhysics(): PhysicsInstance {
       disposeWorld()
 
       world.value = new engine.World(gravity)
+      // 第二个参数 true = autoUpdate：每步之后事件自动排空，接触事件不会跨帧累积
       eventQueue.value = new engine.EventQueue(true)
 
       // 为world添加scene属性
@@ -220,6 +221,13 @@ export function usePhysics(): PhysicsInstance {
     }
   }
 
+  /**
+   * 推进一个物理步，并把刚体位姿回写到 Three.js 对象。
+   *
+   * ⚠️ `deltaTime` 会直接写进 `integrationParameters.dt`——步长由调用方决定。
+   * 要求可复现的路径（仿真实验室、AI 演武场）传固定步长（1/60），
+   * 不要把显示帧率直接喂进来，否则同一场景在不同机器上落点不同。
+   */
   const updatePhysics = (deltaTime: number) => {
     if (!world.value || !eventQueue.value) return
 
@@ -357,6 +365,7 @@ export function usePhysics(): PhysicsInstance {
     ;(rigidBody as RapierRigidBody).userData = { object }
   }
 
+  /** 销账：把刚体从世界里移除，并清掉 mesh 上的引用（留着会变成悬空指针） */
   const removeRigidBody = (object: Object3D) => {
     if (!world.value || !object.userData.physics?.body) return
     world.value.removeRigidBody(object.userData.physics.body)

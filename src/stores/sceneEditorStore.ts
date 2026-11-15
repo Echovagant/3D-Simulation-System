@@ -1,3 +1,10 @@
+/**
+ * 场景编辑器的数据中枢：物体账本、仿真/渲染状态、场景文档的本地存取。
+ *
+ * 分工：store 管数据与意图，**不碰刚体**——物理世界的唯一所有者是 useSceneEditor，
+ * 两者通过 window 自定义事件（update-transform / remove-rigidbody）桥接。
+ * 场景文档存 localStorage（键约定见 SCENE_KEY_PREFIX），云端同步走 sceneSyncStore。
+ */
 import { defineStore } from 'pinia'
 import { ref, computed, watch, reactive, shallowRef, markRaw } from 'vue'
 import * as THREE from 'three'
@@ -6,7 +13,7 @@ import { useModelStore } from './modelStore'
 import { useSceneSyncStore } from './sceneSyncStore'
 import { createPrimitiveMesh, isPrimitiveType } from '@/utils/primitiveFactory'
 
-// 类型定义补充
+// 仿真侧状态：播放/暂停/速度，以及由固定步长累加器推进出来的仿真时钟
 export type SimulationState = {
   isPlaying: boolean
   isTransitioning: boolean
@@ -83,7 +90,7 @@ export type PrimitiveFactory = {
 }
 
 export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
-  // Three.js核心对象使用ref进行管理，移至store内部
+  // three 核心对象：由 useSceneEditor.initializeScene 注入，markRaw 防深度代理
   const scene = ref<THREE.Scene | null>(null)
   const camera = ref<THREE.Camera | null>(null)
   const renderer = ref<THREE.WebGLRenderer | null>(null)
@@ -854,6 +861,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       }
     }
   }
+  /** 渲染器尺寸与相机比例随视口更新（Viewport 组件挂载与 resize 时调用） */
   const updateRendererSize = (width: number, height: number): void => {
     if (renderer.value && camera.value) {
       renderer.value.setSize(width, height)
@@ -865,7 +873,12 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     }
   }
 
-  // 获取场景截图（保持原有）
+  /**
+   * 当前画面的 PNG data URL。
+   *
+   * ⚠️ 渲染器没开 preserveDrawingBuffer：一帧画完之后缓冲区就可能被清掉，
+   * 直接 toDataURL 多半拿到一张空白——所以这里先同步 render 一帧再读。
+   */
   const getScreenshot = (): string | null => {
     if (!renderer.value || !scene.value || !camera.value) return null
     renderer.value.render(scene.value, camera.value)

@@ -1,3 +1,9 @@
+"""场景的落库与查询。
+
+列表与摘要（``to_summary``）只数 ``document.objects`` 的条数，
+不解析内容——凡是需要理解场景内容的地方都在前端。
+"""
+
 from typing import Any
 
 from sqlalchemy import select

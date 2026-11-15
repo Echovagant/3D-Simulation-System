@@ -1,3 +1,9 @@
+"""统一错误出口。
+
+任何失败（业务错、HTTP 错、请求体校验错）都要变成**同一种 JSON 形状**
+（``error_body``），前端只认 ``error.code`` 一种判别方式。
+"""
+
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -37,6 +43,8 @@ class ApiError(Exception):
 
 
 def register_error_handlers(app: FastAPI) -> None:
+    """三类异常各挂一个 handler：业务错（ApiError）/ HTTP 错 / 校验错，出口统一。"""
+
     @app.exception_handler(ApiError)
     async def _api_error(request: Request, exc: ApiError) -> JSONResponse:
         return JSONResponse(

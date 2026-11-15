@@ -1,3 +1,6 @@
+// 系统文档的路由。
+// 三个子路由渲染的是同一个 Docs.vue，:section? 可选参数决定打开哪个板块——
+// 侧边栏的「指南 / API / 示例」三个入口共用一个页面实例，只是深链接地址不同。
 import type { RouteRecordRaw } from 'vue-router';
 
 const docsRoutes: RouteRecordRaw[] = [

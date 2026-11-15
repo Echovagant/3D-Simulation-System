@@ -14,6 +14,12 @@ import { useSceneEditor } from '@/composables/useSceneEditor'
 
 const container: Ref<HTMLDivElement | null> = ref<HTMLDivElement | null>(null)
 const isInitializing = ref(true)
+
+// 场景引擎的「点火器」：只负责把 three 场景 + 物理世界组装起来（initEditor），
+// 自己不显示任何东西——样式里是 display:none，画布由 Viewport 组件挂载。
+// 因此给 useSceneEditor 传 null 容器是刻意的：initEditor 不往 DOM 上添加渲染器。
+// 组装出的 scene/camera/renderer 通过 store 交给 Viewport，
+// 操作方法通过 expose-methods 事件交给父组件转发。
 const emits = defineEmits<{
   (
     e: 'expose-methods',
@@ -46,7 +52,8 @@ const {
 // 暴露重新初始化方法
 const exposeReinit = () => reinit()
 
-// 监听初始化结果
+// 监听初始化结果：useSceneEditor 把「成功/失败回调」放在 ref 里，
+// 这里直接覆写成自己的转发逻辑——成功/失败各自转成组件事件抛给父组件
 onInitSuccess.value = () => {
   isInitializing.value = false
   emits('init-success')

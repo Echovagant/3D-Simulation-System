@@ -1142,6 +1142,7 @@ const handleResize = () => {
   renderer.setSize(width, height)
 }
 
+// resize 监听注册在 setup 顶层（不是 onMounted 里），卸载时在 onUnmounted 里成对摘除
 window.addEventListener('resize', handleResize)
 </script>
 

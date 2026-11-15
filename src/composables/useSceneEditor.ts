@@ -16,14 +16,18 @@ import type {
   IntegrationParameters,
 } from '@dimforge/rapier3d'
 
-// 类型定义 - 移除未使用的RapierColliderDesc接口
+/**
+ * 场景编辑器的组装层：three 场景、物理世界、物体账本与事件桥都在这里。
+ *
+ * 职责边界：sceneEditorStore 管数据与意图，**刚体与碰撞体只归本组合式所有**——
+ * store 通过 window 自定义事件（update-transform / remove-rigidbody）把
+ * 「属性面板改了变换」「删了物体」转进来，由这里落到 Rapier 上。
+ */
 
+// 给 Rapier 刚体反向挂上 mesh 引用：物理同步（刚体 → mesh）靠它找到要搬的对象
 interface RapierRigidBody extends RigidBody {
   userData?: { object: THREE.Object3D }
 }
-
-// 移除空的接口定义
-// export interface RapierRigidBodyDesc extends RigidBodyDesc {}
 
 // 使用类型别名而不是扩展接口来避免类型冲突
 type RapierWorld = World & {
@@ -50,7 +54,7 @@ type ColliderShapeSpec =
   | { kind: 'cuboid'; halfExtents: { x: number; y: number; z: number } }
   | { kind: 'ball'; radius: number }
 
-// 定义完整的接口类型
+// 模型库条目在导入流程里用到的字段（modelStore.models 的元素还带缩略图等元数据，这里用不上）
 interface Item {
   id: string
   name: string
@@ -658,8 +662,6 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     const cube = createGeometry('cube', sharedGeometries.cube, 0.5, 'Cube')
     return cube !== null
   }
-
-  // 修复全局代码块 - 移到适当的位置或函数内部
 
   // 添加球体
   const addSphere = (): boolean => {

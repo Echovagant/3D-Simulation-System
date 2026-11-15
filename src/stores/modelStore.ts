@@ -1,3 +1,9 @@
+/**
+ * 模型库与上传模型的中枢：内置清单、会话内上传、按 id 加载成 three 对象。
+ *
+ * 内置模型的元数据来自 `@/data/modelLibrary.ts`（构建期与 GLB 实测核对过）；
+ * 上传模型只活在当前会话（blob: 对象 URL，刷新即失效，删除时 revoke）。
+ */
 import { defineStore } from 'pinia'
 import { ref, computed, onScopeDispose } from 'vue'
 import * as THREE from 'three'
@@ -80,8 +86,8 @@ let uploadedModelSeq = 0
 export const useModelStore = defineStore('model', () => {
   // 模型列表（复制一份，避免与模块级清单共享同一个数组）
   const models = ref<Model[]>([...createModelLibrary()])
-  // 添加选中模型ID的状态管理
-  const selectedModelId = ref<string | null>(null) // 新增：存储当前选中的模型ID
+  // 模型库当前选中的模型 id：工具栏的「加入场景」读它定位模型，用完即清空
+  const selectedModelId = ref<string | null>(null)
 
   /**
    * 本次会话上传的模型：文件与对象 URL。
@@ -219,7 +225,7 @@ export const useModelStore = defineStore('model', () => {
 
   return {
     models,
-    selectedModelId, // 导出新增的选中模型ID
+    selectedModelId,
     getAllModels,
     getModelById,
     getModelsByCategory,

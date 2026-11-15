@@ -39,6 +39,8 @@ export function useControls(): ControlsInstance {
     if (!camera.value || !renderer.value) return
     disposeControls()
     controls.value = new OrbitControls(camera.value, renderer.value.domElement)
+    // 阻尼生效的前提是每帧调用 updateControls()（渲染循环里）：
+    // 不调的话插值没机会被应用，画面看起来像被冻住
     controls.value.enableDamping = true
     controls.value.dampingFactor = 0.05
   }

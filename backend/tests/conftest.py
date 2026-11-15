@@ -24,4 +24,8 @@ def db_session():
 
 @pytest.fixture
 def client(db_session):
+    """测试用的 API 客户端。
+
+    依赖 ``db_session`` 是为了让建表先发生：TestClient 一发请求就会连库。
+    """
     return TestClient(create_app())

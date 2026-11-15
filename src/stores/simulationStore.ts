@@ -12,6 +12,7 @@ import { simulationPresets as presetCatalog } from '@/data/simulationPresets'
  */
 export const useSimulationStore = defineStore('simulation', () => {
   // 状态
+  // 工具栏当前选中的工具 id（默认「选择」）
   const activeTool = ref('select')
   const simulationSpeed = ref(1)
   const currentScene = ref<PresetScene | null>(null)
@@ -33,6 +34,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     simulationSpeed.value = speed
   }
 
+  /** 直接装载一份场景数据（不走预设目录的入口，如外部导入） */
   const loadScene = (sceneData: PresetScene) => {
     currentScene.value = sceneData
 

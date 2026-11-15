@@ -1,3 +1,12 @@
+"""全部 ORM 模型。
+
+表结构只在这一处定义：Alembic 的 autogenerate 对比的就是这份元数据，
+模型与迁移不一致时以模型为准，改完模型补一条迁移。
+
+场景类表（scenes / simulation_jobs / render_jobs）存的都是**前端给的原始 JSON**，
+服务端不做第二套结构化建模——解释权在前端，后端只存与转发。
+"""
+
 from datetime import UTC, datetime
 from typing import Any
 
@@ -12,6 +21,7 @@ JSONType = JSON().with_variant(JSONB, "postgresql")
 
 
 def utcnow() -> datetime:
+    """全库统一的时间戳：UTC、带时区（DateTime(timezone=True) 的列别喂 naive 值）。"""
     return datetime.now(UTC)
 
 

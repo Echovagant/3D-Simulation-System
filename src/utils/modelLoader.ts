@@ -1,4 +1,11 @@
 // src/utils/modelLoader.ts
+/**
+ * 按 URL 后缀分派的模型加载器（GLB / GLTF / FBX / OBJ）。
+ *
+ * 三种 loader 是模块级单例，复用解析器，不随加载次数重建。
+ * ⚠️ 只认 URL 后缀：blob: 对象 URL 不带扩展名，本次会话上传的模型
+ * 走 modelStore.parseModelFile（按上传时的格式直接 parse），不要进这里。
+ */
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';

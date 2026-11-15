@@ -28,12 +28,17 @@ export class CDP {
     })
   }
 
+  /** 订阅 CDP 事件；传 sessionId 就只听那个会话的，不传则同时收到所有会话的同名事件 */
   on(method, fn, sessionId) {
     const key = sessionId ? sessionId + ':' + method : method
     if (!this.handlers.has(key)) this.handlers.set(key, [])
     this.handlers.get(key).push(fn)
   }
 
+  /**
+   * 发一条命令并等响应。每条命令拿自增 id，响应按 id 配对回来。
+   * 带 60 秒超时兜底——CDP 的响应一旦丢了一条，没这个的话录制器就永远挂在那等。
+   */
   send(method, params = {}, sessionId) {
     const id = ++this.id
     const payload = { id, method, params }
@@ -50,6 +55,7 @@ export class CDP {
     })
   }
 
+  /** 连上 Chrome 的调试 WebSocket（wsUrl 来自 /json/version） */
   static async connect(url) {
     const ws = new WebSocket(url)
     await new Promise((res, rej) => {

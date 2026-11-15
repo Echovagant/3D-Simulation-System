@@ -1,3 +1,10 @@
+"""场景的 HTTP 接口。
+
+``document`` 是**完整的前端 SceneDocument JSON**，服务端不理解里面每个字段，
+原样存取。前端推送是幂等的：先试新建，收到 409 再改走更新，
+所以新建 / 更新是两个独立端点，不做 upsert。
+"""
+
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
