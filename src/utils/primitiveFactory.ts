@@ -19,7 +19,7 @@ const sharedGeometries: Record<PrimitiveType, THREE.BufferGeometry> = {
 }
 
 /** 取共享几何体（碰撞体的基准尺寸也按它换算：立方体半长 0.5、球体半径 0.5） */
-export const getPrimitiveGeometry = (type: PrimitiveType): THREE.BufferGeometry =>
+const getPrimitiveGeometry = (type: PrimitiveType): THREE.BufferGeometry =>
   sharedGeometries[type]
 
 /**

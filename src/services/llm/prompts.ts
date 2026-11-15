@@ -39,7 +39,7 @@ export interface AgentSnapshot {
 }
 
 /** 模型允许输出的动作 */
-export type LlmActionName = 'move' | 'rotate' | 'wait'
+type LlmActionName = 'move' | 'rotate' | 'wait'
 
 /** 校验通过的动作 */
 export interface LlmAction {

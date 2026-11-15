@@ -1,15 +1,16 @@
 import { createApp } from "vue";
 import App from "./App.vue";
 import router from "./router";
-import { library } from "@fortawesome/fontawesome-svg-core";
-import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
-import { faRobot } from "@fortawesome/free-solid-svg-icons";
 
 import { createPinia } from "pinia";
 
 import { installTelemetryReporter } from "@/services/api/telemetry";
 
-import '@fortawesome/fontawesome-free/css/all.min.css'
+// 图标走 Font Awesome 的 webfont 通道：fontawesome.css 提供基类/动画/图标映射，
+// solid.css 只补 solid 字重的 @font-face。不用 all.min.css——它还会把
+// regular / brands / v4compatibility 三套用不到的字体文件带进构建产物。
+import '@fortawesome/fontawesome-free/css/fontawesome.min.css'
+import '@fortawesome/fontawesome-free/css/solid.min.css'
 import './assets/styles/global.css'
 import './assets/styles/ai-panel-kit.css'
 // 浅色页面的工具层（仿真实验室右栏）：白底 + 靛紫，与 ai-* 那套深色 HUD 分开
@@ -27,9 +28,6 @@ installTelemetryReporter();
 
 const pinia = createPinia();
 const app = createApp(App);
-
-library.add(faRobot);
-app.component("font-awesome-icon", FontAwesomeIcon);
 
 app.use(pinia);
 app.use(router);

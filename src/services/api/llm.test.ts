@@ -4,7 +4,6 @@ import {
   completeLlm,
   deleteLlmKey,
   getLlmQuota,
-  listLlmAudit,
   listLlmKeys,
   saveLlmKey,
 } from './llm'
@@ -195,32 +194,6 @@ describe('LLM 托管接口', () => {
     expect(quota.limit).toBe(100)
     expect(quota.used).toBe(3)
     expect(quota.remaining).toBe(97)
-  })
-
-  it('读审计：GET /api/llm/audit', async () => {
-    const { captured, mock } = capture(
-      jsonResponse({
-        calls: [
-          {
-            ts: '2026-10-23T01:02:03Z',
-            providerId: 'minimax',
-            model: 'MiniMax-M3.1-Flash',
-            ok: true,
-            latencyMs: 812,
-            tokens: 42,
-          },
-        ],
-      }),
-    )
-    vi.stubGlobal('fetch', mock)
-
-    const audit = await listLlmAudit(TOKEN)
-
-    expect(captured.url).toBe(`${API_BASE}/api/llm/audit`)
-    expect(captured.headers.get('X-Owner-Token')).toBe(TOKEN)
-    expect(audit.calls).toHaveLength(1)
-    expect(audit.calls[0].providerId).toBe('minimax')
-    expect(audit.calls[0].ok).toBe(true)
   })
 
   it('后端回了错误码时抛 ApiError，错误码与状态码都如实带出', async () => {

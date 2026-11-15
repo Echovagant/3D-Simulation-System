@@ -19,7 +19,7 @@ import type * as RapierModule from '@dimforge/rapier3d'
 
 type Rapier = typeof RapierModule
 
-export interface Vec3 {
+interface Vec3 {
   x: number
   y: number
   z: number
@@ -54,28 +54,28 @@ export const RENDER_GROUND = {
 /** 动作类型——**只有这四种**，新增一种就要多一条测试与一条实现 */
 export const RENDER_ACTION_TYPES = ['addCube', 'addSphere', 'setCamera', 'setSpeed'] as const
 
-export type RenderActionType = (typeof RENDER_ACTION_TYPES)[number]
+type RenderActionType = (typeof RENDER_ACTION_TYPES)[number]
 
-export interface AddCubeParams {
+interface AddCubeParams {
   /** 立方体中心位置 */
   position: Vec3
   /** 边长（默认 1） */
   size: number
 }
 
-export interface AddSphereParams {
+interface AddSphereParams {
   /** 球体中心位置 */
   position: Vec3
   /** 半径（默认 0.5） */
   radius: number
 }
 
-export interface SetCameraParams {
+interface SetCameraParams {
   position: Vec3
   lookAt: Vec3
 }
 
-export interface SetSpeedParams {
+interface SetSpeedParams {
   value: number
 }
 

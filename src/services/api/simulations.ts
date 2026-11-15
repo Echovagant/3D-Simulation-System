@@ -71,13 +71,13 @@ export interface SimulationJobDetail extends SimulationJobSummary {
 }
 
 /** 轨迹上的一个采样点 */
-export interface SimulationTracePoint {
+interface SimulationTracePoint {
   frame: number
   position: { x: number; y: number; z: number }
 }
 
 /** 一次运行里的单个物体 */
-export interface SimulationRunObject {
+interface SimulationRunObject {
   uuid: string
   type: string
   /** 是否已经静止落地 */
@@ -93,14 +93,14 @@ export interface SimulationRunObject {
 }
 
 /** 一次运行的关键指标 */
-export interface SimulationRunMetrics {
+interface SimulationRunMetrics {
   settledAtFrame?: number | null
   maxPenetration: number
   totalFallDistance: number
 }
 
 /** 一次运行 */
-export interface SimulationRun {
+interface SimulationRun {
   index: number
   /** 这一轮实际生效的扫描参数 */
   params: Record<string, number>
@@ -110,7 +110,7 @@ export interface SimulationRun {
 }
 
 /** 结果汇总 */
-export interface SimulationSummary {
+interface SimulationSummary {
   runs: number
   settledRuns: number
   maxPenetration: number

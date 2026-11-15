@@ -38,7 +38,7 @@ export type LlmProtocol = 'openai' | 'anthropic' | 'gemini'
  * ⚠️ 有些厂商两种 key **前缀一样**（智谱都是 `id.secret` 两段十六进制），
  * 那时 `keyPrefix` 留空——前缀认不出来就不认，不硬猜。
  */
-export type LlmKeyKind = 'standard' | 'subscription'
+type LlmKeyKind = 'standard' | 'subscription'
 
 export interface LlmProvider {
   /** 稳定标识（也是 key 的存放槽位） */

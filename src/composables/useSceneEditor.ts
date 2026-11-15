@@ -18,7 +18,7 @@ import type {
 
 // 类型定义 - 移除未使用的RapierColliderDesc接口
 
-export interface RapierRigidBody extends RigidBody {
+interface RapierRigidBody extends RigidBody {
   userData?: { object: THREE.Object3D }
 }
 
@@ -58,24 +58,6 @@ interface Item {
   category: 'props' | 'characters' | 'environments'
   thumbnailUrl: string
   modelUrl: string // 添加路径属性，用于加载模型
-}
-
-export interface SceneObject {
-  uuid: string
-  type: 'cube' | 'sphere' | 'model' | string
-  name?: string
-  threeObject: THREE.Object3D
-  modelId?: string
-  position?: { x: number; y: number; z: number }
-  rotation?: { x: number; y: number; z: number }
-  scale?: { x: number; y: number; z: number }
-  visible?: boolean
-  physics?: {
-    velocity: THREE.Vector3
-    acceleration: THREE.Vector3
-    mass: number
-    isFalling: boolean
-  }
 }
 
 /**

@@ -2,7 +2,7 @@ import { llmConfig } from '@/config/llm'
 import type { LlmProvider, LlmProtocol } from '@/config/llmProviders'
 import { getApiKey, redactSecrets } from './secret'
 
-export interface LlmMessage {
+interface LlmMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
 }

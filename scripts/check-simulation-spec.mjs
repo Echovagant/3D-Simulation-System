@@ -147,7 +147,6 @@ const RENDER = 'src/render/renderPage.ts'
 const RENDERING = 'src/config/rendering.ts'
 const AI_STORE = 'src/stores/aiStore.ts'
 const AI_PANEL = 'src/components/three/ai/AiDebugPanel.vue'
-const AI_PLAYGROUND = 'src/views/AIPlayground.vue'
 const AI_COMPOSABLE = 'src/composables/useAI.ts'
 const FRAMING = 'src/config/sceneFraming.ts'
 

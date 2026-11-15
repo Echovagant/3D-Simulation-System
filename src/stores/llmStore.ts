@@ -7,10 +7,8 @@ import {
   completeLlm,
   deleteLlmKey,
   getLlmQuota,
-  listLlmAudit,
   listLlmKeys,
   saveLlmKey,
-  type LlmAudit,
   type LlmKeyStatus,
   type LlmQuota,
 } from '@/services/api/llm'
@@ -121,8 +119,6 @@ export const useLlmStore = defineStore('llm', () => {
   const hostedError = ref('')
   /** 今日配额 */
   const quota = ref<LlmQuota | null>(null)
-  /** 最近一次调用审计 */
-  const audit = ref<LlmAudit | null>(null)
   /** 上一次托管调用实际由哪家厂商答上（后端可能故障转移过） */
   const lastHostedProvider = ref('')
   /**
@@ -365,17 +361,6 @@ export const useLlmStore = defineStore('llm', () => {
     } catch (error) {
       // ⚠️ 配额是辅助信息，读不到不代表托管通道坏了——不能因此把通道判成不可用
       hostedError.value = describeError(error, '后端不可达，配额暂时读不到')
-      return false
-    }
-  }
-
-  /** 读最近若干条调用审计 */
-  const refreshAudit = async (): Promise<boolean> => {
-    try {
-      audit.value = await listLlmAudit(ownerToken.value)
-      return true
-    } catch (error) {
-      hostedError.value = describeError(error, '后端不可达，审计暂时读不到')
       return false
     }
   }
@@ -725,7 +710,6 @@ export const useLlmStore = defineStore('llm', () => {
     hostedAnyConfigured,
     hostedProviderConfigured,
     quota,
-    audit,
     lastHostedProvider,
     selectProvider,
     setModel,
@@ -738,7 +722,6 @@ export const useLlmStore = defineStore('llm', () => {
     removeHostedKey,
     hostedPassphrase,
     refreshQuota,
-    refreshAudit,
     canCall,
     testConnection,
     availableModels,

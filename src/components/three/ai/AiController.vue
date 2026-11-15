@@ -128,7 +128,7 @@
 </template>
 
 <script lang="ts" setup>
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useAiStore } from '@/stores/aiStore'
 
 const aiStore = useAiStore()

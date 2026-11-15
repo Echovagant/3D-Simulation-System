@@ -45,7 +45,7 @@ type WorldWithScene = RapierModule.World & { scene?: Object3D }
  * 默认是 20×20 的地面；仿真实验室之外的场景（例如 AI 演武场的 60×60 场地）
  * 可以换成自己的尺寸、材质与摩擦参数。
  */
-export interface GroundOptions {
+interface GroundOptions {
   /** 地面网格的名字（默认 `Ground`） */
   name?: string
   /** 碰撞盒半尺寸（米）。默认 `{ x: 10, y: 0.5, z: 10 }` → 20×20×1 的板 */
@@ -61,7 +61,7 @@ export interface GroundOptions {
 }
 
 /** `initPhysics` 的可选参数 */
-export interface PhysicsInitOptions {
+interface PhysicsInitOptions {
   /**
    * 地面配置。
    *

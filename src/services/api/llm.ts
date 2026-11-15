@@ -11,7 +11,7 @@
 import { apiRequest } from './client'
 
 /** 归一化的一条消息：角色与内容，三族协议都一样 */
-export interface LlmMessage {
+interface LlmMessage {
   role: 'system' | 'user' | 'assistant'
   content: string
 }
@@ -51,7 +51,7 @@ export interface LlmCompleteInput {
 }
 
 /** token 用量 */
-export interface LlmUsage {
+interface LlmUsage {
   promptTokens?: number
   completionTokens?: number
 }
@@ -78,22 +78,6 @@ export interface LlmQuota {
   used: number
   remaining: number
   resetAt: string
-}
-
-/** 一条调用审计 */
-export interface LlmAuditEntry {
-  ts: string
-  providerId: string
-  model: string
-  ok: boolean
-  latencyMs: number
-  tokens?: number
-  errorCode?: string
-}
-
-/** 审计列表（只回该 owner 自己最近若干条） */
-export interface LlmAudit {
-  calls: LlmAuditEntry[]
 }
 
 /** 所有端点都要带的软身份头 */
@@ -190,11 +174,5 @@ export const completeLlm = async (
 /** 今日配额 */
 export const getLlmQuota = (ownerToken: string): Promise<LlmQuota> =>
   apiRequest<LlmQuota>('/api/llm/quota', {
-    headers: ownerHeaders(ownerToken),
-  })
-
-/** 最近若干条调用审计 */
-export const listLlmAudit = (ownerToken: string): Promise<LlmAudit> =>
-  apiRequest<LlmAudit>('/api/llm/audit', {
     headers: ownerHeaders(ownerToken),
   })

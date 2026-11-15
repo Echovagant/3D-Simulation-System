@@ -6,9 +6,9 @@
  */
 import { apiRequest, isApiUnavailable } from './client'
 
-export type TelemetryKind = 'error' | 'event'
+type TelemetryKind = 'error' | 'event'
 
-export interface TelemetryEventInput {
+interface TelemetryEventInput {
   kind: TelemetryKind
   path: string
   message: string
@@ -79,15 +79,6 @@ export const reportError = (error: unknown, path: string): void => {
   const message = error instanceof Error ? error.message : String(error)
   const stack = error instanceof Error && error.stack ? error.stack.slice(0, 500) : ''
   enqueue({ kind: 'error', path, message, payload: { stack } })
-}
-
-/** 上报一个行为事件。 */
-export const reportEvent = (
-  path: string,
-  message: string,
-  payload: Record<string, unknown> = {},
-): void => {
-  enqueue({ kind: 'event', path, message, payload })
 }
 
 /**

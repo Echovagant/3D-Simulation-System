@@ -31,7 +31,7 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     /** 提示正文 */
     text: string

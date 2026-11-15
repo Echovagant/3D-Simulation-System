@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushTelemetry, reportError, reportEvent, resetTelemetry } from './telemetry'
+import { flushTelemetry, reportError, resetTelemetry } from './telemetry'
 
 /** 造一个只会说 JSON 的 Response 替身 */
 const jsonResponse = (body: unknown, status = 202): Response =>
@@ -41,19 +41,6 @@ describe('telemetry', () => {
     expect(body.events[0].kind).toBe('error')
     expect(body.events[0].path).toBe('/scene-editor')
     expect(body.events[0].message).toBe('加载场景失败')
-  })
-
-  it('行为事件带 kind=event 与路径', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ accepted: 1 }))
-    vi.stubGlobal('fetch', fetchMock)
-
-    reportEvent('/docs', 'clicked', { n: 1 })
-    flushTelemetry()
-
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body))
-    expect(body.events[0].kind).toBe('event')
-    expect(body.events[0].path).toBe('/docs')
-    expect(body.events[0].payload).toEqual({ n: 1 })
   })
 
   it('错误现场（堆栈）会一并带上', async () => {

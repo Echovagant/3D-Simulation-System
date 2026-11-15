@@ -34,11 +34,6 @@ export const clearApiKey = (providerId: string): void => {
 export const hasApiKey = (providerId: string): boolean =>
   (apiKeys.get(providerId) ?? '').length > 0
 
-/** 一次性清掉所有 key（"清除全部"按钮用） */
-export const clearAllApiKeys = (): void => {
-  apiKeys.clear()
-}
-
 /**
  * 脱敏：把任何长得像密钥的片段替换掉。
  *

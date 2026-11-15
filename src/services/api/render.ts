@@ -15,14 +15,7 @@ import { API_BASE, apiRequest } from './client'
 export type RenderJobStatus = 'queued' | 'rendering' | 'succeeded' | 'failed'
 
 /** 动作脚本支持的动作类型（规格 §2.3：就这四种，不发明新的） */
-export type RenderActionType = 'addCube' | 'addSphere' | 'setCamera' | 'setSpeed'
-
-/** 动作参数里的一个三维向量 */
-export interface RenderVector {
-  x: number
-  y: number
-  z: number
-}
+type RenderActionType = 'addCube' | 'addSphere' | 'setCamera' | 'setSpeed'
 
 /** 动作脚本里的一条动作 */
 export interface RenderAction {

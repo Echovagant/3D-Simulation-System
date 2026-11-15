@@ -31,7 +31,7 @@ const MAX_TOTAL_LOGS = 5000
 let logSequence = 0
 
 /** 胜利条件——当前只实现了一种，用字面量类型挡住无法判定的自由文本 */
-export type AiWinCondition = '到达目标点'
+type AiWinCondition = '到达目标点'
 
 // AI代理状态
 export interface AiAgentLog {

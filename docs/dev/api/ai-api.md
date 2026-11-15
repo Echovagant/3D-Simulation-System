@@ -263,6 +263,5 @@
 - 唯一的随机性是**障碍物布局**：它使用固定种子（`ARENA_SEED = 20260101`）的线性同余伪随机，因此同一密度下布局可复现，刷新页面不会换一副场地。
 - `decisionQueue` 虽然在持续填充，但当前界面并没有展示这个队列；能看到的是写入智能体日志的“决定: …”条目。
 - `AiDecision.action` 中的 `'interact'` 分支从未被生成。
-- `AiSimulationState` 与 `SimulatedObjectState` 两个类型在 `src/types/index.ts` 中定义，但目前没有在运行时被实际使用。
 - `AiAgentState.status` 的取值集合（`'normal'` / `'collided'` / `'goal_reached'` / `'failed'`）与仓库中智能体实际使用的状态（`'idle'` / `'running'` / `'paused'` / `'error'`）并不是同一套：快照里的 `status` 由**真实碰撞情况**推导（上一帧被挡住就是 `'collided'`），智能体抵达过目标点（胜利条件达成）时是 `'goal_reached'`，`'failed'` 从未被产生，仓库状态与快照状态之间也没有映射。
 - 场景类型只实现了 `'navigation'`；`'interaction'` / `'combat'` / `'custom'` 需要的机制不存在，因此不出现在界面可选项里。

@@ -313,7 +313,7 @@ onUnmounted(() => {
 // 监听props变化（场景/相机/渲染器更新时重新初始化）
 watch(
   () => [props.scene, props.camera, props.renderer],
-  (newValues, oldValues) => {
+  (newValues) => {
     // 只有当所有三个值都存在时，才重新初始化渲染器
     if (newValues[0] && newValues[1] && newValues[2]) {
       // 确保canvas已添加到DOM中

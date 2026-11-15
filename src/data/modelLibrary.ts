@@ -42,7 +42,7 @@ export const isPlaceholderModel = (model: Pick<Model, 'modelUrl'>): boolean =>
  */
 
 // 角色模型
-export const createCharacterModels = (seed: number = 0): Model[] => [
+const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-001',
     name: '机甲',
@@ -88,7 +88,7 @@ export const createCharacterModels = (seed: number = 0): Model[] => [
 ];
 
 // 环境模型
-export const createEnvironmentModels = (seed: number = 0): Model[] => [
+const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-001',
     name: '太空站内部',
@@ -134,7 +134,7 @@ export const createEnvironmentModels = (seed: number = 0): Model[] => [
 ];
 
 // 道具模型
-export const createPropModels = (seed: number = 0): Model[] => [
+const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-001',
     name: '科幻武器',
