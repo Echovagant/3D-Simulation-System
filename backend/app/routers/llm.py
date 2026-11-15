@@ -14,15 +14,12 @@ from app.config import settings
 from app.db import get_session
 from app.errors import ApiError
 from app.schemas import (
-    LlmAuditEntry,
-    LlmAuditResponse,
     LlmCompleteRequest,
     LlmCompletionResponse,
     LlmKeyCreated,
     LlmKeyStatus,
     LlmKeyUpsertRequest,
     LlmQuotaStatus,
-    LlmUsage,
 )
 from app.services import key_vault, llm_audit, llm_proxy
 
@@ -152,34 +149,4 @@ def quota(
         used=used,
         remaining=max(0, limit - used),
         reset_at=llm_audit.next_day_start(),
-    )
-
-
-@router.get("/audit", response_model=LlmAuditResponse, summary="查自己最近的托管调用")
-def audit(
-    owner_token: str = Depends(require_owner_token),
-    session: Session = Depends(get_session),
-) -> LlmAuditResponse:
-    """只回**该 owner 自己**最近的调用。"""
-    rows = llm_audit.recent_calls(session, owner_token)
-    return LlmAuditResponse(
-        calls=[
-            LlmAuditEntry(
-                ts=row.ts,
-                provider_id=row.provider_id,
-                model=row.model,
-                ok=row.ok,
-                latency_ms=row.latency_ms,
-                tokens=(
-                    LlmUsage(
-                        prompt_tokens=row.prompt_tokens,
-                        completion_tokens=row.completion_tokens,
-                    )
-                    if row.prompt_tokens is not None or row.completion_tokens is not None
-                    else None
-                ),
-                error_code=row.error_code,
-            )
-            for row in rows
-        ]
     )

@@ -164,20 +164,6 @@ class LlmQuotaStatus(ApiModel):
     reset_at: datetime
 
 
-class LlmAuditEntry(ApiModel):
-    ts: datetime
-    provider_id: str
-    model: str
-    ok: bool
-    latency_ms: int
-    tokens: LlmUsage | None = None
-    error_code: str | None = None
-
-
-class LlmAuditResponse(ApiModel):
-    calls: list[LlmAuditEntry] = Field(default_factory=list)
-
-
 # --------------------------------------------------------------------------
 # 批量仿真
 # --------------------------------------------------------------------------

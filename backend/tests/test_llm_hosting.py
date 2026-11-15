@@ -155,7 +155,6 @@ def test_quota_endpoint_reports_limit_and_reset(client: TestClient) -> None:
         ("DELETE", "/api/llm/keys/minimax", None),
         ("POST", "/api/llm/complete", {"messages": [{"role": "user", "content": "hi"}]}),
         ("GET", "/api/llm/quota", None),
-        ("GET", "/api/llm/audit", None),
     ],
 )
 def test_owner_token_required(
@@ -712,11 +711,6 @@ def test_failover_to_next_provider(
     assert body["content"] == "from deepseek"
     assert fake_provider.count == 2
 
-    calls = client.get("/api/llm/audit", headers=_headers()).json()["calls"]
-    assert len(calls) == 2
-    assert {call["providerId"] for call in calls} == {"minimax", "deepseek"}
-    assert {call["ok"] for call in calls} == {True, False}
-
 
 def test_client_error_does_not_fail_over(
     client: TestClient, fake_provider: FakeProvider, monkeypatch: pytest.MonkeyPatch
@@ -773,32 +767,6 @@ def test_all_candidates_fail(
     assert len(attempts) == 2
     assert {attempt["providerId"] for attempt in attempts} == {"minimax", "deepseek"}
     assert fake_provider.count == 2
-
-
-# --------------------------------------------------------------------------
-# 审计
-# --------------------------------------------------------------------------
-
-
-def test_audit_lists_only_own_calls(client: TestClient, fake_provider: FakeProvider) -> None:
-    fake_provider.install(lambda request: _ok_openai())
-    _store_key(client, "minimax")
-    _complete(
-        client,
-        {"providerId": "minimax", "messages": [{"role": "user", "content": "hi"}]},
-    )
-
-    calls = client.get("/api/llm/audit", headers=_headers()).json()["calls"]
-    assert len(calls) == 1
-    assert calls[0]["providerId"] == "minimax"
-    assert calls[0]["model"] == "MiniMax-M3.1-Flash"
-    assert calls[0]["ok"] is True
-    assert calls[0]["errorCode"] is None
-    assert calls[0]["latencyMs"] >= 0
-    assert calls[0]["ts"]
-
-    other = client.get("/api/llm/audit", headers=_headers(OTHER_OWNER)).json()["calls"]
-    assert other == []
 
 
 # --------------------------------------------------------------------------
@@ -884,9 +852,7 @@ def test_audit_rows_hold_no_secret(client: TestClient, fake_provider: FakeProvid
         {"providerId": "minimax", "messages": [{"role": "user", "content": "hi"}]},
     )
 
-    listing = client.get("/api/llm/audit", headers=_headers())
-    assert secret not in listing.text
-
+    # 审计读取端点已移除，但审计仍在落库——这里直接查库，验证落库行不带密钥。
     with SessionLocal() as session:
         rows = session.query(LlmCallAudit).all()
         assert rows

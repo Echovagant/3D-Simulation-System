@@ -4,14 +4,13 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：21
+后端版本：0.1.0　端点总数：20
 
 ## 端点
 
 | 方法 | 路径 | 操作 id | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/api/health` | `health_api_health_get` | 存活探针 |
-| `GET` | `/api/llm/audit` | `audit_api_llm_audit_get` | 查自己最近的托管调用 |
 | `POST` | `/api/llm/complete` | `complete_api_llm_complete_post` | 托管调用 |
 | `GET` | `/api/llm/keys` | `list_keys_api_llm_keys_get` | 查各厂商密钥配没配 |
 | `POST` | `/api/llm/keys` | `upsert_key_api_llm_keys_post` | 托管一把厂商密钥 |
