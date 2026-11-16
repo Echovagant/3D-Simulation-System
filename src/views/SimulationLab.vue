@@ -49,6 +49,10 @@
                 @change="setSimulationSpeed"
               />
               <span>{{ simulationSpeed }}x</span>
+              <InfoTip
+                label="关于仿真速度"
+                text="速度调到 5× 会不稳吗？不会：物理步长恒为 1/60 秒，倍率只改每秒推进步数；单帧最多补 5 步，多余的积压会被丢弃。"
+              />
             </div>
           </div>
 

@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.6" src="https://img.shields.io/badge/Vite-6.4.6-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="50 test files / 463 cases" src="https://img.shields.io/badge/test-50%20files%20%2F%20463%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="47 test files / 439 cases" src="https://img.shields.io/badge/test-47%20files%20%2F%20439%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="12 build gates" src="https://img.shields.io/badge/build%20gates-12%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-6E5AF0?logo=apache&logoColor=6E5AF0"></a>
 </p>
@@ -23,8 +23,8 @@
 
 <table>
   <tr>
-    <td align="center"><b>170.27 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>463</b><br><sub>测试用例 · 50 个文件</sub></td>
+    <td align="center"><b>164.71 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>439</b><br><sub>测试用例 · 47 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -40,7 +40,6 @@
   <a href="#可选后端">可选后端</a> ·
   <a href="#架构">架构</a> ·
   <a href="#质量保障">质量保障</a> ·
-  <a href="#文档">文档</a> ·
   <a href="#许可证">许可证</a>
 </p>
 
@@ -50,7 +49,7 @@
 
 一个 Web3D 场景编辑与物理仿真平台：**左边编辑场景，右边跑物理，中间放智能体**。
 
-7 个页面：首页 / 总览 / 场景编辑器 / 仿真实验室 / 模型资源库 / AI 演武场 / 系统文档。
+6 个页面：首页 / 总览 / 场景编辑器 / 仿真实验室 / 模型资源库 / AI 演武场。
 物理由 **Rapier** 承担，它是场景与智能体行为的唯一权威。
 
 三件值得先说的事：
@@ -100,10 +99,6 @@
 <sub>Key 交给服务端加密保管，由后端做配额、调用审计与故障转移</sub>
 </td>
 <td width="33%" valign="top" align="center">
-<b>📚 系统文档</b><br><br>
-<sub>2 篇正文：系统总览 + 已知问题与边界</sub>
-</td>
-<td width="33%" valign="top" align="center">
 <b>📋 仿真过程规格</b><br><br>
 <sub>世界/时间/状态/一致性/意图五层共 34 条约束，每条标出实现位置与验证它的测试</sub>
 </td>
@@ -127,9 +122,8 @@
   <td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库 · 9 个模型全部可加载</sub></td>
 </tr>
 <tr>
-  <td width="33%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场 · 智能体自主移动，决策日志随时回看</sub></td>
-  <td width="33%" align="center"><img src="docs/screenshots/overview.png" alt="系统总览" width="100%"><br><sub>系统总览 · 每个模块是什么、数据存在哪</sub></td>
-  <td width="33%" align="center"><img src="docs/screenshots/docs.png" alt="系统文档" width="100%"><br><sub>系统文档 · 总览与已知问题与边界</sub></td>
+  <td width="50%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场 · 智能体自主移动，决策日志随时回看</sub></td>
+  <td width="50%" align="center"><img src="docs/screenshots/overview.png" alt="系统总览" width="100%"><br><sub>系统总览 · 每个模块是什么、数据存在哪</sub></td>
 </tr>
 </table>
 </div>
@@ -198,12 +192,12 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（50 个测试文件 / 463 个用例） |
+| `npm test` | Vitest 全量用例（47 个测试文件 / 439 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
 | `npm run gen:api-contract` | 从后端代码重新生成 API 契约文档 |
-| `npm run verify:offline` | 离线降级闸门：拔掉后端，7 个页面逐个走一遍（需要 Chrome） |
+| `npm run verify:offline` | 离线降级闸门：拔掉后端，6 个页面逐个走一遍（需要 Chrome） |
 | `npm run verify:llm-live` | 真厂商连通性验证：用自己的 key 跑一遍控制器提示词（需要 key 与网络，不在构建链里） |
 | `npm run build:all` | 前后端一起跑（前端构建 + 后端闸门） |
 | `npm run gen:models` | 用几何配方重新生成 9 个模型与缩略图 |
@@ -353,11 +347,11 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 4.94 MB |
-| 运行时依赖 | 8 个 |
+| 产物体积 | 4.81 MB |
+| 运行时依赖 | 6 个 |
 | 可加载模型 | 9 个（全部程序化生成） |
 | 类型检查 | 0 错误 |
-| 页面体检 | 7 个页面 0 console error / 0 未捕获异常 / 0 网络失败 |
+| 页面体检 | 6 个页面 0 console error / 0 未捕获异常 / 0 网络失败 |
 
 渲染器一律显式请求高性能 GPU（`powerPreference: 'high-performance'`）——**双显卡笔记本**上
 浏览器默认可能把 WebGL 上下文交给核显，帧率直接掉一半；显式请求能显著提高拿到独显的概率。
@@ -367,7 +361,7 @@ CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 
 还有一道**离线降级闸门**（`npm run verify:offline`）：把后端整个拔掉，
-再用无头浏览器走完 7 个页面，要求**逐页 0 console error、0 个未捕获异常**，
+再用无头浏览器走完 6 个页面，要求**逐页 0 console error、0 个未捕获异常**，
 而且依赖后端的面板必须给出降级说明——
 「后端不在时一切照旧」是本项目的承诺，承诺不能靠人工记得验。
 
@@ -379,12 +373,12 @@ CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 
 ## 文档
 
-产品界面里的 `/docs` 只有两篇，因为只有两件事值得单独写一页：
-**系统总览**（每个模块是什么、数据存在哪）与**已知问题与边界**
-（那些界面里点不出来、也猜不到的限制，按「现象 → 原因 → 怎么办」列）。
-Markdown 原文在 [`src/docs/`](src/docs)。
+两篇操作手册随仓库走（[`docs/manual/`](docs/manual/)）：**系统总览**（每个模块是什么、
+数据存在哪）与**已知问题与边界**（那些界面里点不出来、也猜不到的限制，
+按「现象 → 原因 → 怎么办」列）。界面里另有 **2 篇手册** 的关键条目做成了控件旁的
+`?` 提示，就地说明，不必翻手册。
 
-界面点不出来的限制，大部分已经做成控件旁的 `?` 提示，就地说明，不必翻文档。
+界面点不出来的限制，关键条目已经做成控件旁的 `?` 提示，就地说明，不必翻手册。
 
 面向**集成者**的 API 参考与操作示例随仓库走，在 [`docs/dev/`](docs/dev/)：
 [`api/`](docs/dev/api/)（AI 接口 / 物理引擎 / Three.js 集成）与

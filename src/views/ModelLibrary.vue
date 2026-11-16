@@ -38,6 +38,10 @@
       <button class="primary-btn" @click="showUploadModal = true">
         <i class="fas fa-upload"></i> 上传新模型
       </button>
+      <InfoTip
+        label="关于导入模型的出生点"
+        text="模型导入场景时落在随机出生点（X/Z 在 -2.5 ~ 2.5，Y = 2），不在原点；导入后用属性面板把它移到你要的位置。"
+      />
       <span class="upload-hint">
         上传的模型使用浏览器对象 URL，<strong>仅在当前会话有效</strong>：刷新页面后失效。
       </span>
@@ -254,6 +258,7 @@ import { isPlaceholderModel } from '@/data/modelLibrary';
 import { resolveModelUrl } from '@/utils/modelLoader';
 import { reportError } from '@/services/api/telemetry';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
+import InfoTip from '@/components/common/InfoTip.vue';
 
 // ===================== 类型定义 =====================
 interface Model {

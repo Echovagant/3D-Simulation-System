@@ -3,8 +3,6 @@ import {
   formatFileSize,
   formatDate,
   formatNumber,
-  formatDocTitle,
-  parseDocPath,
 } from './formatHelpers'
 
 describe('formatFileSize', () => {
@@ -49,31 +47,5 @@ describe('formatNumber', () => {
 
   it('小数保留默认位数', () => {
     expect(formatNumber(0.5)).toBe('0.5')
-  })
-})
-
-describe('formatDocTitle', () => {
-  it('把连字符转成空格并首字母大写', () => {
-    expect(formatDocTitle('model-library')).toBe('Model Library')
-  })
-
-  it('空输入返回空串', () => {
-    expect(formatDocTitle('')).toBe('')
-  })
-})
-
-describe('parseDocPath', () => {
-  it('拆出分类和文件名', () => {
-    expect(parseDocPath('guide/introduction')).toEqual({
-      category: 'guide',
-      name: 'introduction',
-    })
-  })
-
-  it('没有斜杠时分类为空', () => {
-    expect(parseDocPath('introduction')).toEqual({
-      category: 'introduction',
-      name: '',
-    })
   })
 })

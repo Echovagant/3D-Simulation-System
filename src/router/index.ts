@@ -5,7 +5,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import sceneRoutes from './modules/sceneRoutes';
 import simulationRoutes from './modules/simulationRoutes';
 import aiRoutes from './modules/aiRoutes';
-import docsRoutes from './modules/docsRoutes';
 
 // 第二步：创建路由器实例。
 //
@@ -46,7 +45,6 @@ const router = createRouter({
     ...sceneRoutes,
     ...simulationRoutes,
     ...aiRoutes,
-    ...docsRoutes, // 添加文档路由
   ],
 })
 

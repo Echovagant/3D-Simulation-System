@@ -176,9 +176,9 @@ const loadableModels = [...librarySource.matchAll(/modelUrl:\s*'([^']+)'/g)]
   .filter((m) => m[1] !== '#').length
 expect('可加载模型数', loadableModels, /可加载模型 \| (\d+) 个/)
 
-// 文档篇数
-const docCount = walk(join(repoRoot, 'src', 'docs'), (n) => n.endsWith('.md')).length
-expect('文档篇数', docCount, /(\d+) 篇正文/)
+// 文档篇数（操作手册随仓库走，在 docs/manual/）
+const docCount = walk(join(repoRoot, 'docs', 'manual'), (n) => n.endsWith('.md')).length
+expect('文档篇数', docCount, /(\d+) 篇手册/)
 
 // 依赖 dist/ 的两项：入口体积与产物体积
 const distDir = join(repoRoot, 'dist')

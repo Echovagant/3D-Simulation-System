@@ -373,7 +373,6 @@ const SHOTS = [
   ['/simulation-lab?preset=newtons-cradle', 'simulation-lab', 4500],
   ['/model-library', 'model-library', 4500],
   ['/ai-playground', 'ai-playground', 6000],
-  ['/docs', 'docs', 3600],
 ]
 
 // 静态服务要先能吐 dist/ 里的文件

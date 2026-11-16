@@ -43,7 +43,7 @@ describe('路由表', () => {
     expect([...duplicates]).toEqual([])
   })
 
-  it('七个顶层页面都在', () => {
+  it('六个顶层页面都在', () => {
     const paths = flattenPaths(routes)
     for (const p of [
       '/',
@@ -52,7 +52,6 @@ describe('路由表', () => {
       '/simulation-lab',
       '/model-library',
       '/ai-playground',
-      '/docs',
     ]) {
       expect(paths).toContain(p)
     }
@@ -64,13 +63,6 @@ describe('路由表', () => {
     const lab = routes.find((r) => r.path === '/simulation-lab')
     expect(lab).toBeDefined()
     expect(lab?.props).toBeTypeOf('function')
-  })
-
-  it('文档页的三个子路由都在', () => {
-    const paths = flattenPaths(routes)
-    for (const p of ['/docs/guide/:section?', '/docs/api/:section?', '/docs/examples/:section?']) {
-      expect(paths).toContain(p)
-    }
   })
 
   it('每个顶层页面都有标题元信息', () => {
