@@ -4,13 +4,28 @@
       <div class="title-container">
         <h1>{{ typedText }}</h1>
         <div class="subtitle">
-          <p>沉浸式体验 · 精准模拟 · 直观展示</p>
-          <p>探索更多可能性，开启您的仿真之旅</p>
+          <p>场景编辑 · 刚体仿真 · 智能体演武，全部跑在同一套物理引擎上</p>
         </div>
       </div>
-      <button @click="goToOverview" class="start-button">
-        <i class="fa fa-play-circle"></i>开始体验
-      </button>
+
+      <!-- 双入口：总览是主门，演武场给想直接上手的人 -->
+      <div class="cta-row">
+        <button @click="goToOverview" class="start-button">
+          <i class="fa-solid fa-play"></i> 进入总览
+        </button>
+        <button @click="goToArena" class="ghost-button">
+          <i class="fa-solid fa-robot"></i> 直接开演武场
+        </button>
+      </div>
+
+      <!-- 产品支撑条：一句话说清这套工具有什么，替代纯口号 -->
+      <ul class="support-strip">
+        <li><i class="fa-solid fa-cubes" aria-hidden="true"></i>场景编辑</li>
+        <li><i class="fa-solid fa-atom" aria-hidden="true"></i>刚体仿真</li>
+        <li><i class="fa-solid fa-robot" aria-hidden="true"></i>智能体演武</li>
+        <li><i class="fa-solid fa-video" aria-hidden="true"></i>服务端渲染</li>
+      </ul>
+
       <div class="footer-text">
         <p>© 2025 仿真系统 | 为您提供专业的模拟体验</p>
       </div>
@@ -26,53 +41,34 @@ export default {
       text: '欢迎体验仿真系统',
       typedText: '',
       index: 0,
-      typingSpeed: 150, // 打字速度，毫秒
-      deletingSpeed: 75, // 删除速度，毫秒
-      pauseDuration: 2000, // 完成一次后的停顿时间，毫秒
-      isDeleting: false // 是否处于删除状态
+      typingSpeed: 130,
+      timer: null
     }
   },
   mounted() {
     this.startTyping();
   },
+  beforeUnmount() {
+    // 打字是单次的：打完就停。定时器句柄存下来，卸载时清干净——
+    // 旧版递归循环不清（还打完又删光重来），这里一并修掉。
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  },
   methods: {
-    // 打字机效果：一个 setTimeout 递归循环，自己驱动自己。
-    // ⚠️ 组件卸载时这个循环没有被清掉——离开首页后还会空转几轮，
-    // 好在它只改本组件的 data，无副作用。要修就先把定时器句柄存下来再 clear。
+    // 打字机效果：逐字打出，打完停格，不循环删除
     startTyping() {
-      const { text, index, isDeleting } = this;
-
-      // 控制打字和删除状态
-      if (isDeleting) {
-        // 删除文字
-        this.typedText = text.substring(0, index - 1);
-        this.index = index - 1;
-      } else {
-        // 输入文字
-        this.typedText = text.substring(0, index + 1);
-        this.index = index + 1;
-      }
-
-      // 计算下一次执行的延迟时间
-      let timeout = isDeleting ? this.deletingSpeed : this.typingSpeed;
-
-      // 如果打字完成，切换到删除状态
-      if (!isDeleting && index === text.length - 1) {
-        timeout = this.pauseDuration;
-        this.isDeleting = true;
-      }
-      // 如果删除完成，切换到打字状态
-      else if (isDeleting && index === 0) {
-        timeout = this.pauseDuration;
-        this.isDeleting = false;
-      }
-
-      // 递归调用，实现循环效果
-      setTimeout(this.startTyping, timeout);
+      this.typedText = this.text.substring(0, this.index + 1);
+      this.index += 1;
+      if (this.index >= this.text.length) return;
+      this.timer = setTimeout(this.startTyping, this.typingSpeed);
     },
     goToOverview() {
-      // 导航到Overview页面
       this.$router.push('/overview');
+    },
+    goToArena() {
+      this.$router.push('/ai-playground');
     }
   }
 }
@@ -80,14 +76,12 @@ export default {
 
 <style scoped>
 .welcome-container {
-  /* 透明背景 */
-  background-color: transparent;
-  /* 让内容居中显示 */
+  /* 宽度用 100%（容器已在导航轨内），不用 100vw——100vw 含滚动条与轨宽会横向溢出 */
   display: flex;
   justify-content: center;
   align-items: center;
-  height: 100vh;
-  width: 100vw;
+  min-height: calc(100vh - 60px);
+  width: 100%;
   padding: 20px;
   box-sizing: border-box;
 }
@@ -95,55 +89,113 @@ export default {
 .content-wrapper {
   text-align: center;
   padding: 30px;
-  border-radius: 10px;
-  background-color: transparent;
-  max-width: 800px;
+  max-width: 760px;
 }
 
 .title-container {
-  margin-bottom: 40px;
+  margin-bottom: 36px;
 }
 
 h1 {
   font-size: 3rem;
   color: var(--text-1);
-  margin-bottom: 20px;
-  min-height: 4rem; /* 防止文字变化时布局跳动 */
+  margin-bottom: 16px;
+  min-height: 4rem; /* 防止文字打出时布局跳动 */
 }
 
 .subtitle {
   color: var(--text-2);
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   line-height: 1.8;
-  margin-bottom: 10px;
+}
+
+.cta-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 44px;
 }
 
 .start-button {
-  padding: 14px 36px;
-  font-size: 1.3rem;
+  padding: 13px 30px;
+  font-size: 1.05rem;
   background-color: var(--accent-strong);
-  /* 主色实底上的白字：项目约定写法（见 simulation-panel-kit.css 的 .sim-t-on-accent） */
   color: #ffffff;
   border: none;
-  border-radius: 50px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: background-color 0.25s ease, transform 0.25s ease;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.25);
 }
 
 .start-button:hover {
   background-color: var(--accent-strong-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(var(--accent-rgb), 0.3);
+}
+
+.start-button:focus-visible,
+.ghost-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.ghost-button {
+  padding: 13px 26px;
+  font-size: 1.05rem;
+  background-color: transparent;
+  color: var(--text-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.25s ease, border-color 0.25s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ghost-button:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* 产品支撑条：四条一排，分隔竖线，克制不抢戏 */
+.support-strip {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 0;
+  margin-bottom: 60px;
+  padding: 0;
+}
+
+.support-strip li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.support-strip li:last-child {
+  border-right: none;
+}
+
+.support-strip li i {
+  color: var(--accent);
+  font-size: 0.9rem;
 }
 
 .footer-text {
-  margin-top: 60px;
-  color: var(--text-2);
+  margin-top: 40px;
+  color: var(--text-3);
   font-size: 0.9rem;
 }
 
@@ -166,13 +218,8 @@ h1::after {
     min-height: 3rem;
   }
 
-  .subtitle {
-    font-size: 1rem;
-  }
-
-  .start-button {
-    font-size: 1.1rem;
-    padding: 12px 30px;
+  .cta-row {
+    flex-direction: column;
   }
 }
 
@@ -183,6 +230,15 @@ h1::after {
 
   .content-wrapper {
     padding: 15px;
+  }
+
+  .support-strip {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .support-strip li {
+    border-right: none;
   }
 }
 </style>
