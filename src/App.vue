@@ -1,6 +1,12 @@
 <template>
   <div class="app">
-    <div class="app-background"></div>
+    <!-- 背景三层：深空底色 + 星云漂移（纯 CSS 合成层动画）+ 视差网格 -->
+    <div class="app-background">
+      <div class="nebula nebula-1"></div>
+      <div class="nebula nebula-2"></div>
+      <div class="nebula nebula-3"></div>
+      <div class="parallax-grid" :style="gridStyle"></div>
+    </div>
     <div class="app-container">
       <!-- 侧边导航 -->
       <aside class="shell" v-show="showNavigate()" :class="{ show: sidebarShow }">
@@ -96,6 +102,37 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import '@/assets/styles/app-global.css'
 
+/*
+ * 星云视差：pointermove 给目标偏移，rAF 里 lerp 阻尼追过去——
+ * 「平时安静，动鼠标才回应你」。prefers-reduced-motion 时整段不装，
+ * 星云动画也会被 media 查询关掉，背景退回纯静态。
+ * 当前值不走 Vue 响应式（每帧 set ref 会触发无谓重渲染），直接写 style。
+ */
+const gridStyle = ref({ transform: 'translate3d(0px, 0px, 0px)' })
+let parallaxRaf = 0
+let reducedMotion = false
+let targetX = 0
+let targetY = 0
+let curX = 0
+let curY = 0
+
+const onPointerMove = (event: PointerEvent) => {
+  targetX = (event.clientX / window.innerWidth - 0.5) * 16 // ±8px
+  targetY = (event.clientY / window.innerHeight - 0.5) * 12 // ±6px
+}
+
+const startParallax = () => {
+  const tick = () => {
+    curX += (targetX - curX) * 0.06
+    curY += (targetY - curY) * 0.06
+    gridStyle.value = {
+      transform: `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0)`,
+    }
+    parallaxRaf = requestAnimationFrame(tick)
+  }
+  parallaxRaf = requestAnimationFrame(tick)
+}
+
 const isMobile = ref(false)
 // 监听窗口大小变化，更新设备类型
 const checkIsMobile = () => {
@@ -184,6 +221,12 @@ onMounted(() => {
   window.addEventListener('resize', checkIsMobile)
   // 添加点击事件监听，用于关闭侧边栏
   document.addEventListener('click', handleOutsideClick)
+  // 星云视差：reduced-motion 用户不装，保持纯静态
+  reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (!reducedMotion) {
+    window.addEventListener('pointermove', onPointerMove, { passive: true })
+    startParallax()
+  }
 })
 
 // 组件卸载时移除监听，避免内存泄漏
@@ -191,23 +234,102 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkIsMobile)
   // 移除点击事件监听
   document.removeEventListener('click', handleOutsideClick)
+  window.removeEventListener('pointermove', onPointerMove)
+  cancelAnimationFrame(parallaxRaf)
 })
 </script>
 
 <style scoped>
 /*
- * 背景容器：纯静态底——深色画布 + 极淡的靛紫网格纹理（alpha 0.03）。
- * 没有动画、没有 JS：科技感交给 3D 视口与数据面板本体，底子保持安静。
- * 网格用 48px 间隔与令牌 accent 同色系，肉眼只余质感、不抢内容。
+ * 背景：深空底色 + 三片星云漂移 + 视差网格。
+ *
+ * 分层（自底向上）：
+ *   .app-background —— 纯 --bg-canvas 底，overflow 裁掉光斑溢出；
+ *   .nebula-1/2/3   —— 大尺寸靛紫/琥珀 radial-gradient 光斑，transform
+ *                      关键帧异周期漂移（60/75/90s），纯合成层动画，
+ *                      主线程零占用；异周期避免「同步循环」的机械感；
+ *   .parallax-grid  —— 48px 网格纹理层，跟随鼠标 ±8px 阻尼偏移（JS 侧
+ *                      lerp）。平时安静，动鼠标才回应你。
+ *
+ * 颜色全部走 --accent-rgb 令牌族：换主题（过渡态的当前主题不是终点）
+ * 只改 tokens.css 基础层，星云跟着换色。
  */
 .app-background {
   position: fixed;
   inset: 0;
   z-index: 0;
   background-color: var(--bg-canvas);
+  overflow: hidden;
+}
+
+.nebula {
+  position: absolute;
+  border-radius: 50%;
+  will-change: transform;
+}
+
+/* 主星云：左上，靛紫 */
+.nebula-1 {
+  width: 900px;
+  height: 700px;
+  left: -180px;
+  top: -160px;
+  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.13), rgba(var(--accent-rgb), 0) 70%);
+  animation: nebula-drift-1 60s ease-in-out infinite alternate;
+}
+
+/* 副星云：右下，靛紫偏暗 */
+.nebula-2 {
+  width: 760px;
+  height: 620px;
+  right: -200px;
+  bottom: -180px;
+  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.10), rgba(var(--accent-rgb), 0) 70%);
+  animation: nebula-drift-2 75s ease-in-out infinite alternate;
+}
+
+/* 琥珀微光：中部偏右，量极少——只给深空一点暖意 */
+.nebula-3 {
+  width: 520px;
+  height: 420px;
+  left: 56%;
+  top: 30%;
+  background: radial-gradient(ellipse at center, rgba(255, 161, 23, 0.05), rgba(255, 161, 23, 0) 70%);
+  animation: nebula-drift-3 90s ease-in-out infinite alternate;
+}
+
+@keyframes nebula-drift-1 {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(120px, 70px, 0); }
+}
+
+@keyframes nebula-drift-2 {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-100px, -60px, 0); }
+}
+
+@keyframes nebula-drift-3 {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-70px, 90px, 0); }
+}
+
+/* 网格纹理层：独立一层才能跟星云做差速视差 */
+.parallax-grid {
+  position: absolute;
+  inset: -24px; /* 四周多留 24px，视差偏移时不露边 */
   background-image:
     linear-gradient(rgba(124, 106, 242, 0.03) 1px, transparent 1px),
     linear-gradient(90deg, rgba(124, 106, 242, 0.03) 1px, transparent 1px);
   background-size: 48px 48px;
+  will-change: transform;
+}
+
+/* 动画偏好：星云静止、视差不装（JS 侧），背景退回纯静态 */
+@media (prefers-reduced-motion: reduce) {
+  .nebula-1,
+  .nebula-2,
+  .nebula-3 {
+    animation: none;
+  }
 }
 </style>
