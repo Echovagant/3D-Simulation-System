@@ -8,7 +8,7 @@
   <a href="https://www.npmjs.com/package/vue"><img alt="Vue 3.5.44" src="https://img.shields.io/badge/Vue-3.5.44-42b883?logo=vuedotjs&logoColor=35495e"></a>
   <a href="https://threejs.org/"><img alt="Three.js 0.180.0" src="https://img.shields.io/badge/Three.js-0.180.0-000000?logo=threedotjs&logoColor=000000"></a>
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
-  <a href="https://vite.dev/"><img alt="Vite 6.4.4" src="https://img.shields.io/badge/Vite-6.4.4-646cff?logo=vite&logoColor=646cff"></a>
+  <a href="https://vite.dev/"><img alt="Vite 6.4.6" src="https://img.shields.io/badge/Vite-6.4.6-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
   <img alt="51 test files / 471 cases" src="https://img.shields.io/badge/test-51%20files%20%2F%20471%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="12 build gates" src="https://img.shields.io/badge/build%20gates-12%20passed-16a34a?logo=githubactions&logoColor=2088ff">
@@ -53,15 +53,14 @@
 7 个页面：首页 / 总览 / 场景编辑器 / 仿真实验室 / 模型资源库 / AI 演武场 / 系统文档。
 物理由 **Rapier** 承担，它是场景与智能体行为的唯一权威。
 
-两件值得先说的事：
+三件值得先说的事：
 
 - **前后端跑的是同一套物理。** 可选后端里的批量仿真用与浏览器完全相同的引擎与参数，
   自由落体段逐位相同，落地后的偏差在毫米级——结论可以拿去做回归基准。
 - **后端是可选的。** `npm run build` 的产物可以直接扔到任何静态托管上；
   后端缺席时，前端功能一件不少，界面只多一句「后端不在」。
-
-AI 那部分也遵守同一条规矩：**模型只提供意图，位移永远由物理引擎决定**。
-面板上能直接看到「LLM 生效 12 / 87 拍（13.8%）」——它降级了多久、降到什么程度，是可读的。
+- **AI 那部分模型只提供意图，位移永远由物理引擎决定。**
+  面板上能直接看到「LLM 生效 12 / 87 拍（13.8%）」——它降级了多久、降到什么程度，是可读的。
 
 ## 功能
 
@@ -78,7 +77,7 @@ AI 那部分也遵守同一条规矩：**模型只提供意图，位移永远由
 </td>
 <td width="33%" valign="top" align="center">
 <b>🤖 AI 演武场</b><br><br>
-<sub>智能体读真实感知自主移动；决策日志随时回看、可导出成 .jsonl；可选接入 11 条接入线（5 家厂商）做决策与解释</sub>
+<sub>智能体读真实感知自主移动；决策日志随时回看、可导出成 .jsonl；可选接入 15 条接入线（9 家厂商）做决策与解释</sub>
 </td>
 </tr>
 <tr>
@@ -169,12 +168,12 @@ AI 那部分也遵守同一条规矩：**模型只提供意图，位移永远由
 | 领域 | 选型 | 版本 |
 | --- | --- | --- |
 | 框架 | Vue | 3.5.44 |
-| 构建 / 语言 | Vite · TypeScript | 6.4.4 · 5.8.3 |
+| 构建 / 语言 | Vite · TypeScript | 6.4.6 · 5.8.3 |
 | 渲染 | Three.js | 0.180.0 |
 | 物理 | Rapier3D（WASM） | 0.19.3 |
 | 状态 / 路由 | Pinia · Vue Router | 3.0.3 · 4.5.1 |
-| 测试 | Vitest + jsdom | 5.0.5 / 30.x |
-| 文档 / 图标 | marked · DOMPurify · Font Awesome Free | 16.3.0 / 6.7.2 |
+| 测试 | Vitest + jsdom | 5.0.5 / 30.1.3 |
+| 文档 / 图标 | marked · DOMPurify · Font Awesome Free | 16.3.0 / 3.4.17 / 6.7.2 |
 | 后端 | FastAPI · SQLAlchemy · Alembic · ARQ | 0.158 / 2.1 / 1.20 / 0.28 |
 
 > 样式是手写 CSS + CSS 变量，令牌层见 [`DESIGN.md`](DESIGN.md)。**本项目没有接 Tailwind**——
@@ -267,12 +266,41 @@ Redis 连不上时 `POST /api/simulations` 直接返回 503 `simulation_queue_un
 
 ```bash
 cd backend
-uv run pytest        # 139 个用例
+uv run pytest        # 137 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
-后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（21 个端点）是**生成物**：
+后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（20 个端点）是**生成物**：
 它由后端代码生成，改了接口却没重新生成，CI 会直接红。
+
+</details>
+
+<details>
+<summary><b>接入线：端点 × 凭证</b></summary>
+
+同一家厂商可能有多条**互不兼容**的接入线。清单里每个条目就是一条接入线，不是一家厂商。
+
+**接入线 = 端点 × 凭证类型**，两个维度各自独立：
+
+| 维度 | 例子 | 区别 |
+| --- | --- | --- |
+| 端点 | `api.minimax.io` / `api.minimaxi.com` | 不同域名可能是不同账号体系，key 不通用 |
+| 凭证 | `sk-api-` / `sk-cp-` / `sk-sp-` | 按量计费与订阅消耗不同的计费资源 |
+
+实测：同一把 `sk-cp-` key 在 `api.minimaxi.com` 上能列出 9 个模型，
+在 `api.minimax.io` 上直接 401。
+
+当前支持 **15 条接入线，覆盖 9 个厂商**（MiniMax、DeepSeek、智谱 GLM、通义千问、火山方舟、
+OpenAI、Anthropic、Google Gemini、xAI），其中 2 条是订阅制。
+
+所以清单里**每条接入线各占一个条目**（key 是按条目分槽存的，一个槽位装不下两种互斥的组合），
+界面会提示当前要的是哪一种凭证，贴错了当场就能看出来。
+
+模型能调哪些也跟凭证绑定——面板上的**「拉取可用模型」**按钮会用你这把 key
+调 `GET {base_url}/models`，直接列出它实际能用的模型，而不是让用户凭记忆手填再撞 404。
+少数接入线不开放这个接口（如百炼 Coding Plan），那就标出来、直接跳过。
+
+</details>
 
 <details>
 <summary><b>用真 key 验证 LLM 控制器</b>（可选）</summary>
@@ -296,33 +324,6 @@ npm run verify:llm-live -- --key-file /path/to/key.env --provider minimax-cn-sub
 
 </details>
 
-<details>
-<summary><b>接入线：端点 × 凭证</b></summary>
-
-同一家厂商可能有多条**互不兼容**的接入线。清单里每个条目就是一条接入线，不是一家厂商。
-
-**接入线 = 端点 × 凭证类型**，两个维度各自独立：
-
-| 维度 | 例子 | 区别 |
-| --- | --- | --- |
-| 端点 | `api.minimax.io` / `api.minimaxi.com` | 不同域名可能是不同账号体系，key 不通用 |
-| 凭证 | `sk-api-` / `sk-cp-` / `sk-sp-` | 按量计费与订阅消耗不同的计费资源 |
-
-实测：同一把 `sk-cp-` key 在 `api.minimaxi.com` 上能列出 9 个模型，
-在 `api.minimax.io` 上直接 401。
-
-当前支持 **11 条接入线，覆盖 5 个厂商**（MiniMax、DeepSeek、智谱 GLM、通义千问、火山方舟），
-其中 5 条是订阅制。
-
-所以清单里**每条接入线各占一个条目**（key 是按条目分槽存的，一个槽位装不下两种互斥的组合），
-界面会提示当前要的是哪一种凭证，贴错了当场就能看出来。
-
-模型能调哪些也跟凭证绑定——面板上的**「拉取可用模型」**按钮会用你这把 key
-调 `GET {base_url}/models`，直接列出它实际能用的模型，而不是让用户凭记忆手填再撞 404。
-少数接入线不开放这个接口（如百炼 Coding Plan），那就标出来、直接跳过。
-
-</details>
-
 ## 架构
 
 ```mermaid
@@ -341,7 +342,7 @@ flowchart LR
 
 「一次仿真到底发生了什么」写成了一份可核对的规格：[**仿真过程规格**](docs/simulation-spec.md)——
 世界、时间、状态、一致性、意图五层共 34 条约束，每条都标出它在源码里的实现位置与验证它的测试。
-文档里写下的每个数值都由 `verify:spec` 闸门自动与源码对账（当前 **110 项**），
+文档里写下的每个数值都由 `verify:spec` 闸门自动与源码对账（当前 **112 项**），
 改了代码没改规格，构建会直接失败。
 
 ## 质量保障
@@ -361,7 +362,7 @@ flowchart LR
 渲染器一律显式请求高性能 GPU（`powerPreference: 'high-performance'`）——**双显卡笔记本**上
 浏览器默认可能把 WebGL 上下文交给核显，帧率直接掉一半；显式请求能显著提高拿到独显的概率。
 
-后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（139 个用例）。
+后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（137 个用例）。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 
