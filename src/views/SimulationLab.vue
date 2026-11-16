@@ -1,5 +1,17 @@
 <template>
   <div class="simulation-lab">
+    <!-- 初始化加载态：Rapier 是运行时加载的 WASM，加载与建世界期间盖全屏（对齐 SceneEditor 的 overlay 标准） -->
+    <div v-if="initLoading" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <p>仿真实验室初始化中...</p>
+    </div>
+
+    <!-- 初始化失败：给出错误信息与重试入口，不再静默黑屏 -->
+    <div v-if="initError" class="error-overlay">
+      <p class="error-message">{{ initError }}</p>
+      <button type="button" class="retry-btn" @click="retryInit">重试</button>
+    </div>
+
     <!-- 消息提示 -->
     <div v-if="message" class="message-toast">
       {{ message }}
@@ -65,6 +77,7 @@
                   {{ preset.name }}
                 </option>
               </select>
+              <span class="preset-desc">{{ presetDescription }}</span>
               <InfoTip
                 label="关于预设场景"
                 text="「钟摆」预设没有实现摆的约束——它和其它预设一样只是自由落体。"
@@ -94,10 +107,18 @@
 
         <!-- 3D视口：核心内容区域 -->
         <div ref="viewportRef" class="viewport-container">
-          <div class="viewport-info">物体数量: {{ objectCount }} | FPS: {{ fps }}</div>
+          <!-- 视口 HUD：物体数量与 FPS 只在这里显示（底部状态条不再重复这两项）。
+               FPS 项与底部状态条共用 status-item 的「label+value」结构，<30 时标红 -->
+          <div class="viewport-info">
+            <span>物体数量: {{ objectCount }}</span>
+            <span class="status-item">
+              <span class="label">FPS:</span>
+              <span class="value" :class="{ low: fps < 30 }">{{ fps }}</span>
+            </span>
+          </div>
         </div>
 
-        <!-- 仿真状态信息面板 -->
+        <!-- 仿真状态信息面板：只放 HUD 没有的项 -->
         <div class="simulation-status-panel">
           <div class="status-item">
             <span class="label">仿真状态:</span>
@@ -109,61 +130,126 @@
             <span class="label">仿真时间:</span>
             <span class="value">{{ simulationTime.toFixed(2) }}s</span>
           </div>
-          <div class="status-item">
-            <span class="label">物体数量:</span>
-            <span class="value">{{ objectCount }}</span>
-          </div>
-          <div class="status-item">
-            <span class="label">FPS:</span>
-            <span class="value" :class="{ low: fps < 30 }">{{ fps }}</span>
-          </div>
         </div>
       </div>
 
-      <!-- 实验参数面板：固定宽度侧边栏 -->
+      <!-- 实验参数面板：固定宽度侧边栏（选中物体信息置顶，两个重面板收进 tab 组） -->
       <div class="experiment-panel">
-        <h3>
-          实验参数
-          <InfoTip
-            label="关于实验参数"
-            text="摩擦力与弹性系数是全局批量生效的：改动会同时作用于场景里的每一个物体，不能只调某一个。"
+        <!-- 栏目头：原生 h3 换成统一的 PanelHeader -->
+        <div class="lab-side-head">
+          <PanelHeader title="实验参数" />
+        </div>
+
+        <!-- 选中物体信息：上移到右栏第一位 -->
+        <section class="side-section">
+          <PanelHeader title="选中物体信息" />
+          <EmptyState
+            v-if="!selectedObject"
+            icon="fa-solid fa-arrow-pointer"
+            title="未选中物体"
+            description="点击视口中的物体查看它的状态"
           />
-        </h3>
+          <div v-else class="selected-object-info">
+            <div class="object-property">
+              <span>名称:</span>
+              <span>{{ selectedObject.name || '未命名' }}</span>
+            </div>
+            <div class="object-property">
+              <span>位置:</span>
+              <span
+                >({{ selectedObject.position?.x?.toFixed(2) }},
+                {{ selectedObject.position?.y?.toFixed(2) }},
+                {{ selectedObject.position?.z?.toFixed(2) }})</span
+              >
+            </div>
+            <div class="object-property">
+              <span>旋转:</span>
+              <span
+                >({{ selectedObject.rotation?.x?.toFixed(2) }},
+                {{ selectedObject.rotation?.y?.toFixed(2) }},
+                {{ selectedObject.rotation?.z?.toFixed(2) }})</span
+              >
+            </div>
+          </div>
+        </section>
 
         <!-- 环境参数设置 -->
-        <div class="parameter-group">
-          <h4>环境设置</h4>
+        <section class="side-section">
+          <PanelHeader title="环境设置">
+            <!-- 「全局批量生效」从 InfoTip 升级为内联警示标签：小字 --accent-2，悬停看完整语义 -->
+            <span
+              class="param-global-warning"
+              title="摩擦力与弹性系数是全局批量生效的：改动会同时作用于场景里的每一个物体，不能只调某一个。"
+            >
+              全局批量生效
+            </span>
+          </PanelHeader>
           <div class="parameter-item">
-            <label>重力:</label>
-            <input type="number" v-model="gravity" step="0.1" @change="updateGravity" />
+            <label for="lab-gravity">重力:</label>
+            <input
+              id="lab-gravity"
+              type="range"
+              min="-30"
+              max="0"
+              step="0.1"
+              v-model.number="gravity"
+              @change="updateGravity"
+            />
+            <input
+              type="number"
+              v-model="gravity"
+              step="0.1"
+              aria-label="重力数值"
+              @change="updateGravity"
+            />
           </div>
           <div class="parameter-item">
-            <label>摩擦力:</label>
+            <label for="lab-friction">摩擦力:</label>
+            <input
+              id="lab-friction"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              v-model.number="friction"
+              @change="updateFriction"
+            />
             <input
               type="number"
               v-model="friction"
               step="0.01"
               min="0"
               max="1"
+              aria-label="摩擦力数值"
               @change="updateFriction"
             />
           </div>
           <div class="parameter-item">
-            <label>弹性系数:</label>
+            <label for="lab-restitution">弹性系数:</label>
+            <input
+              id="lab-restitution"
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              v-model.number="restitution"
+              @change="updateRestitution"
+            />
             <input
               type="number"
               v-model="restitution"
               step="0.01"
               min="0"
               max="1"
+              aria-label="弹性系数数值"
               @change="updateRestitution"
             />
           </div>
-        </div>
+        </section>
 
         <!-- 数据记录设置 -->
-        <div class="parameter-group">
-          <h4>数据记录</h4>
+        <section class="side-section">
+          <PanelHeader title="数据记录" />
           <div class="parameter-item">
             <label> <input type="checkbox" v-model="recordData" /> 记录仿真数据 </label>
           </div>
@@ -178,38 +264,37 @@
           <div class="parameter-item" v-if="recordedData.length > 0">
             <button class="export-btn" @click="exportData">导出数据</button>
           </div>
-        </div>
+        </section>
 
-        <!-- 批量仿真面板：后端缺席时安静降级，不影响本页的实时仿真 -->
-        <SimulationBatchPanel />
-
-        <!-- 服务端渲染面板：后端缺席时同样安静降级 -->
-        <RenderPanel />
-
-        <!-- 选中物体信息 -->
-        <div class="selected-object-info" v-if="selectedObject">
-          <h4>选中物体信息</h4>
-          <div class="object-property">
-            <span>名称:</span>
-            <span>{{ selectedObject.name || '未命名' }}</span>
-          </div>
-          <div class="object-property">
-            <span>位置:</span>
-            <span
-              >({{ selectedObject.position?.x?.toFixed(2) }},
-              {{ selectedObject.position?.y?.toFixed(2) }},
-              {{ selectedObject.position?.z?.toFixed(2) }})</span
+        <!-- 两个重面板收进 tab 组：本地 ref 二选一，v-show 保挂载（后端探测的轮询与状态不丢） -->
+        <section class="side-section">
+          <div class="side-tabs" role="tablist" aria-label="后端面板">
+            <button
+              type="button"
+              class="side-tab"
+              :class="{ active: backendTab === 'batch' }"
+              role="tab"
+              :aria-selected="backendTab === 'batch'"
+              @click="backendTab = 'batch'"
             >
-          </div>
-          <div class="object-property">
-            <span>旋转:</span>
-            <span
-              >({{ selectedObject.rotation?.x?.toFixed(2) }},
-              {{ selectedObject.rotation?.y?.toFixed(2) }},
-              {{ selectedObject.rotation?.z?.toFixed(2) }})</span
+              批量仿真
+            </button>
+            <button
+              type="button"
+              class="side-tab"
+              :class="{ active: backendTab === 'render' }"
+              role="tab"
+              :aria-selected="backendTab === 'render'"
+              @click="backendTab = 'render'"
             >
+              服务端渲染
+            </button>
           </div>
-        </div>
+          <!-- 批量仿真面板：后端缺席时安静降级，不影响本页的实时仿真 -->
+          <SimulationBatchPanel v-show="backendTab === 'batch'" />
+          <!-- 服务端渲染面板：后端缺席时同样安静降级 -->
+          <RenderPanel v-show="backendTab === 'render'" />
+        </section>
       </div>
     </div>
   </div>
@@ -221,6 +306,8 @@ import * as THREE from 'three'
 import { Vector3, Object3D, Scene } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import InfoTip from '@/components/common/InfoTip.vue'
+import PanelHeader from '@/components/common/PanelHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import SimulationBatchPanel from '@/components/simulations/SimulationBatchPanel.vue'
 import RenderPanel from '@/components/simulations/RenderPanel.vue'
 import { usePhysics } from '@/composables/usePhysics'
@@ -274,6 +361,17 @@ const message = ref('')
 const messageTimeout = ref<number | null>(null)
 const selectedObject = ref<Object3D | null>(null)
 const fps = ref(0)
+
+/**
+ * 物理初始化的 loading / 失败态。
+ * Rapier 是运行时加载的 WASM：离线或 CDN 抖动会让初始化失败——
+ * 之前这段没有加载态也没有 try/catch，失败时页面只会静默黑屏。
+ */
+const initLoading = ref(true)
+const initError = ref('')
+
+/** 右栏重面板 tab：「批量仿真 | 服务端渲染」二选一；v-show 保挂载，后端探测与轮询状态不丢 */
+const backendTab = ref<'batch' | 'render'>('batch')
 
 /**
  * FPS 统计窗口。
@@ -363,6 +461,16 @@ const objectCount = computed(() => {
 // 预设来源：simulationStore 是**唯一**的预设目录（@/data/simulationPresets）。
 // 以前这里内联了另一套 id 不同的预设，深链接与预设目录因此永远对不上。
 const presets = computed(() => simulationStore.simulationPresets)
+
+/**
+ * 预设下拉旁的一句话描述：直接取预设目录里的 description 字段；
+ * 未选择预设时说明当前跑的是演示场景。
+ */
+const presetDescription = computed(() => {
+  const preset = presets.value.find((entry) => entry.id === selectedPreset.value)
+  if (!preset) return '未选择预设，当前是演示场景'
+  return preset.description
+})
 
 // 场景编辑器里保存过的场景（供「从编辑器加载」使用）
 const savedScenes = ref<SceneIndexEntry[]>([])
@@ -1054,19 +1162,11 @@ const displayMessage = (msg: string) => {
   }, 3000)
 }
 
-// 生命周期
-onMounted(async () => {
-  // 初始化 Three.js
-  initThree()
-
-  // 添加鼠标点击事件监听
-  if (renderer) {
-    renderer.domElement.addEventListener('click', handleMouseClick)
-  }
-
-  // 回填上次保存的实验配置（物理参数等物理世界建好后再同步）
-  restoreExperimentConfig()
-
+/**
+ * 物理初始化段：等 Rapier 就绪 → 建物理世界 → 放演示场景 → 重建并对齐刚体 → 下发参数。
+ * 中途任何一步失败都算初始化失败，整段可重跑（error-overlay 的重试按钮从这里重新执行）。
+ */
+const initializePhysicsWorld = async () => {
   // 等待物理引擎初始化
   await ready()
 
@@ -1078,7 +1178,10 @@ onMounted(async () => {
   await initPhysics(scene)
   alignBodiesToMeshes()
   applyPhysicsParameters()
+}
 
+/** 初始化成功后的收尾（渲染循环与路由监听只注册一次；重试成功时也走这里） */
+const startLabRuntime = () => {
   // 场景编辑器里保存过的场景（「从编辑器加载」用）
   refreshSavedScenes()
 
@@ -1105,6 +1208,48 @@ onMounted(async () => {
     },
     { immediate: true },
   )
+}
+
+/** 物理初始化：失败时给出错误信息并上报遥测，不再静默黑屏 */
+const runInitSequence = async () => {
+  initLoading.value = true
+  initError.value = ''
+  try {
+    await initializePhysicsWorld()
+  } catch (error) {
+    console.warn('[SimulationLab] 物理引擎初始化失败', error)
+    reportError(error, '/simulation-lab')
+    initError.value =
+      error instanceof Error && error.message
+        ? `物理引擎初始化失败：${error.message}`
+        : '物理引擎初始化失败，请检查网络后重试'
+    return
+  } finally {
+    initLoading.value = false
+  }
+  startLabRuntime()
+}
+
+/** 重试入口：error-overlay 的重试按钮，重跑整段初始化 */
+const retryInit = async () => {
+  await runInitSequence()
+}
+
+// 生命周期
+onMounted(async () => {
+  // 初始化 Three.js
+  initThree()
+
+  // 添加鼠标点击事件监听
+  if (renderer) {
+    renderer.domElement.addEventListener('click', handleMouseClick)
+  }
+
+  // 回填上次保存的实验配置（物理参数等物理世界建好后再同步）
+  restoreExperimentConfig()
+
+  // 等待物理引擎并建世界：失败时 error-overlay 接管，可重试
+  await runInitSequence()
 })
 
 onUnmounted(() => {
@@ -1157,7 +1302,8 @@ window.addEventListener('resize', handleResize)
 
 .message-toast {
   position: fixed;
-  top: 80px;
+  /* 本页是 full-bleed 工作台、没有顶栏：80px 的魔数会悬在半空，贴住上缘 */
+  top: 20px;
   left: 50%;
   transform: translateX(-50%);
   background-color: var(--bg-panel-raised);
@@ -1178,6 +1324,72 @@ window.addEventListener('resize', handleResize)
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ---------- 初始化加载 / 失败 overlay（类名与样式对齐 SceneEditor 的标准） ---------- */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  color: var(--text-1);
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid var(--border-strong);
+  border-radius: 50%;
+  border-top-color: var(--text-1);
+  animation: spin 1s ease-in-out infinite;
+}
+
+.error-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  color: var(--text-1);
+}
+
+.error-message {
+  color: var(--danger);
+  font-size: 18px;
+  margin-bottom: 20px;
+}
+
+.retry-btn {
+  padding: 10px 20px;
+  background: var(--accent-strong);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: var(--accent-strong-hover);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -1288,12 +1500,22 @@ window.addEventListener('resize', handleResize)
   position: absolute;
   top: 10px;
   left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
   background: rgba(0, 0, 0, 0.7);
   color: var(--text-2);
   padding: 5px 10px;
   border-radius: 4px;
   font-size: 12px;
   z-index: 100;
+}
+
+/* HUD 里的 FPS 与底部状态条共用 status-item 的「label+value」结构，这里压成横排单行 */
+.viewport-info .status-item {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 4px;
 }
 
 .simulation-status-panel {
@@ -1338,21 +1560,36 @@ window.addEventListener('resize', handleResize)
   padding: 20px;
 }
 
-.experiment-panel h3 {
-  margin: 0 0 20px 0;
-  color: var(--text-1);
-  border-bottom: 2px solid var(--accent);
-  padding-bottom: 8px;
+/* 栏目头：PanelHeader 统一标题，底部分隔线收住右栏边界 */
+.lab-side-head {
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
-.parameter-group {
+.lab-side-head :deep(.panel-title) {
+  font-size: 18px;
+}
+
+/* 右栏内容区块：统一的纵向节奏（标题走 PanelHeader） */
+.side-section {
   margin-bottom: 25px;
 }
 
-.parameter-group h4 {
-  margin: 0 0 12px 0;
-  color: var(--text-2);
-  font-size: 14px;
+/* 「全局批量生效」警示标签：小字 --accent-2，挂在环境设置标题旁（从 InfoTip 升级而来） */
+.param-global-warning {
+  font-size: var(--text-xs);
+  color: var(--accent-2);
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* 预设下拉旁的一句话描述 */
+.preset-desc {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+  max-width: 200px;
+  line-height: 1.4;
 }
 
 .parameter-item {
@@ -1366,6 +1603,13 @@ window.addEventListener('resize', handleResize)
   min-width: 80px;
   font-size: 13px;
   color: var(--text-2);
+}
+
+/* 物理参数滑条：与 number 双控件绑定同一个 ref，滑条管手感、number 管精确值 */
+.parameter-item input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent-strong);
 }
 
 .parameter-item input[type='number'] {
@@ -1398,22 +1642,55 @@ window.addEventListener('resize', handleResize)
   background-color: var(--accent-strong-hover);
 }
 
-.selected-object-info {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid var(--border-subtle);
+/* 「批量仿真 | 服务端渲染」tab 条：样式对齐 SceneEditor 的 side-tab，两个工作台观感同源 */
+.side-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
-.selected-object-info h4 {
-  margin: 0 0 12px 0;
+.side-tab {
+  flex: 1 1 0;
+  padding: 7px 12px;
+  background-color: transparent;
   color: var(--text-2);
-  font-size: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.side-tab.active {
+  background-color: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.side-tab:hover:not(.active) {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+/* 选中物体信息卡片：未选中时同区块上方渲染 EmptyState 空态 */
+.selected-object-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background-color: var(--bg-inset);
+  border-radius: var(--radius-sm);
 }
 
 .object-property {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 6px;
+  gap: 8px;
   font-size: 13px;
 }
 
