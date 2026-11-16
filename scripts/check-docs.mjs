@@ -1,21 +1,19 @@
 #!/usr/bin/env node
 /**
- * 文档回归检查：防止 `src/docs/` 下再次出现 0 字节的空文档
+ * 文档回归检查：防止 `docs/manual/` 下再次出现 0 字节的空文档
  *
  * 用法：node scripts/check-docs.mjs
  * 退出码：发现空文档为 1，否则为 0
  *
- * 注意：本脚本只能检查“文档文件是否存在且非空”。
- * 新增文档如果忘了在 `DocsSidebar.vue` 加侧边栏链接、或忘了在
- * `Docs.vue` 的 titles 表里加标题，那篇文档仍然不可达——
- * 那是产品流程问题，需要人工核对，脚本查不出来。
+ * 背景：产品界面里的 /docs 页面已下线，两篇操作手册（系统总览、已知问题
+ * 与边界）移到 docs/manual/ 随仓库走。这道闸门守住它们仍然存在且非空。
  */
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
-const docsRoot = join(repoRoot, 'src', 'docs')
+const docsRoot = join(repoRoot, 'docs', 'manual')
 
 /** 递归收集目录下所有 .md 文件 */
 const collectMarkdown = async (dir) => {

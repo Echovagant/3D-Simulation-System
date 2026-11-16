@@ -1,6 +1,12 @@
 <template>
   <div class="sim-form sim-batch-panel sim-p-4 sim-bg-panel sim-r-lg sim-b sim-b-accent sim-mb-4">
-    <h3 class="sim-t-accent sim-fs-lg sim-fw-bold sim-mb-3">批量仿真</h3>
+    <h3 class="sim-t-accent sim-fs-lg sim-fw-bold sim-mb-3">
+      批量仿真
+      <InfoTip
+        label="关于批量仿真的物体支持"
+        text="只支持立方体与球体，其它类型（包括模型）会被跳过；场景里一个可渲染物体都没有时判为场景无效。"
+      />
+    </h3>
 
     <!-- 后端是可选增强：缺席时只说明情况，不影响本页其它功能 -->
     <p v-if="backendMissing" class="sim-fs-xs sim-t-accent-soft sim-mb-3 sim-backend-missing">
@@ -137,6 +143,10 @@
     >
       {{ submitting ? '提交中…' : '提交批量仿真' }}
     </button>
+    <InfoTip
+      label="关于批量仿真的队列依赖"
+      text="提交提示队列不可用（返回 503，任务不会被收下）：批量仿真走 Redis 队列，需另起 worker 进程——先 cd backend，再运行 uv run arq app.workers.simulation.WorkerSettings。"
+    />
 
     <!-- 进度 -->
     <div v-if="jobId" class="sim-mt-3 sim-mb-3 sim-progress">
@@ -203,6 +213,7 @@ import {
 } from '@/services/api/simulations'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import type { SceneDocument, SceneIndexEntry } from '@/types'
+import InfoTip from '@/components/common/InfoTip.vue'
 
 /** 轮询间隔（毫秒） */
 const POLL_INTERVAL_MS = 1500

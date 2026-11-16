@@ -73,17 +73,6 @@
                 <div class="text">AI演武场</div>
               </RouterLink>
             </li>
-
-            <li
-              class="nav-item"
-              :class="{ active: activeNavKey === 'docs' }"
-              @click="setActiveNav('docs')"
-            >
-              <RouterLink to="/docs" class="nav-link" title="系统使用指南">
-                <div class="icon">❓</div>
-                <div class="text">文档</div>
-              </RouterLink>
-            </li>
           </ul>
         </div>
       </aside>
@@ -179,7 +168,6 @@ watch(
       '/simulation-lab': 'simulation-lab',
       '/model-library': 'model-library',
       '/ai-playground': 'ai-playground',
-      '/docs': 'docs',
     }
     activeNavKey.value = keyMap[newPath] || 'overview' // 默认值避免空值
 

@@ -96,6 +96,10 @@
     >
       {{ submitting ? '提交中…' : '提交渲染任务' }}
     </button>
+    <InfoTip
+      label="关于服务端渲染的前置条件"
+      text="渲染要真的跑起来，生产产物、Chrome、ffmpeg 缺一不可（路径可用环境变量 CHROME_PATH / FFMPEG_PATH 覆盖）；宽高必须是偶数（H.264 yuv420p），单次最多 3600 帧、最长 600 秒。"
+    />
 
     <!-- 进度 -->
     <div v-if="jobId" class="sim-mt-3 sim-mb-3 sim-render-progress">
@@ -140,6 +144,7 @@ import {
 } from '@/services/api/render'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import type { SceneDocument, SceneIndexEntry } from '@/types'
+import InfoTip from '@/components/common/InfoTip.vue'
 
 /** 轮询间隔（毫秒） */
 const POLL_INTERVAL_MS = 1500

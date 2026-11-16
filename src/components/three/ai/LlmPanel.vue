@@ -215,7 +215,13 @@
     <!-- 托管模式：服务端密钥库的现状 -->
     <div v-if="llm.hostingMode === 'hosted'" class="ai-mb-3">
       <div class="ai-flex ai-justify-between ai-items-center ai-mb-1">
-        <span class="ai-fs-xs ai-t-amber">服务端密钥库</span>
+        <span class="ai-fs-xs ai-t-amber">
+          服务端密钥库
+          <InfoTip
+            label="关于托管护栏"
+            text="护栏是刻意设的：两次请求至少间隔 1.5 秒、单次超时 15 秒、一次会话最多 60 次。超时或返回不可解析时这一拍自动回落到规则式（面板会标「已降级」），失败后 5 秒内不重试。"
+          />
+        </span>
         <span v-if="llm.quota" class="ai-fs-xs ai-t-faint">
           今日剩余 {{ llm.quota.remaining }} / {{ llm.quota.limit }}
         </span>
@@ -332,6 +338,7 @@ import { useAiStore } from '@/stores/aiStore'
 import { llmConfig } from '@/config/llm'
 import { llmProviders } from '@/config/llmProviders'
 import type { AgentSnapshot } from '@/services/llm/prompts'
+import InfoTip from '@/components/common/InfoTip.vue'
 
 /**
  * LLM 面板。
