@@ -10,59 +10,59 @@
  *
  * 这里用**语义类名**提供一层最小实现，让面板真正可读、可用。
  * 命名一律 `ai-` 前缀，避免与业务类名冲突。
- * 令牌取值见仓库根目录 DESIGN.md（深色底上的强调色用 #FFA117，9.65:1 on #0A0C12）。
+ * 令牌取值见仓库根目录 DESIGN.md（强调色走 tokens 的 --accent-2 / --accent）。
  */
 
 /* ---------- 文字 ---------- */
 .ai-t-primary {
-  color: #f9fafb;
+  color: var(--text-1);
 }
 .ai-t-strong {
-  color: #e5e7eb;
+  color: var(--text-1);
 }
 .ai-t {
-  color: #d1d5db;
+  color: var(--text-2);
 }
 .ai-t-muted {
-  color: #9ca3af;
+  color: var(--text-2);
 }
 .ai-t-faint {
-  color: #6b7280;
+  color: var(--text-3);
 }
 .ai-t-amber {
-  color: #ffa117;
+  color: var(--accent-2);
 }
 .ai-t-amber-soft {
-  color: #fcd34d;
+  color: var(--accent-2);
 }
 .ai-t-red {
-  color: #f87171;
+  color: var(--danger);
 }
 .ai-t-blue {
-  color: #60a5fa;
+  color: var(--accent);
 }
 .ai-t-on-amber {
-  color: #111827;
+  color: var(--bg-canvas);
 }
 
 /* ---------- 背景与边框 ---------- */
 .ai-bg-panel {
-  background: rgba(10, 12, 18, 0.7);
+  background: var(--bg-panel);
 }
 .ai-bg-soft {
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--shadow-pop);
 }
 .ai-bg-sunken {
-  background: #1f2937;
+  background: var(--bg-panel-raised);
 }
 .ai-bg-raised {
-  background: #374151;
+  background: var(--bg-inset);
 }
 .ai-bg-chip {
-  background: #4b5563;
+  background: var(--ink-700);
 }
 .ai-bg-chip-light {
-  background: #f3f4f6;
+  background: var(--bg-hover);
 }
 .ai-bg-amber-faint {
   background: rgba(255, 161, 23, 0.1);
@@ -71,27 +71,27 @@
   background: rgba(255, 161, 23, 0.3);
 }
 .ai-bg-amber {
-  background: #d97706;
+  background: var(--accent-2);
 }
 .ai-bg-green {
-  background: #16a34a;
+  background: var(--success-strong);
   color: #ffffff;
 }
 .ai-bg-red {
-  background: #dc2626;
+  background: var(--danger-strong);
   color: #ffffff;
 }
 .ai-bg-green:hover {
-  background: #15803d;
+  background: var(--success-strong);
 }
 .ai-bg-red:hover {
-  background: #b91c1c;
+  background: var(--danger-strong);
 }
 .ai-b {
   border: 1px solid transparent;
 }
 .ai-b-gray {
-  border: 1px solid #374151;
+  border: 1px solid var(--bg-inset);
 }
 .ai-b-amber {
   border: 1px solid rgba(255, 161, 23, 0.3);
@@ -295,18 +295,18 @@
 .ai-form input[type='number'],
 .ai-form select,
 .ai-form textarea {
-  background: #111827;
-  color: #e5e7eb;
-  border: 1px solid #374151;
+  background: var(--bg-canvas);
+  color: var(--text-1);
+  border: 1px solid var(--bg-inset);
   border-radius: 4px;
   padding: 0.25rem 0.5rem;
   font-size: 0.875rem;
 }
 
 .ai-form input[type='range'] {
-  accent-color: #ffa117;
+  accent-color: var(--accent-2);
 }
 
 .ai-form label {
-  color: #9ca3af;
+  color: var(--text-2);
 }

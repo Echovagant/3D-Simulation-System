@@ -181,10 +181,12 @@ if (!pageBg) {
   console.error('FAIL 无法从 tokens.css 解析出 --bg-canvas（画布底色）')
   process.exit(1)
 }
-/** 深色面板底（阶段 4 深色化后的统一面板面） */
-const PANEL_SURFACE_DARK = resolveColorHex(tokenMap.get('--bg-panel') ?? '')
-/** 白面板底：仿真实验室两个面板与浅色 kit 在阶段 4 之前仍是白底，暂按白对账 */
-const PANEL_SURFACE = '#ffffff'
+/** 深色面板底：实验室面板与面板工具层的统一对账底 */
+const PANEL_SURFACE = resolveColorHex(tokenMap.get('--bg-panel') ?? '')
+if (!PANEL_SURFACE) {
+  console.error('FAIL 无法从 tokens.css 解析出 --bg-panel（面板底色）')
+  process.exit(1)
+}
 
 const failures = []
 const rows = []
@@ -264,11 +266,11 @@ checkTarget({
   bg: pageBg,
 })
 
-/* 3. 仿真实验室的两个面板：阶段 4 深色化之前仍是白面板底，暂按白对账 */
+/* 3. 仿真实验室的两个面板：深色面板底 */
 for (const file of ['SimulationBatchPanel.vue', 'RenderPanel.vue']) {
   const source = read('src', 'components', 'simulations', file)
   const name = file.replace('.vue', '')
-  checkTarget({ name, style: styleOf(source), bg: PANEL_SURFACE, bannedForeground: BANNED_ON_LIGHT })
+  checkTarget({ name, style: styleOf(source), bg: PANEL_SURFACE })
 }
 
 /* 4. 面板工具层本身：每个前景色都要在其面板底上达到 AA */
@@ -284,8 +286,7 @@ for (const file of ['SimulationBatchPanel.vue', 'RenderPanel.vue']) {
     name: '面板工具层',
     style: kitSource,
     bg: PANEL_SURFACE,
-    bannedForeground: BANNED_ON_LIGHT,
-    // 主色底上的白字：底色不是白，得单独算
+    // 主色底上的白字：底色不是面板深灰，得单独算
     specialBg: { '.sim-t-on-accent': accentBg },
   })
 }
