@@ -189,6 +189,40 @@
 }
 
 /* ======================================
+   工作台骨架约定类（full-bleed 三页共用）
+   「顶条 + 视口主角 + 侧面板」的骨架语言：
+   各页用自己的容器拼这三段，宽度/内部布局页内自定，
+   这里只统一底色、分隔线与滚动口径——保证三个工作台观感同源。
+====================================== */
+.ws-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 50px;
+  padding: 0 14px;
+  background: var(--bg-panel-raised);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.ws-viewport {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+  background: var(--bg-canvas);
+}
+
+.ws-side {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-subtle);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* ======================================
    响应式：移动端抽屉
 ====================================== */
 @media (max-width: 992px) {
