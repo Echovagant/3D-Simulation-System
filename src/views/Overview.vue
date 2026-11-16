@@ -277,7 +277,7 @@ onMounted(() => {
 
 .title {
   font-size: 48px;
-  color: #333;
+  color: var(--text-1);
   margin-bottom: 15px;
   letter-spacing: 5px;
   animation: fadeIn 1.5s ease-out;
@@ -285,7 +285,7 @@ onMounted(() => {
 
 .subtitle {
   font-size: 20px;
-  color: #666;
+  color: var(--text-2);
   max-width: 700px;
   margin: 0 auto;
 }
@@ -314,10 +314,10 @@ onMounted(() => {
   top: 50%;
   left: 50%;
   padding: 8px 16px;
-  background-color: rgba(110, 90, 240, 0.1);
+  background-color: rgba(110, 90, 240, 0.16);
   border: 1px solid rgba(110, 90, 240, 0.25);
   border-radius: 20px;
-  color: #4B37C9;
+  color: var(--accent);
   font-size: 14px;
   transform-origin: 0 0;
   text-align: center;
@@ -328,7 +328,7 @@ onMounted(() => {
 
 .tag:hover {
   background-color: rgba(110, 90, 240, 0.16);
-  color: #4B37C9;
+  color: var(--accent);
   transform: rotateY(var(--rotation)) translateZ(220px) scale(1.2);
   z-index: 10;
 }
@@ -340,7 +340,7 @@ onMounted(() => {
 
 .section-title {
   text-align: center;
-  color: #333;
+  color: var(--text-1);
   font-size: 28px;
   margin-bottom: 40px;
 }
@@ -369,19 +369,19 @@ onMounted(() => {
 
 .feature-item .icon {
   font-size: 32px;
-  color: #6E5AF0;
+  color: var(--accent);
   min-width: 40px;
   margin-top: 5px;
 }
 
 .feature-content h3 {
-  color: #333;
+  color: var(--text-1);
   margin-bottom: 10px;
   font-size: 18px;
 }
 
 .feature-content p {
-  color: #666;
+  color: var(--text-2);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -402,7 +402,7 @@ onMounted(() => {
   border-radius: 10px;
   padding: 30px 20px;
   text-align: center;
-  color: #333;
+  color: var(--text-1);
   text-decoration: none;
   transition: all 0.3s ease;
   border: 1px solid rgba(110, 90, 240, 0.12);
@@ -417,7 +417,7 @@ onMounted(() => {
 .access-icon {
   font-size: 40px;
   margin-bottom: 15px;
-  color: #6E5AF0;
+  color: var(--accent);
 }
 
 .access-card h3 {
@@ -427,7 +427,7 @@ onMounted(() => {
 
 .access-card p {
   font-size: 14px;
-  color: #666;
+  color: var(--text-2);
 }
 
 /* 动画效果 */
@@ -489,8 +489,8 @@ onMounted(() => {
   backdrop-filter: none;
 
   /* 清除默认按钮样式，避免干扰 */
-  border: 1px solid #6E5AF0; /* 靛紫边框（与导航图标同源） */
-  color: #6E5AF0; /* 靛紫文字（与导航图标同源） */
+  border: 1px solid var(--accent-strong); /* 靛紫边框（与导航图标同源） */
+  color: var(--accent); /* 靛紫文字（与导航图标同源） */
   padding: 10px 24px; /* 按钮内边距，保证点击区域 */
   font-size: 16px; /* 字体大小，保证可读性 */
   border-radius: 30px; /* 圆角，提升美观度 */
@@ -502,7 +502,7 @@ onMounted(() => {
 /* 按钮hover效果（可选，增强交互感） */
 .quick-know-btn:hover {
   background-color: rgba(110, 90, 240, 0.14); /* 淡靛紫背景 */
-  color: #4B37C9; /* 靛紫加深，浅底上仍达 AA */
+  color: var(--accent); /* 靛紫加深，浅底上仍达 AA */
   transform: translateY(-2px); /* 轻微上浮 */
   box-shadow: 0 4px 12px rgba(110, 90, 240, 0.25); /* 靛紫阴影 */
 }

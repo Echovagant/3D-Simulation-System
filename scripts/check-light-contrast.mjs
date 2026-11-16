@@ -1,23 +1,21 @@
 /**
- * 防回归检查：**浅色页面**的配色必须适配浅色背景。
+ * 防回归检查：**深色界面**的配色必须达到 WCAG AA。
  *
- * 背景：全屏背景已从深蓝 Babylon 全息换成 Canvas 2D 浅色靛紫网络
- * （画布底色见 TechGridUniverse.vue 的 CANVAS_BG，浅色靛紫 #f7f8fc）。
- * 当年有若干页面是按深色背景写的——白字、金字，落在浅色背景上对比度只有 1.05，
- * 等于隐形。总览页是第一个被这道闸门盯住的，首页是第二个。
+ * 背景：全站已统一为深色专业工具风（画布底色见 src/assets/styles/tokens.css
+ * 的 --bg-canvas）。当年浅色时代的闸门盯的是「白字落在浅底上隐形」；
+ * 现在方向反过来——深底上的纯黑前景、深靛文字同样会隐形。
  *
  * 这道闸门拦四类回退：
- *   1. 又把“为深色背景设计”的浅色/金色前景塞回浅色页面（纯白、#f0f0f0、
- *      #ffd700、纯黑）；
+ *   1. 禁用色重新出现（浅灰 #f0f0f0、金色 #ffd700 / rgb(255,215,0)）——
+ *      它们不属于项目色系，任何位置都不允许；
  *   2. 前景色与实际背景的对比度掉到 WCAG AA 以下（正文 4.5:1、大字 3:1）——
- *      包括半透明底色先与背景合成后再算；
- *   3. **深色面板工具层（`ai-*`）被搬进浅色页面**——那套近黑底 + 琥珀强调
- *      是 AI 演武场的 HUD 风格，出现在浅色页面上会像装了两个 App；
- *   4. 浅色面板工具层（`sim-*`）里的颜色不再满足对比度。
+ *      半透明底色先与背景合成后再算；组件里写 var(--token) 会先展开成实色；
+ *   3. **面板工具层跑出白名单域**：ai-* 类只允许出现在 AI 演武场域，
+ *      sim-* 类只允许出现在仿真实验室域——工具层串门会像装了两个 App；
+ *   4. 各目标底色上的前景色逐条对账（底色取自目标配置，不再全局硬编码）。
  *
- * 覆盖范围：总览页、首页、仿真实验室的两个新面板、浅色面板工具层。
- *
- * 改背景色时**必须同步改这些页面的配色**，否则这里会直接失败。
+ * 覆盖范围：总览页、首页（深色画布底）；仿真实验室两个面板与浅色面板
+ * 工具层（阶段 4 深色化之前暂按白面板底对账）。
  *
  * 零依赖，Node ESM。退出码：0 = 通过；1 = 发现问题。
  */
@@ -58,6 +56,32 @@ const parseColor = (value) => {
 const composite = (fg, bgHex) => {
   const bg = hexToRgb(bgHex)
   return rgbToHex(fg.rgb.map((c, i) => fg.a * c + (1 - fg.a) * bg[i]))
+}
+
+/* ---------- 令牌解析：组件里允许写 var(--token)，这里展开成实色再对账 ---------- */
+const tokensSource = read('src', 'assets', 'styles', 'tokens.css')
+const tokenMap = new Map()
+for (const m of tokensSource.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/gi)) {
+  tokenMap.set(m[1], m[2].trim())
+}
+/** 递归展开 var() 引用（令牌允许互相引用，如 --bg-canvas: var(--ink-950)） */
+const resolveVar = (value, depth = 0) => {
+  if (depth > 8) return value
+  return value.replace(/var\((--[\a-z0-9-]+)(?:,\s*([^)]+))?\)/gi, (whole, name, fallback) => {
+    if (tokenMap.has(name)) return resolveVar(tokenMap.get(name), depth + 1)
+    return fallback !== undefined ? fallback : whole
+  })
+}
+/** 解析一个声明值：先展开令牌，再 parseColor；rgba() 整体展开后仍能命中 */
+const resolveColor = (value) => {
+  const expanded = resolveVar(value).trim()
+  // var 展开后可能是 "rgba(124, 106, 242, 0.16)" 也可能落在 calc() 里——calc 不支持，返回 null
+  return parseColor(expanded)
+}
+/** 同上，但只接受不透明色并返回 #hex（页面/面板底色用） */
+const resolveColorHex = (value) => {
+  const c = resolveColor(value)
+  return c && c.a === 1 ? rgbToHex(c.rgb) : null
 }
 
 /**
@@ -138,60 +162,35 @@ const styleOf = (source) => {
 }
 
 /* ---------- 禁用色 ---------- */
-// 为深色背景设计的颜色：任何位置都不允许再出现
+// 不属于项目色系的颜色：任何位置都不允许再出现
 const BANNED_EVERYWHERE = [
-  { label: '浅灰前景 #f0f0f0（深色背景遗留）', re: /#f0f0f0\b/i },
+  { label: '浅灰前景 #f0f0f0（浅色时代遗留）', re: /#f0f0f0\b/i },
   { label: '金色 #ffd700 / rgb(255,215,0)（不属于项目色系）', re: /#ffd700\b|\brgba?\(\s*255\s*,\s*215\s*,\s*0/i },
 ]
-// 纯白/纯黑：允许作为半透明底色（例如 rgba(255,255,255,0.75) 的卡片），
-// 但不允许出现在前景位——浅色背景上的白字必然不可见。
-const BANNED_FOREGROUND = [
-  { label: '纯白前景 #fff / #ffffff（浅色背景上不可见）', re: /#fff(?:fff)?\b|\brgba?\(\s*255\s*,\s*255\s*,\s*255/i },
-  { label: '纯黑前景 #000（项目正文用 #333）', re: /#000(?:000)?\b|\brgba?\(\s*0\s*,\s*0\s*,\s*0/i },
+// 深底页面禁纯黑前景（必然隐形）；白底面板禁纯白前景。按目标底色选用。
+const BANNED_ON_DARK = [
+  { label: '纯黑前景 #000（深色底上不可见）', re: /#000(?:000)?\b|\brgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*1\s*\)/i },
+]
+const BANNED_ON_LIGHT = [
+  { label: '纯白前景 #fff / #ffffff（浅色背景上不可见）', re: /#fff(?:fff)?\b|\brgba?\(\s*255\s*,\s*255\s*,\s*255\s*,\s*1\s*\)/i },
 ]
 
-/* ---------- 深色面板工具层：不允许出现在浅色页面 ---------- */
-const DARK_KIT_CLASSES = [
-  'ai-bg-panel',
-  'ai-bg-soft',
-  'ai-bg-sunken',
-  'ai-bg-raised',
-  'ai-bg-chip',
-  'ai-bg-chip-light',
-  'ai-bg-amber',
-  'ai-bg-amber-faint',
-  'ai-bg-amber-soft',
-  'ai-b-amber',
-  'ai-b-gray',
-  'ai-t',
-  'ai-t-primary',
-  'ai-t-strong',
-  'ai-t-muted',
-  'ai-t-faint',
-  'ai-t-amber',
-  'ai-t-amber-soft',
-  'ai-t-on-amber',
-  'ai-t-red',
-  'ai-t-blue',
-  'ai-form',
-]
-
-/** 页面底色从背景组件里读，保证「背景改了 → 检查跟着变」 */
-const backgroundSource = read('src', 'components', 'common', 'Background', 'TechGridUniverse.vue')
-const pageBg = backgroundSource.match(/CANVAS_BG\s*=\s*['"](#[0-9a-f]{3,6})['"]/i)?.[1]
+/** 页面底色从令牌层读，保证「令牌改了 → 检查跟着变」 */
+const pageBg = resolveColorHex(tokenMap.get('--bg-canvas') ?? '')
 if (!pageBg) {
-  console.error('FAIL 无法从 TechGridUniverse.vue 解析出 CANVAS_BG（画布底色）')
+  console.error('FAIL 无法从 tokens.css 解析出 --bg-canvas（画布底色）')
   process.exit(1)
 }
-
-/** 面板卡片的底色：白 */
+/** 深色面板底（阶段 4 深色化后的统一面板面） */
+const PANEL_SURFACE_DARK = resolveColorHex(tokenMap.get('--bg-panel') ?? '')
+/** 白面板底：仿真实验室两个面板与浅色 kit 在阶段 4 之前仍是白底，暂按白对账 */
 const PANEL_SURFACE = '#ffffff'
 
 const failures = []
 const rows = []
 
 /* ---------- 逐个目标检查 ---------- */
-const checkTarget = ({ name, style, bg, specialBg = {}, skipForeground = [] }) => {
+const checkTarget = ({ name, style, bg, specialBg = {}, bannedForeground = BANNED_ON_DARK }) => {
   const rules = parseRules(style)
 
   const cleanStyle = style.replace(/\/\*[\s\S]*?\*\//g, '')
@@ -202,13 +201,12 @@ const checkTarget = ({ name, style, bg, specialBg = {}, skipForeground = [] }) =
   for (const [selector, decls] of rules) {
     const fgDecl = decls.color
     if (!fgDecl) continue
-    if (skipForeground.includes(selector)) continue
 
     // 底色：元素自己的 background-color（半透明则与页面底色合成），否则页面底色
     let elementBg = bg
     let hasOwnBg = false
     if (decls['background-color']) {
-      const parsedBg = parseColor(decls['background-color'])
+      const parsedBg = resolveColor(decls['background-color'])
       if (parsedBg) {
         elementBg = parsedBg.a < 1 ? composite(parsedBg, bg) : rgbToHex(parsedBg.rgb)
         hasOwnBg = true
@@ -219,7 +217,7 @@ const checkTarget = ({ name, style, bg, specialBg = {}, skipForeground = [] }) =
       hasOwnBg = true
     }
 
-    const parsedFg = parseColor(fgDecl)
+    const parsedFg = resolveColor(fgDecl)
     if (!parsedFg) {
       failures.push(`${name} ${selector} 的文字色无法解析：${fgDecl}`)
       continue
@@ -240,10 +238,10 @@ const checkTarget = ({ name, style, bg, specialBg = {}, skipForeground = [] }) =
       )
     }
 
-    // 「禁用前景色」只针对**压在浅色页面上**的字：
-    // 元素自带底色时（主色按钮上的白字），白字是对的，由对比度检查负责。
+    // 「禁用前景色」只针对压在目标底上且没有自带底色的字：
+    // 主色按钮上的白字是对的，由对比度检查负责。
     if (!hasOwnBg) {
-      for (const { label, re } of BANNED_FOREGROUND) {
+      for (const { label, re } of bannedForeground) {
         if (re.test(fgDecl)) {
           failures.push(`${name} ${selector} 的文字色仍是${label}（当前 ${fgDecl}）`)
         }
@@ -252,77 +250,90 @@ const checkTarget = ({ name, style, bg, specialBg = {}, skipForeground = [] }) =
   }
 }
 
-/* 1. 总览页（浅色页面底色；.title 压在 Header 的渐变条上，按最差的一端算） */
+/* 1. 总览页（深色画布底） */
 checkTarget({
   name: '总览页',
   style: styleOf(read('src', 'views', 'Overview.vue')),
   bg: pageBg,
-  specialBg: { '.title': '#808080' },
 })
 
-/* 2. 首页（同一片浅色背景，之前是白字 + 深阴影撑出来的） */
+/* 2. 首页（同一片深色画布） */
 checkTarget({
   name: '首页',
   style: styleOf(read('src', 'views', 'Welcome.vue')),
   bg: pageBg,
 })
 
-/* 3. 仿真实验室的两个新面板：面板底色是白，且不许再引用深色工具层 */
+/* 3. 仿真实验室的两个面板：阶段 4 深色化之前仍是白面板底，暂按白对账 */
 for (const file of ['SimulationBatchPanel.vue', 'RenderPanel.vue']) {
   const source = read('src', 'components', 'simulations', file)
   const name = file.replace('.vue', '')
-  checkTarget({ name, style: styleOf(source), bg: PANEL_SURFACE })
-
-  // 深色工具层一旦被引用就会把浅色页面弄成深色块——直接拦在类名上
-  const usedClasses = new Set()
-  for (const m of source.matchAll(/class="([^"]*)"/g)) {
-    for (const token of m[1].split(/\s+/)) {
-      if (token) usedClasses.add(token)
-    }
-  }
-  for (const dark of DARK_KIT_CLASSES) {
-    if (usedClasses.has(dark)) {
-      failures.push(`${name} 用了深色面板工具层类 ${dark}（浅色页面不许出现）`)
-    }
-  }
+  checkTarget({ name, style: styleOf(source), bg: PANEL_SURFACE, bannedForeground: BANNED_ON_LIGHT })
 }
 
-/* 4. 仿真实验室页面本身也不许出现深色工具层 */
-{
-  const source = read('src', 'views', 'SimulationLab.vue')
-  const usedClasses = new Set()
-  for (const m of source.matchAll(/class="([^"]*)"/g)) {
-    for (const token of m[1].split(/\s+/)) {
-      if (token) usedClasses.add(token)
-    }
-  }
-  for (const dark of DARK_KIT_CLASSES) {
-    if (usedClasses.has(dark)) {
-      failures.push(`仿真实验室页面用了深色面板工具层类 ${dark}（浅色页面不许出现）`)
-    }
-  }
-}
-
-/* 5. 浅色面板工具层本身：每个前景色都要在白色面板上达到 AA */
+/* 4. 面板工具层本身：每个前景色都要在其面板底上达到 AA */
 {
   const kitSource = read('src', 'assets', 'styles', 'simulation-panel-kit.css')
   const kitRules = parseRules(kitSource)
-  const accentBg = kitRules.get('.sim-bg-accent')?.background
+  const accentBg = resolveColorHex(kitRules.get('.sim-bg-accent')?.background ?? '')
   if (!accentBg) {
-    console.error('FAIL 浅色面板工具层里找不到 .sim-bg-accent 的底色')
+    console.error('FAIL 面板工具层里找不到 .sim-bg-accent 的底色')
     process.exit(1)
   }
   checkTarget({
-    name: '浅色面板工具层',
+    name: '面板工具层',
     style: kitSource,
     bg: PANEL_SURFACE,
+    bannedForeground: BANNED_ON_LIGHT,
     // 主色底上的白字：底色不是白，得单独算
     specialBg: { '.sim-t-on-accent': accentBg },
   })
 }
 
+/* 5. 工具层白名单：ai-* 类只能出现在 AI 演武场域，sim-* 类只能出现在仿真实验室域。
+      工具层串门 = 同一个应用里出现第二套观感，直接拦在类名上。 */
+const extractKitClasses = (css) => {
+  const set = new Set()
+  for (const m of css.matchAll(/\.((?:ai|sim)-[a-z0-9-]+)/g)) set.add(m[1])
+  return [...set]
+}
+const AI_KIT_CLASSES = extractKitClasses(read('src', 'assets', 'styles', 'ai-panel-kit.css'))
+const SIM_KIT_CLASSES = extractKitClasses(read('src', 'assets', 'styles', 'simulation-panel-kit.css'))
+const KIT_DOMAINS = [
+  { name: 'AI 工具层（ai-*）', classes: AI_KIT_CLASSES, allowed: ['src/views/AIPlayground.vue', 'src/components/three/ai/'] },
+  { name: '实验室工具层（sim-*）', classes: SIM_KIT_CLASSES, allowed: ['src/views/SimulationLab.vue', 'src/components/simulations/'] },
+]
+{
+  const { readdirSync } = await import('node:fs')
+  const walkVue = (dir) => {
+    const out = []
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name)
+      if (e.isDirectory()) out.push(...walkVue(p))
+      else if (e.name.endsWith('.vue')) out.push(p)
+    }
+    return out
+  }
+  for (const file of walkVue(join(repoRoot, 'src'))) {
+    const rel = file.slice(repoRoot.length).replace(/\\/g, '/')
+    const source = readFileSync(file, 'utf8')
+    const used = new Set()
+    for (const m of source.matchAll(/class="([^"]*)"/g)) {
+      for (const token of m[1].split(/\s+/)) if (token) used.add(token)
+    }
+    for (const kit of KIT_DOMAINS) {
+      if (kit.allowed.some((prefix) => rel.startsWith(prefix))) continue
+      for (const cls of kit.classes) {
+        if (used.has(cls)) {
+          failures.push(`${rel} 用了${kit.name}类 ${cls}（只允许出现在它自己的域里）`)
+        }
+      }
+    }
+  }
+}
+
 /* ---------- 输出 ---------- */
-console.log(`浅色页面配色检查（页面底色取自 TechGridUniverse.vue 的 CANVAS_BG = ${pageBg}）\n`)
+console.log(`深色界面配色检查（页面底色取自 tokens.css 的 --bg-canvas = ${pageBg}）\n`)
 for (const r of rows) {
   const flag = r.ratio >= r.need ? 'OK  ' : 'FAIL'
   console.log(
@@ -332,13 +343,13 @@ for (const r of rows) {
 }
 
 if (failures.length > 0) {
-  console.error('\nFAIL 浅色页面配色与背景不匹配：')
+  console.error('\nFAIL 配色与深色背景不匹配：')
   for (const f of failures) console.error(`  - ${f}`)
   console.error(
-    '提示：背景已是浅色 #f7f8fc，正文用 #333、次级用 #666、强调用靛紫 #6E5AF0，' +
-      '不要用白字/金字；浅色页面也不许引用 ai-* 那套深色工具层。',
+    '提示：深色界面正文用 var(--text-1)、次级用 var(--text-2)、弱化用 var(--text-3)，' +
+      '强调用 var(--accent)；组件里不要写硬编码 hex，更不要把别的工具层类搬进来。',
   )
   process.exit(1)
 }
 
-console.log('\nOK 浅色页面配色与背景匹配（禁用色未出现，全部前景达到 WCAG AA，浅色页面未引用深色工具层）')
+console.log('\nOK 深色界面配色达标（禁用色未出现，全部前景达到 WCAG AA，工具层未串门）')
