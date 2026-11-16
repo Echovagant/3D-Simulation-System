@@ -2,514 +2,211 @@
 
 <template>
   <div class="overview-container">
-    <!-- 页面标题区域 -->
-    <div class="header-section">
-      <h1 class="title">3D仿真系统</h1>
-      <p class="subtitle">高效·精准·可视化的仿真解决方案</p>
-    </div>
-    <div style="text-align: center; margin-bottom: 20px !important;">
-      <button class="quick-know-btn" @click="handleScrollDown">快速了解</button>
-    </div>
+    <PageHeader title="系统总览" lead="高效 · 精准 · 可视化的仿真解决方案" />
 
-
-    <!-- 3D旋转标签云 - 展示核心技术和特性 -->
-    <div class="tag-cloud-container">
-      <div class="tag-cloud">
-        <div
-          class="tag"
-          :style="{ transform: `rotateY(${i * (360 / tags.length)}deg) translateZ(200px)` }"
-          v-for="(tag, i) in tags"
-          :key="i"
-        >
-          {{ tag }}
-        </div>
+    <!-- 功能入口：动线主角，首屏 C 位。四个入口就是全站的分发枢纽 -->
+    <section class="access-section" aria-label="功能入口">
+      <div class="access-grid">
+        <RouterLink v-for="entry in entries" :key="entry.to" :to="entry.to" class="access-card">
+          <div class="access-icon"><i class="fa-solid" :class="entry.icon"></i></div>
+          <div class="access-body">
+            <h3>{{ entry.name }}</h3>
+            <p>{{ entry.desc }}</p>
+          </div>
+          <i class="fa-solid fa-arrow-right access-arrow" aria-hidden="true"></i>
+        </RouterLink>
       </div>
-    </div>
+    </section>
 
-    <!-- 核心特性 -->
-    <div class="features-section">
+    <!-- 核心特性：紧凑摘要，补充「这套工具为什么可信」 -->
+    <section class="features-section" aria-label="核心特性">
       <h2 class="section-title">核心特性</h2>
       <div class="features-grid">
-        <div class="feature-item">
-          <span class="icon">🌐</span>
+        <div v-for="f in features" :key="f.title" class="feature-item">
+          <span class="icon"><i class="fa-solid" :class="f.icon"></i></span>
           <div class="feature-content">
-            <h3>三维场景实时渲染</h3>
-            <p>高性能渲染引擎，支持复杂场景实时绘制与交互</p>
-          </div>
-        </div>
-        <div class="feature-item">
-          <span class="icon">⚛️</span>
-          <div class="feature-content">
-            <h3>物理引擎精准模拟</h3>
-            <p>真实的物理碰撞、重力和动力学效果模拟</p>
-          </div>
-        </div>
-        <div class="feature-item">
-          <span class="icon">🤖</span>
-          <div class="feature-content">
-            <h3>AI智能交互控制</h3>
-            <p>人工智能驱动的场景元素行为与决策系统</p>
-          </div>
-        </div>
-        <div class="feature-item">
-          <span class="icon">📱</span>
-          <div class="feature-content">
-            <h3>多终端适配兼容</h3>
-            <p>完美支持桌面端、平板和移动设备的交互体验</p>
+            <h3>{{ f.title }}</h3>
+            <p>{{ f.desc }}</p>
           </div>
         </div>
       </div>
-    </div>
-
-    <!-- 功能快捷入口 -->
-    <div class="quick-access-section">
-      <h2 class="section-title">快速导航</h2>
-      <div class="access-grid">
-        <RouterLink to="/scene-editor" class="access-card">
-          <div class="access-icon">🛠️</div>
-          <h3>场景编辑器</h3>
-          <p>创建和定制3D虚拟环境</p>
-        </RouterLink>
-        <RouterLink to="/simulation-lab" class="access-card">
-          <div class="access-icon">🔬</div>
-          <h3>仿真实验室</h3>
-          <p>运行和分析物理模拟</p>
-        </RouterLink>
-        <RouterLink to="/model-library" class="access-card">
-          <div class="access-icon">📦</div>
-          <h3>模型库</h3>
-          <p>浏览和管理3D模型资源</p>
-        </RouterLink>
-        <RouterLink to="/ai-playground" class="access-card">
-          <div class="access-icon">🧠</div>
-          <h3>AI演武场</h3>
-          <p>体验AI与3D环境交互</p>
-        </RouterLink>
-      </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script lang="ts" setup name="Overview">
-import { onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink } from 'vue-router' // 引入RouterLink类型
+import { RouterLink } from 'vue-router'
+import PageHeader from '@/components/common/PageHeader.vue'
 
-// 标签云数据 —— 只列系统**真的具备**的能力，每一项都能指到具体实现
-const tags = ref([
-  'Three.js',
-  'WebGL',
-  '实时渲染',
-  'Rapier 物理引擎',
-  '碰撞检测',
-  '刚体动力学',
-  '固定步长仿真',
-  '场景编辑',
-  '模型导入',
-  'AI 智能体',
-  '规则式决策',
-  '可选 LLM 决策',
-  '数据导出',
-])
-
-const handleScrollDown = () => {
-  // 「快速了解」按钮：平滑滚到「核心特性」区域；目标不存在就不动
-  const targetSection = document.querySelector('.features-section') as HTMLElement;
-  if (!targetSection) return; // 若目标区域不存在，避免报错
-  if (targetSection) {
-    // 使用scrollIntoView实现平滑滚动到目标区域
-    targetSection.scrollIntoView({ behavior: 'smooth' });
-  }
+/*
+ * 动线重排说明：
+ * 旧版把 3D 标签云放在首屏 C 位（纯装饰、无导航语义、hover 效果引用
+ * 未定义变量实际不生效），而真正的功能入口沉在页尾——进页面的人
+ * 「看了个热闹，找不到门」。新版把四个入口卡提到首屏，特性摘要压成
+ * 一条；标签云整体移除，它的「技术栈」信息由每张入口卡自身承载。
+ */
+interface Entry {
+  to: string
+  icon: string
+  name: string
+  desc: string
 }
 
-// 标签云的动画帧与交互监听必须在组件卸载时收掉：
-// 否则路由离开后 requestAnimationFrame 会一直排期（实测卸载后仍以 ~120 次/2s 的频率跑），
-// document 上的鼠标/触摸监听也会残留。
-let frameId: number | null = null
-// 卸载后置位：万一有一帧已经在派发途中，也不能再排下一帧
-let stopped = false
-// AbortController 一次性摘掉下面所有 addEventListener 注册的监听
-const interactions = new AbortController()
+const entries: Entry[] = [
+  { to: '/scene-editor', icon: 'fa-cubes', name: '场景编辑器', desc: '拖拽摆放基本体与模型，属性改完立刻写回刚体' },
+  { to: '/simulation-lab', icon: 'fa-flask', name: '仿真实验室', desc: '固定步长物理仿真，批量扫描与服务端渲染' },
+  { to: '/model-library', icon: 'fa-box-open', name: '模型资源库', desc: '9 个程序化生成的模型，下载或导入场景' },
+  { to: '/ai-playground', icon: 'fa-robot', name: 'AI 演武场', desc: '智能体读感知自主移动，可选接入 LLM 决策' },
+]
 
-onUnmounted(() => {
-  stopped = true
-  if (frameId !== null) {
-    cancelAnimationFrame(frameId)
-    frameId = null
-  }
-  interactions.abort()
-})
+interface Feature {
+  icon: string
+  title: string
+  desc: string
+}
 
-// 实现3D标签云旋转效果
-onMounted(() => {
-  // 明确指定为HTMLElement类型
-  const tagCloud = document.querySelector('.tag-cloud') as HTMLElement | null
-  if (!tagCloud) return
-
-  let startX = 0
-  let startY = 0
-  let isDragging = false
-  let currentRotationX = -10
-  let currentRotationY = 0
-
-  // 自动旋转效果
-  const autoRotate = () => {
-    if (stopped) return
-    if (!isDragging) {
-      currentRotationY += 0.3// 这行控制旋转速度
-      tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
-    }
-    frameId = requestAnimationFrame(autoRotate)
-  }
-
-  // 鼠标交互 - 指定为MouseEvent类型
-  tagCloud.addEventListener(
-    'mousedown',
-    (e: MouseEvent) => {
-      isDragging = true
-      startX = e.clientX
-      startY = e.clientY
-    },
-    { signal: interactions.signal },
-  )
-
-  document.addEventListener(
-    'mousemove',
-    (e: MouseEvent) => {
-      if (!isDragging) return
-
-      const deltaX = e.clientX - startX
-      const deltaY = e.clientY - startY
-
-      currentRotationY += deltaX * 0.5
-      currentRotationX -= deltaY * 0.5
-
-      // 限制X轴旋转角度，避免过度翻转
-      currentRotationX = Math.max(-30, Math.min(30, currentRotationX))
-
-      tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
-
-      startX = e.clientX
-      startY = e.clientY
-    },
-    { signal: interactions.signal },
-  )
-
-  document.addEventListener(
-    'mouseup',
-    () => {
-      isDragging = false
-    },
-    { signal: interactions.signal },
-  )
-
-  document.addEventListener(
-    'mouseleave',
-    () => {
-      isDragging = false
-    },
-    { signal: interactions.signal },
-  )
-
-  // 触摸设备支持 - 指定为TouchEvent类型
-  tagCloud.addEventListener(
-    'touchstart',
-    (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        isDragging = true
-        startX = e.touches[0].clientX
-        startY = e.touches[0].clientY
-      }
-    },
-    { signal: interactions.signal },
-  )
-
-  document.addEventListener(
-    'touchmove',
-    (e: TouchEvent) => {
-      if (!isDragging || e.touches.length !== 1) return
-
-      const deltaX = e.touches[0].clientX - startX
-      const deltaY = e.touches[0].clientY - startY
-
-      currentRotationY += deltaX * 0.5
-      currentRotationX -= deltaY * 0.5
-
-      currentRotationX = Math.max(-30, Math.min(30, currentRotationX))
-
-      tagCloud.style.transform = `rotateX(${currentRotationX}deg) rotateY(${currentRotationY}deg)`
-
-      startX = e.touches[0].clientX
-      startY = e.touches[0].clientY
-    },
-    { signal: interactions.signal },
-  )
-
-  document.addEventListener(
-    'touchend',
-    () => {
-      isDragging = false
-    },
-    { signal: interactions.signal },
-  )
-
-  autoRotate()
-})
+const features: Feature[] = [
+  { icon: 'fa-cube', title: '三维场景实时渲染', desc: 'Three.js 高性能渲染，复杂场景实时绘制与交互' },
+  { icon: 'fa-atom', title: '物理引擎精准模拟', desc: 'Rapier 刚体物理，前后端同一引擎、结果逐位一致' },
+  { icon: 'fa-brain', title: 'AI 智能交互控制', desc: '规则式决策兜底，LLM 只提供意图、物理说了算' },
+  { icon: 'fa-display', title: '多终端适配', desc: '桌面、平板与移动端同一套交互体验' },
+]
 </script>
 
 <style scoped>
-/* 样式部分保持不变 */
 .overview-container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 40px 20px;
-  background-color: transparent;
-  border-radius: 12px;
-  backdrop-filter: none;
 }
 
-/* 标题区域样式 */
-.header-section {
-  text-align: center;
-  margin-bottom: 60px;
-  padding: 10px 20px;
-  margin-top: 10px;
+/* 入口卡：首屏 C 位。深色卡面 + hover 箭头位移，导航语义一眼可见 */
+.access-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: var(--grid-gap);
 }
 
-.title {
-  font-size: 48px;
-  color: var(--text-1);
-  margin-bottom: 15px;
-  letter-spacing: 5px;
-  animation: fadeIn 1.5s ease-out;
-}
-
-.subtitle {
-  font-size: 20px;
-  color: var(--text-2);
-  max-width: 700px;
-  margin: 0 auto;
-}
-
-/* 3D标签云样式 */
-.tag-cloud-container {
-  width: 100%;
-  height: 400px;
+.access-card {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 20px 0 80px;
-  perspective: 1000px;
-}
-
-.tag-cloud {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transform-style: preserve-3d;
-  transition: transform 0.5s ease;
-}
-
-.tag {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  padding: 8px 16px;
-  background-color: var(--accent-soft);
+  align-items: flex-start;
+  gap: 14px;
+  padding: 20px;
+  background: var(--bg-panel-raised);
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  color: var(--accent);
-  font-size: 14px;
-  transform-origin: 0 0;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  backface-visibility: hidden;
+  border-radius: var(--radius-lg);
+  transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
 }
 
-.tag:hover {
-  background-color: var(--accent-soft);
-  border-color: var(--border-strong);
-  color: var(--accent);
-  transform: rotateY(var(--rotation)) translateZ(220px) scale(1.2);
-  z-index: 10;
+.access-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-panel);
 }
 
-/* 特性区域样式 */
+.access-icon {
+  font-size: 22px;
+  color: var(--accent);
+  min-width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border-radius: var(--radius-md);
+}
+
+.access-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.access-body h3 {
+  font-size: var(--text-lg);
+  color: var(--text-1);
+  margin-bottom: 4px;
+}
+
+.access-body p {
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  line-height: 1.55;
+}
+
+.access-arrow {
+  align-self: center;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  transition: transform 0.25s ease, color 0.25s ease;
+}
+
+.access-card:hover .access-arrow {
+  color: var(--accent);
+  transform: translateX(4px);
+}
+
+/* 焦点可达：入口卡是 RouterLink，键盘 tab 上去要有可见环 */
+.access-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 特性摘要：真实卡面（旧版透明底 + hover 阴影是「假卡片」语义） */
 .features-section {
-  margin-bottom: 80px;
+  margin-top: 48px;
 }
 
 .section-title {
-  text-align: center;
+  font-size: var(--text-lg);
+  font-weight: 600;
   color: var(--text-1);
-  font-size: 28px;
-  margin-bottom: 40px;
+  margin-bottom: 18px;
+  letter-spacing: 0.02em;
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 30px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--grid-gap);
 }
 
 .feature-item {
-  background-color: transparent;
-  border-radius: 10px;
-  padding: 25px;
   display: flex;
-  gap: 15px;
-  transition:
-    transform 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.feature-item:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(var(--accent-rgb), 0.2);
+  gap: 14px;
+  padding: 18px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 
 .feature-item .icon {
-  font-size: 32px;
+  font-size: 18px;
   color: var(--accent);
-  min-width: 40px;
-  margin-top: 5px;
+  min-width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-soft);
+  border-radius: var(--radius-sm);
 }
 
 .feature-content h3 {
+  font-size: var(--text-md);
   color: var(--text-1);
-  margin-bottom: 10px;
-  font-size: 18px;
+  margin-bottom: 4px;
 }
 
 .feature-content p {
+  font-size: var(--text-sm);
   color: var(--text-2);
-  font-size: 14px;
-  line-height: 1.6;
+  line-height: 1.55;
 }
 
-/* 快捷入口样式 */
-.quick-access-section {
-  margin-bottom: 40px;
-}
-
-.access-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 25px;
-}
-
-.access-card {
-  background-color: transparent;
-  border-radius: 10px;
-  padding: 30px 20px;
-  text-align: center;
-  color: var(--text-1);
-  text-decoration: none;
-  transition: all 0.3s ease;
-  border: 1px solid var(--border-subtle);
-}
-
-.access-card:hover {
-  background-color: var(--accent-soft);
-  border-color: var(--accent);
-  transform: translateY(-5px) scale(1.02);
-}
-
-.access-icon {
-  font-size: 40px;
-  margin-bottom: 15px;
-  color: var(--accent);
-}
-
-.access-card h3 {
-  margin-bottom: 10px;
-  font-size: 18px;
-}
-
-.access-card p {
-  font-size: 14px;
-  color: var(--text-2);
-}
-
-/* 动画效果 */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-  .overview-container {
-    padding: 20px 15px;
-  }
-
-  .title {
-    font-size: 32px;
-    letter-spacing: 3px;
-  }
-
-  .tag-cloud-container {
-    height: 300px;
-    margin: 20px 0 50px;
-  }
-
-  .tag {
-    font-size: 12px;
-    padding: 5px 10px;
-  }
-
-  .section-title {
-    font-size: 24px;
-  }
-
-  .features-section,
-  .quick-access-section {
-    margin-bottom: 50px;
-  }
-}
-
+/* 窄屏：单列化即可，入口卡自适应网格自动降列 */
 @media (max-width: 480px) {
-  .features-grid,
-  .access-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .tag-cloud-container {
-    height: 250px;
+  .overview-container {
+    padding: 20px 14px;
   }
 }
-
-.quick-know-btn {
-  background-color: transparent;
-  backdrop-filter: none;
-
-  /* 清除默认按钮样式，避免干扰 */
-  border: 1px solid var(--accent-strong); /* 靛紫边框（与导航图标同源） */
-  color: var(--accent); /* 靛紫文字（与导航图标同源） */
-  padding: 10px 24px; /* 按钮内边距，保证点击区域 */
-  font-size: 16px; /* 字体大小，保证可读性 */
-  border-radius: 30px; /* 圆角，提升美观度 */
-  cursor: pointer; /* 鼠标悬浮显示“手”形，提示可点击 */
-
-  /* 交互动效：hover时轻微变化，提升体验 */
-  transition: all 0.3s ease;
-}
-/* 按钮hover效果（可选，增强交互感） */
-.quick-know-btn:hover {
-  background-color: var(--accent-soft); /* 选中底色令牌 */
-  color: var(--accent); /* 靛紫文字，深底上仍达 AA */
-  transform: translateY(-2px); /* 轻微上浮 */
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.25); /* 靛紫阴影 */
-}
-/* 按钮点击反馈（可选，增强手感） */
-.quick-know-btn:active {
-  transform: translateY(0); /* 点击后复位 */
-}
-
 </style>
