@@ -170,8 +170,10 @@
 | 文档 / 图标 | marked · DOMPurify · Font Awesome Free | 16.3.0 / 3.4.17 / 6.7.2 |
 | 后端 | FastAPI · SQLAlchemy · Alembic · ARQ | 0.158 / 2.1 / 1.20 / 0.28 |
 
-> 样式是手写 CSS + CSS 变量，令牌层见 [`DESIGN.md`](DESIGN.md)。**本项目没有接 Tailwind**——
-> 模板里的工具类不生效，仓库有闸门盯着死类名数量不增长。
+> 全站**深色工具风**：一套令牌（[`src/assets/styles/tokens.css`](src/assets/styles/tokens.css)，
+> 语义与约束见 [`DESIGN.md`](DESIGN.md））撑起导航轨、面板与三级文字，
+> 六个页面同一套观感。**没有接 Tailwind**——模板里的工具类不生效，
+> 仓库有闸门盯着死类名数量不增长。
 
 ## 快速开始
 
@@ -343,7 +345,7 @@ flowchart LR
 
 `npm run build` 会依次跑完类型检查、构建、全部测试，并用 **12 道构建闸门**守住不回退：
 入口体积、README 数字与产物对账、**仿真规格与源码逐项对账**、资产来源与协议、仓库里不许有疑似密钥、零引用依赖、
-**浅色页面的配色必须达到 WCAG AA**、**死 Tailwind 类名不得超过 239 处** 等。任何一道不过，构建就失败。
+**深色界面的配色必须达到 WCAG AA**、**死 Tailwind 类名不得超过 74 处** 等。任何一道不过，构建就失败。
 
 | 指标 | 数值 |
 | --- | --- |
