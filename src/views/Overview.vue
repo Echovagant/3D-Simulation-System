@@ -314,8 +314,8 @@ onMounted(() => {
   top: 50%;
   left: 50%;
   padding: 8px 16px;
-  background-color: rgba(110, 90, 240, 0.16);
-  border: 1px solid rgba(110, 90, 240, 0.25);
+  background-color: var(--accent-soft);
+  border: 1px solid var(--border-subtle);
   border-radius: 20px;
   color: var(--accent);
   font-size: 14px;
@@ -327,7 +327,8 @@ onMounted(() => {
 }
 
 .tag:hover {
-  background-color: rgba(110, 90, 240, 0.16);
+  background-color: var(--accent-soft);
+  border-color: var(--border-strong);
   color: var(--accent);
   transform: rotateY(var(--rotation)) translateZ(220px) scale(1.2);
   z-index: 10;
@@ -364,7 +365,7 @@ onMounted(() => {
 
 .feature-item:hover {
   transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(110, 90, 240, 0.15);
+  box-shadow: 0 10px 20px rgba(var(--accent-rgb), 0.2);
 }
 
 .feature-item .icon {
@@ -405,12 +406,12 @@ onMounted(() => {
   color: var(--text-1);
   text-decoration: none;
   transition: all 0.3s ease;
-  border: 1px solid rgba(110, 90, 240, 0.12);
+  border: 1px solid var(--border-subtle);
 }
 
 .access-card:hover {
-  background-color: rgba(110, 90, 240, 0.08);
-  border-color: rgba(110, 90, 240, 0.35);
+  background-color: var(--accent-soft);
+  border-color: var(--accent);
   transform: translateY(-5px) scale(1.02);
 }
 
@@ -501,10 +502,10 @@ onMounted(() => {
 }
 /* 按钮hover效果（可选，增强交互感） */
 .quick-know-btn:hover {
-  background-color: rgba(110, 90, 240, 0.14); /* 淡靛紫背景 */
-  color: var(--accent); /* 靛紫加深，浅底上仍达 AA */
+  background-color: var(--accent-soft); /* 选中底色令牌 */
+  color: var(--accent); /* 靛紫文字，深底上仍达 AA */
   transform: translateY(-2px); /* 轻微上浮 */
-  box-shadow: 0 4px 12px rgba(110, 90, 240, 0.25); /* 靛紫阴影 */
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.25); /* 靛紫阴影 */
 }
 /* 按钮点击反馈（可选，增强手感） */
 .quick-know-btn:active {

@@ -571,18 +571,18 @@ const modelMeta = (model: Model): string =>
 .page-header {
   text-align: center;
   margin-bottom: 30px;
-  color: #333;
+  color: var(--text-2);
 }
 
 .page-header h1 {
   font-size: 2.2rem;
   margin-bottom: 10px;
-  color: #000;
+  color: var(--text-1);
 }
 
 .page-header p {
   font-size: 1.1rem;
-  color: #666;
+  color: var(--text-2);
 }
 
 /* 下载反馈条：成功与失败用两套配色，3 秒后自动消失 */
@@ -598,15 +598,15 @@ const modelMeta = (model: Model): string =>
 }
 
 .download-notice--success {
-  color: #14532d;
-  background-color: #f0fdf4;
-  border-color: #bbf7d0;
+  color: var(--success);
+  background-color: var(--bg-panel-raised);
+  border-color: var(--success);
 }
 
 .download-notice--error {
-  color: #7f1d1d;
-  background-color: #fef2f2;
-  border-color: #fecaca;
+  color: var(--danger);
+  background-color: var(--bg-panel-raised);
+  border-color: var(--danger);
 }
 
 .category-tabs {
@@ -619,10 +619,10 @@ const modelMeta = (model: Model): string =>
 
 .category-tab {
   padding: 10px 20px;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: #e5e7eb;
-  border: none;
-  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -632,20 +632,23 @@ const modelMeta = (model: Model): string =>
 }
 
 .category-tab.active {
-  background-color: #6e5af0;
-  color: #ffffff;
+  background-color: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent);
   font-weight: bold;
-  box-shadow: 0 4px 8px rgba(110, 90, 240, 0.35);
+  box-shadow: 0 4px 8px rgba(var(--accent-rgb), 0.3);
 }
 
 .category-tab:hover:not(.active) {
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-1);
   transform: translateY(-2px);
 }
 
 .model-count {
   font-size: 0.85rem;
-  opacity: 0.8;
+  color: var(--text-3);
 }
 
 .action-toolbar {
@@ -659,9 +662,9 @@ const modelMeta = (model: Model): string =>
 
 .upload-hint {
   font-size: 0.8rem;
-  color: #a94442;
-  background-color: #fdf2f2;
-  border: 1px solid #f5c6cb;
+  color: var(--warning);
+  background-color: var(--accent-2-soft);
+  border: 1px solid var(--border-subtle);
   border-radius: 6px;
   padding: 6px 10px;
 }
@@ -670,10 +673,10 @@ const modelMeta = (model: Model): string =>
   display: inline-block;
   margin: 6px 0 0 0;
   font-size: 0.72rem;
-  color: #a94442;
-  background-color: #fdf2f2;
-  border: 1px solid #f5c6cb;
-  border-radius: 4px;
+  color: var(--warning);
+  background-color: var(--accent-2-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   padding: 2px 6px;
 }
 
@@ -686,19 +689,39 @@ const modelMeta = (model: Model): string =>
 
 .search-input {
   padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
+  color: var(--text-1);
   min-width: 250px;
   font-size: 1rem;
 }
 
+.search-input::placeholder {
+  color: var(--text-3);
+}
+
+.search-input:focus,
+.sort-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
 .sort-select {
   padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background-color: white;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
+  color: var(--text-1);
   font-size: 1rem;
   cursor: pointer;
+}
+
+/* 下拉展开项跟主题走，避免系统默认白底下出现浅色文字 */
+.sort-select option,
+.form-group select option {
+  background-color: var(--bg-panel);
+  color: var(--text-1);
 }
 
 .models-grid {
@@ -709,44 +732,47 @@ const modelMeta = (model: Model): string =>
 }
 
 .model-card {
-  background-color: white;
-  border-radius: 12px;
+  background-color: var(--bg-panel-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-panel);
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
 }
 
 .model-card:hover {
+  border-color: var(--accent);
   transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-pop);
 }
 
 .model-preview {
   position: relative;
   height: 160px;
   overflow: hidden;
+  background-color: var(--bg-inset);
 }
 
 /*
- * 分类渐变是缩略图的背景层，配色的唯一真源。
- * 占位条目画的是透明 SVG（只有首字），真实模型叠的是透明 PNG（真实渲染图）——
- * 两者共用这层背景。
+ * 分类底色是缩略图的背景层。
+ * 卡片上看到的就是点进去加载到的东西（透明底渲染图叠在这层底色上）；
+ * 底色全部走令牌：角色=靛紫、环境=琥珀、道具=中性嵌入底。
  */
 .model-preview--characters,
 .model-preview-large.model-preview--characters {
-  background: linear-gradient(135deg, rgb(56, 189, 248), rgb(99, 102, 241));
+  background-color: var(--accent-soft);
 }
 
 .model-preview--environments,
 .model-preview-large.model-preview--environments {
-  background: linear-gradient(135deg, rgb(16, 185, 129), rgb(13, 148, 136));
+  background-color: var(--accent-2-soft);
 }
 
 .model-preview--props,
 .model-preview-large.model-preview--props {
-  background: linear-gradient(135deg, rgb(251, 146, 60), rgb(236, 72, 153));
+  background-color: var(--bg-inset);
 }
 
 .model-thumbnail {
@@ -778,8 +804,9 @@ const modelMeta = (model: Model): string =>
   width: 32px;
   height: 32px;
   border-radius: 50%;
+  /* 浮在缩略图上的遮罩圆钮：半透明黑是元素自带底色，与模态遮罩同源 */
   background-color: rgba(0, 0, 0, 0.7);
-  color: white;
+  color: #ffffff;
   border: none;
   display: flex;
   align-items: center;
@@ -789,7 +816,7 @@ const modelMeta = (model: Model): string =>
 }
 
 .action-btn:hover {
-  background-color: #6e5af0;
+  background-color: var(--accent-strong);
   color: #ffffff;
 }
 
@@ -800,6 +827,7 @@ const modelMeta = (model: Model): string =>
 .model-name {
   font-size: 1.1rem;
   margin-bottom: 5px;
+  color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -807,7 +835,7 @@ const modelMeta = (model: Model): string =>
 
 .model-meta {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-3);
   display: flex;
   justify-content: space-between;
 }
@@ -815,36 +843,38 @@ const modelMeta = (model: Model): string =>
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  background-color: var(--bg-panel-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
 }
 
 .empty-state i {
   font-size: 4rem;
-  color: #ddd;
+  color: var(--text-3);
   margin-bottom: 20px;
 }
 
 .empty-state h3 {
   font-size: 1.5rem;
   margin-bottom: 10px;
-  color: #333;
+  color: var(--text-1);
 }
 
 .empty-state p {
   font-size: 1rem;
-  color: #666;
+  color: var(--text-2);
   margin-bottom: 30px;
 }
 
 /* 按钮样式 */
 .primary-btn {
   padding: 10px 20px;
-  background-color: #6e5af0;
+  background-color: var(--accent-strong);
+  /* 主色实底上的白字：项目约定写法（见 simulation-panel-kit.css 的 .sim-t-on-accent） */
   color: #ffffff;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-weight: bold;
   cursor: pointer;
   display: inline-flex;
@@ -854,13 +884,14 @@ const modelMeta = (model: Model): string =>
 }
 
 .primary-btn:hover {
-  background-color: #4b37c9;
+  background-color: var(--accent-strong-hover);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(var(--accent-rgb), 0.25);
 }
 
 .primary-btn:disabled {
-  background-color: #ccc;
+  background-color: var(--bg-inset);
+  color: var(--text-3);
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -868,10 +899,10 @@ const modelMeta = (model: Model): string =>
 
 .secondary-btn {
   padding: 10px 20px;
-  background-color: #f0f0f0;
-  color: #333;
-  border: none;
-  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -880,21 +911,23 @@ const modelMeta = (model: Model): string =>
 }
 
 .secondary-btn:hover {
-  background-color: #e0e0e0;
+  background-color: var(--bg-hover);
+  border-color: var(--accent);
 }
 
 .cancel-btn {
   padding: 10px 20px;
-  background-color: #f8f8f8;
-  color: #666;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .cancel-btn:hover {
-  background-color: #f0f0f0;
+  background-color: var(--bg-hover);
+  color: var(--text-1);
 }
 
 .full-width {
@@ -909,7 +942,8 @@ const modelMeta = (model: Model): string =>
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  /* 遮罩是元素自带底色，允许黑色 rgba */
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -918,13 +952,14 @@ const modelMeta = (model: Model): string =>
 }
 
 .modal-content {
-  background-color: white;
-  border-radius: 12px;
+  background-color: var(--bg-panel-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-panel);
 }
 
 .model-detail-modal {
@@ -933,7 +968,7 @@ const modelMeta = (model: Model): string =>
 
 .modal-header {
   padding: 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -942,6 +977,7 @@ const modelMeta = (model: Model): string =>
 .modal-header h2 {
   margin: 0;
   font-size: 1.5rem;
+  color: var(--text-1);
 }
 
 .close-btn {
@@ -949,12 +985,12 @@ const modelMeta = (model: Model): string =>
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-2);
   transition: color 0.2s ease;
 }
 
 .close-btn:hover {
-  color: #000;
+  color: var(--text-1);
 }
 
 .modal-body {
@@ -970,21 +1006,34 @@ const modelMeta = (model: Model): string =>
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-1);
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
   padding: 12px 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
+  color: var(--text-1);
   font-size: 1rem;
 }
 
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.form-group input::placeholder {
+  color: var(--text-3);
+}
+
 .file-upload-area {
-  border: 2px dashed #ddd;
-  border-radius: 8px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
   padding: 30px;
   text-align: center;
   cursor: pointer;
@@ -992,8 +1041,8 @@ const modelMeta = (model: Model): string =>
 }
 
 .file-upload-area:hover {
-  border-color: #6e5af0;
-  background-color: #f0effc;
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
 }
 
 .file-upload-area input {
@@ -1002,18 +1051,18 @@ const modelMeta = (model: Model): string =>
 
 .upload-placeholder i {
   font-size: 2.5rem;
-  color: #ccc;
+  color: var(--text-3);
   margin-bottom: 15px;
 }
 
 .upload-placeholder p {
   margin: 0 0 5px 0;
-  color: #666;
+  color: var(--text-2);
 }
 
 .file-formats {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--text-3);
 }
 
 .file-selected {
@@ -1021,19 +1070,20 @@ const modelMeta = (model: Model): string =>
   align-items: center;
   justify-content: space-between;
   padding: 10px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+  background-color: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 
 .file-selected i {
-  color: #666;
+  color: var(--text-2);
   margin-right: 10px;
 }
 
 .remove-file {
   background: none;
   border: none;
-  color: #e74c3c;
+  color: var(--danger);
   cursor: pointer;
   padding: 5px;
 }
@@ -1077,13 +1127,14 @@ const modelMeta = (model: Model): string =>
 .model-properties td {
   padding: 12px 15px;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .model-properties th {
   width: 35%;
   font-weight: 600;
-  color: #666;
+  color: var(--text-3);
 }
 
 .detail-actions {

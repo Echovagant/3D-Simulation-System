@@ -9,7 +9,7 @@
         </div>
       </div>
       <button @click="goToOverview" class="start-button">
-        <i class="fa fa-play-circle mr-2"></i>开始体验
+        <i class="fa fa-play-circle"></i>开始体验
       </button>
       <div class="footer-text">
         <p>© 2025 仿真系统 | 为您提供专业的模拟体验</p>
@@ -122,6 +122,7 @@ h1 {
   padding: 14px 36px;
   font-size: 1.3rem;
   background-color: var(--accent-strong);
+  /* 主色实底上的白字：项目约定写法（见 simulation-panel-kit.css 的 .sim-t-on-accent） */
   color: #ffffff;
   border: none;
   border-radius: 50px;
@@ -130,13 +131,14 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(110, 90, 240, 0.25);
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.25);
 }
 
 .start-button:hover {
   background-color: var(--accent-strong-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(110, 90, 240, 0.3);
+  box-shadow: 0 6px 16px rgba(var(--accent-rgb), 0.3);
 }
 
 .footer-text {

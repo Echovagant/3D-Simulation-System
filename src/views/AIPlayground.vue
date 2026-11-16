@@ -515,13 +515,10 @@ onUnmounted(() => {
 
 /* 面板通用样式 */
 .panel {
-  background: rgba(10, 12, 18, 0.75);
-  backdrop-filter: blur(12px);
+  background: var(--bg-panel);
   border-radius: 16px;
-  border: 1px solid rgba(255, 161, 23, 0.25);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 161, 23, 0.3);
+  box-shadow: var(--shadow-panel);
   overflow: hidden;
   position: relative;
   transition: all 0.3s ease;
@@ -529,9 +526,6 @@ onUnmounted(() => {
 
 .panel:hover {
   border-color: rgba(255, 161, 23, 0.4);
-  box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transform: translateY(-3px);
 }
 
@@ -552,11 +546,11 @@ onUnmounted(() => {
 }
 
 .panel-header {
-  background: linear-gradient(90deg, rgba(30, 30, 40, 0.8) 0%, rgba(40, 40, 50, 0.8) 100%);
+  background: linear-gradient(90deg, var(--bg-panel-raised), var(--bg-inset));
   padding: 1rem 1.2rem;
-  border-bottom: 1px solid rgba(255, 161, 23, 0.25);
+  border-bottom: 1px solid rgba(255, 161, 23, 0.3);
   font-weight: 600;
-  color: #e0e0e0;
+  color: var(--text-1);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -566,22 +560,19 @@ onUnmounted(() => {
 /* 左右面板特定样式 */
 .left-panel {
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    var(--shadow-panel),
     -8px 0 20px rgba(255, 161, 23, 0.15);
 }
 
 .right-panel {
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    var(--shadow-panel),
     8px 0 20px rgba(255, 161, 23, 0.15);
 }
 
 .center-panel {
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    var(--shadow-panel),
     0 0 30px rgba(255, 161, 23, 0.2);
 }
 
@@ -602,8 +593,8 @@ onUnmounted(() => {
   padding: 0.5rem 0.9rem;
   font-size: 0.75rem;
   line-height: 1.5;
-  color: #9ca3af;
-  background: rgba(10, 12, 18, 0.6);
+  color: var(--text-2);
+  background: var(--bg-panel);
   border-top: 1px solid rgba(255, 161, 23, 0.15);
 }
 
@@ -734,8 +725,8 @@ onUnmounted(() => {
 
    配色沿用项目令牌层（见仓库根目录 DESIGN.md）：
    演武场是**深色驾驶舱**（与场景编辑器、仿真实验室的 3D 视口一致），
-   浅色靛紫主色属于界面层，所以这里用的是"深底上的琥珀"=#FFA117
-   （9.65:1 on #0A0C12），而不是浅底上的 #96560A。
+   浅色靛紫主色属于界面层，所以这里用的是"深底上的琥珀"var(--accent-2)
+   （对深底画布对比度 9.65:1），而不是浅底上的暗琥珀。
    ========================================================================== */
 
 .ai-playground-container {
@@ -823,7 +814,7 @@ onUnmounted(() => {
 .ai-title {
   position: relative;
   margin: 0;
-  color: #ffffff;
+  color: var(--text-1);
   font-size: clamp(1.5rem, 2.4vw, 2rem);
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -842,19 +833,19 @@ onUnmounted(() => {
   flex: 1;
   min-width: 0;
   margin: 0;
-  color: #e5e7eb;
+  color: var(--text-1);
   font-size: 0.9375rem;
   font-weight: 300;
   line-height: 1.6;
 }
 
 .ai-lead-accent {
-  color: #ffa117;
+  color: var(--accent-2);
   font-weight: 500;
 }
 
 .ai-lead-muted {
-  color: #9ca3af;
+  color: var(--text-2);
 }
 
 /* 面板标题与图标 */
@@ -867,7 +858,7 @@ onUnmounted(() => {
   width: 1.25rem;
   height: 1.25rem;
   margin-right: 0.5rem;
-  color: #ffa117;
+  color: var(--accent-2);
   flex-shrink: 0;
 }
 
@@ -892,15 +883,15 @@ onUnmounted(() => {
 }
 
 .ai-dot-red {
-  background: #ef4444;
+  background: var(--danger);
 }
 
 .ai-dot-amber {
-  background: #ffa117;
+  background: var(--accent-2);
 }
 
 .ai-dot-green {
-  background: #22c55e;
+  background: var(--success);
 }
 
 .ai-dot-inline {
@@ -915,7 +906,7 @@ onUnmounted(() => {
   width: 0.25rem;
   height: 0.25rem;
   border-radius: 9999px;
-  background: #4b5563;
+  background: var(--border-strong);
 }
 
 /* 加载态 */
@@ -935,14 +926,14 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  color: #ffa117;
+  color: var(--accent-2);
 }
 
 .ai-spinner {
   width: 5rem;
   height: 5rem;
   margin-bottom: 1.25rem;
-  border: 4px solid #ffa117;
+  border: 4px solid var(--accent-2);
   border-top-color: transparent;
   border-radius: 9999px;
   animation: spin 1s linear infinite;
@@ -950,13 +941,13 @@ onUnmounted(() => {
 
 .ai-loading-title {
   margin-bottom: 0.5rem;
-  color: #f3f4f6;
+  color: var(--text-1);
   font-size: 1.25rem;
   font-weight: 500;
 }
 
 .ai-loading-sub {
-  color: rgba(255, 161, 23, 0.7);
+  color: var(--accent-2);
   font-size: 0.875rem;
 }
 
@@ -966,13 +957,13 @@ onUnmounted(() => {
   margin-top: 1.25rem;
   overflow: hidden;
   border-radius: 9999px;
-  background: #1f2937;
+  background: var(--bg-inset);
 }
 
 .ai-progress-bar {
   height: 100%;
   border-radius: 9999px;
-  background: #ffa117;
+  background: var(--accent-2);
 }
 
 /* 操作提示卡 */
@@ -981,13 +972,13 @@ onUnmounted(() => {
   left: 1.25rem;
   bottom: 1.25rem;
   padding: 0.75rem 1rem;
-  color: #e5e7eb;
+  color: var(--text-1);
   font-size: 0.875rem;
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 161, 23, 0.4);
   border-radius: 0.75rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-pop);
   transition:
     background 0.3s ease,
     border-color 0.3s ease;
@@ -1014,13 +1005,13 @@ onUnmounted(() => {
   top: 1.25rem;
   right: 1.25rem;
   padding: 0.75rem;
-  color: #ffa117;
+  color: var(--accent-2);
   font-size: 0.875rem;
   background: rgba(0, 0, 0, 0.8);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 161, 23, 0.4);
   border-radius: 0.75rem;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-pop);
 }
 
 .ai-camera-title {
@@ -1041,8 +1032,8 @@ onUnmounted(() => {
 .ai-key {
   padding: 0.5rem;
   border-radius: 0.375rem;
-  background: #111827;
-  color: #e5e7eb;
+  background: var(--bg-panel);
+  color: var(--text-1);
 }
 
 /* 键位图里的占位格：留白，不画成一个假按键 */
@@ -1057,13 +1048,13 @@ onUnmounted(() => {
 
 .ai-key-active {
   background: rgba(255, 161, 23, 0.3);
-  color: #ffa117;
+  color: var(--accent-2);
   font-weight: 600;
 }
 
 .ai-camera-hint {
   margin-top: 0.5rem;
-  color: #9ca3af;
+  color: var(--text-2);
   font-size: 0.6875rem;
   line-height: 1.6;
 }
@@ -1075,7 +1066,7 @@ onUnmounted(() => {
   flex-shrink: 0;
   margin: 0;
   padding: 0.5rem 0 0.25rem;
-  color: #9ca3af;
+  color: var(--text-2);
   font-size: 0.8125rem;
   text-align: center;
 }

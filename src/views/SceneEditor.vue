@@ -228,7 +228,7 @@ onUnmounted(() => {
   flex: 1 1 auto;
   position: relative;
   height: 100%;
-  background: #000; /* 添加黑色背景以便更好地显示3D内容 */
+  background: var(--bg-canvas); /* 添加深黑背景以便更好地显示3D内容（视口允许比面板更深） */
 }
 
 .property-panel {
@@ -248,15 +248,15 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  color: white;
+  color: var(--text-1);
 }
 
 .loading-spinner {
   width: 50px;
   height: 50px;
-  border: 5px solid rgba(255, 255, 255, 0.3);
+  border: 5px solid var(--border-strong);
   border-radius: 50%;
-  border-top-color: white;
+  border-top-color: var(--text-1);
   animation: spin 1s ease-in-out infinite;
 }
 
@@ -272,22 +272,27 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  color: white;
+  color: var(--text-1);
 }
 
 .error-message {
-  color: #ff4444;
+  color: var(--danger);
   font-size: 18px;
   margin-bottom: 20px;
 }
 
 .retry-btn {
   padding: 10px 20px;
-  background: #3b82f6;
-  color: white;
+  background: var(--accent-strong);
+  color: #ffffff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: var(--accent-strong-hover);
 }
 
 @keyframes spin {

@@ -271,9 +271,9 @@ watch(
   align-items: center;
   padding: 0 15px;
   height: 50px;
-  background-color: #2c3e50;
-  color: white;
-  border-bottom: 1px solid #34495e;
+  background-color: var(--bg-panel-raised);
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border-subtle);
   gap: 10px;
 }
 
@@ -290,8 +290,8 @@ watch(
   height: 36px;
   border: none;
   border-radius: 4px;
-  background-color: #34495e;
-  color: white;
+  background-color: transparent;
+  color: var(--text-2);
   cursor: pointer;
   transition: all 0.2s;
   gap: 6px;
@@ -299,12 +299,12 @@ watch(
 }
 
 .toolbar-btn:hover {
-  background-color: #3d5a7c;
+  background-color: var(--bg-hover);
 }
 
 .toolbar-btn:disabled {
-  background-color: #4a6988;
-  color: #95a5a6;
+  background-color: transparent;
+  color: var(--text-3);
   cursor: not-allowed;
 }
 
@@ -314,10 +314,10 @@ watch(
 
 .toolbar-status {
   margin-left: auto;
-  color: #ecf0f1;
+  color: var(--text-2);
   font-size: 14px;
   padding: 4px 8px;
   border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--bg-inset);
 }
 </style>

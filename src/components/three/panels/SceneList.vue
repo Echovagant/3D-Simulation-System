@@ -194,18 +194,18 @@ watch(
 .scene-list {
   margin-top: 20px;
   padding-top: 15px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .scene-list h3 {
   margin: 0 0 12px 0;
   font-size: 14px;
-  color: #2c3e50;
+  color: var(--text-1);
 }
 
 .scene-hint {
   font-size: 12px;
-  color: #888;
+  color: var(--text-3);
   line-height: 1.6;
   margin: 0;
 }
@@ -230,18 +230,19 @@ watch(
   align-items: flex-start;
   gap: 2px;
   padding: 7px 9px;
-  background-color: #fff;
-  border: 1px solid #d5d8dc;
+  background-color: transparent;
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   cursor: pointer;
   text-align: left;
   font-size: 13px;
-  color: #2c3e50;
-  transition: border-color 0.2s;
+  color: var(--text-1);
+  transition: border-color 0.2s, background-color 0.2s;
 }
 
 .scene-open:hover:not(:disabled) {
-  border-color: #3498db;
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .scene-open:disabled {
@@ -255,14 +256,14 @@ watch(
 
 .scene-meta {
   font-size: 11px;
-  color: #888;
+  color: var(--text-3);
 }
 
 .scene-delete {
   width: 28px;
-  border: 1px solid #d5d8dc;
-  background-color: #fff;
-  color: #a94442;
+  border: 1px solid var(--border-subtle);
+  background-color: transparent;
+  color: var(--danger);
   border-radius: 4px;
   cursor: pointer;
   font-size: 13px;
@@ -270,14 +271,14 @@ watch(
 }
 
 .scene-delete:hover {
-  background-color: #f5c6cb;
+  background-color: var(--bg-hover);
 }
 
 .scene-status {
   margin: 10px 0 0 0;
   font-size: 12px;
-  color: #2c3e50;
-  background-color: #eef5fb;
+  color: var(--text-2);
+  background-color: var(--bg-inset);
   border-radius: 4px;
   padding: 6px 8px;
 }
@@ -285,7 +286,7 @@ watch(
 .scene-remote {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px dashed #d5d8dc;
+  border-top: 1px dashed var(--border-subtle);
 }
 
 .scene-remote-head {
@@ -298,21 +299,23 @@ watch(
 .scene-remote-head h4 {
   margin: 0;
   font-size: 13px;
-  color: #2c3e50;
+  color: var(--text-2);
 }
 
 .scene-refresh {
   padding: 2px 8px;
-  border: 1px solid #d5d8dc;
-  background-color: #fff;
-  color: #2c3e50;
+  border: 1px solid var(--border-subtle);
+  background-color: transparent;
+  color: var(--text-2);
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
+  transition: border-color 0.2s, background-color 0.2s;
 }
 
 .scene-refresh:hover:not(:disabled) {
-  border-color: #3498db;
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .scene-refresh:disabled {
