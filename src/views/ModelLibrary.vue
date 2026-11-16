@@ -1,24 +1,23 @@
 <template>
   <div class="model-library-container">
     <!-- 页面标题 -->
-    <div class="page-header">
-      <h1>📦 3D模型资源库</h1>
-      <p>浏览、管理和使用各类3D模型资产</p>
-    </div>
+    <PageHeader title="3D 模型资源库" lead="浏览、管理和使用各类 3D 模型资产" />
 
-    <!-- 下载反馈：成功与失败都写在这里，3 秒后自动消失 -->
-    <div
+    <!-- 反馈条：下载成败（3 秒自清）与上传失败（可手动关）共用一条通道 -->
+    <AppNotice
       v-if="downloadNotice"
-      class="download-notice"
-      :class="`download-notice--${downloadNotice.type}`"
-      role="status"
-    >
-      <i
-        class="fas"
-        :class="downloadNotice.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'"
-      ></i>
-      <span>{{ downloadNotice.message }}</span>
-    </div>
+      :type="downloadNotice.type === 'success' ? 'success' : 'danger'"
+      :message="downloadNotice.message"
+      class="library-notice"
+    />
+    <AppNotice
+      v-else-if="uploadNotice"
+      type="danger"
+      :message="uploadNotice"
+      dismissible
+      class="library-notice"
+      @dismiss="uploadNotice = null"
+    />
 
     <!-- 模型分类标签 -->
     <div class="category-tabs">
@@ -33,18 +32,17 @@
       </button>
     </div>
 
-    <!-- 操作工具栏 -->
+    <!-- 操作工具栏：上行是「动作 + 过滤」，会话提示降级为下方警示条 -->
     <div class="action-toolbar">
-      <button class="primary-btn" @click="showUploadModal = true">
-        <i class="fas fa-upload"></i> 上传新模型
-      </button>
-      <InfoTip
-        label="关于导入模型的出生点"
-        text="模型导入场景时落在随机出生点（X/Z 在 -2.5 ~ 2.5，Y = 2），不在原点；导入后用属性面板把它移到你要的位置。"
-      />
-      <span class="upload-hint">
-        上传的模型使用浏览器对象 URL，<strong>仅在当前会话有效</strong>：刷新页面后失效。
-      </span>
+      <div class="toolbar-actions">
+        <button class="primary-btn" @click="showUploadModal = true">
+          <i class="fas fa-upload"></i> 上传新模型
+        </button>
+        <InfoTip
+          label="关于导入模型的出生点"
+          text="模型导入场景时落在随机出生点（X/Z 在 -2.5 ~ 2.5，Y = 2），不在原点；导入后用属性面板把它移到你要的位置。"
+        />
+      </div>
       <div class="search-filter">
         <input
           type="text"
@@ -60,10 +58,17 @@
       </div>
     </div>
 
+    <AppNotice
+      type="warning"
+      message="上传的模型使用浏览器对象 URL，仅在当前会话有效：刷新页面后失效。"
+      class="library-notice"
+    />
+
     <!-- 模型网格展示 -->
     <div class="models-grid">
       <div
         class="model-card"
+        :class="{ 'model-card--placeholder': isPlaceholder(model) }"
         v-for="model in filteredModels"
         :key="model.id"
         @click="selectModel(model)"
@@ -75,35 +80,61 @@
             class="model-thumbnail"
             loading="lazy"
           >
-          <div class="model-actions">
-            <button class="action-btn" @click.stop="handleAddToScene(model)">
-              <i class="fas fa-plus"></i>
-            </button>
-            <button class="action-btn" @click.stop="handleDownloadModel(model)">
-              <i class="fas fa-download"></i>
-            </button>
-            <button class="action-btn" @click.stop="handleDeleteModel(model)">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
         </div>
         <div class="model-info">
-          <h3 class="model-name">{{ model.name }}</h3>
+          <div class="model-name-row">
+            <h3 class="model-name">{{ model.name }}</h3>
+            <span v-if="isPlaceholder(model)" class="placeholder-badge">不可加载</span>
+          </div>
           <p class="model-meta">{{ modelMeta(model) }}</p>
-          <p v-if="model.sessionOnly" class="session-badge">仅本次会话有效</p>
+          <div class="model-foot">
+            <p v-if="model.sessionOnly" class="session-badge">仅本次会话有效</p>
+            <!-- 删除走两段式行内确认，替代原生 confirm() -->
+            <div v-if="pendingDeleteId === model.id" class="model-confirm">
+              <span class="confirm-text">确认删除？</span>
+              <button class="action-btn action-btn--confirm" @click.stop="confirmDeleteModel(model)" title="确认删除" aria-label="确认删除">
+                <i class="fas fa-check"></i>
+              </button>
+              <button class="action-btn" @click.stop="pendingDeleteId = null" title="取消" aria-label="取消删除">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div v-else class="model-actions">
+              <button class="action-btn" @click.stop="handleAddToScene(model)" title="添加到场景编辑器" aria-label="添加到场景编辑器">
+                <i class="fas fa-plus"></i>
+              </button>
+              <button
+                v-if="!isPlaceholder(model)"
+                class="action-btn"
+                @click.stop="handleDownloadModel(model)"
+                title="下载模型文件"
+                aria-label="下载模型文件"
+              >
+                <i class="fas fa-download"></i>
+              </button>
+              <button class="action-btn action-btn--danger" @click.stop="handleDeleteClick(model)" title="删除模型" aria-label="删除模型">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- 空状态提示 -->
-    <div class="empty-state" v-if="filteredModels.length === 0">
-      <i class="fas fa-box-open"></i>
-      <h3>没有找到模型</h3>
-      <p>尝试更改筛选条件或上传新模型</p>
-      <button class="primary-btn" @click="showUploadModal = true">
-        <i class="fas fa-upload"></i> 上传模型
-      </button>
-    </div>
+    <EmptyState
+      v-if="filteredModels.length === 0"
+      icon="fa-solid fa-box-open"
+      title="没有找到模型"
+      description="尝试更改筛选条件或上传新模型"
+      class="models-empty"
+    >
+      <template #cta>
+        <button class="primary-btn" @click="showUploadModal = true">
+          <i class="fas fa-upload"></i> 上传模型
+        </button>
+      </template>
+    </EmptyState>
 
     <!-- 上传模型模态框 -->
     <div class="modal-backdrop" v-if="showUploadModal" @click="showUploadModal = false">
@@ -115,6 +146,14 @@
           </button>
         </div>
         <div class="modal-body">
+          <AppNotice
+            v-if="uploadNotice"
+            type="danger"
+            :message="uploadNotice"
+            dismissible
+            class="modal-notice"
+            @dismiss="uploadNotice = null"
+          />
           <form @submit.prevent="handleUpload">
             <div class="form-group">
               <label for="modelName">模型名称</label>
@@ -258,6 +297,9 @@ import { isPlaceholderModel } from '@/data/modelLibrary';
 import { resolveModelUrl } from '@/utils/modelLoader';
 import { reportError } from '@/services/api/telemetry';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
+import PageHeader from '@/components/common/PageHeader.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
+import AppNotice from '@/components/common/AppNotice.vue';
 import InfoTip from '@/components/common/InfoTip.vue';
 
 // ===================== 类型定义 =====================
@@ -409,7 +451,7 @@ const handleUpload = async () => {
   } catch (error) {
     console.warn('[ModelLibrary] 模型上传失败', error)
     reportError(error, '/model-library')
-    alert('模型上传失败，请重试');
+    showUploadNotice('模型上传失败，请重试');
   } finally {
     isUploading.value = false;
   }
@@ -492,6 +534,9 @@ onUnmounted(() => {
   if (downloadNoticeTimer !== undefined) {
     window.clearTimeout(downloadNoticeTimer);
   }
+  if (uploadNoticeTimer !== undefined) {
+    window.clearTimeout(uploadNoticeTimer);
+  }
 });
 
 /**
@@ -523,9 +568,37 @@ const handleDownloadModel = async (model: Model): Promise<void> => {
 };
 
 const handleDeleteModel = (model: Model) => {
-  if (confirm(`确定要删除模型 "${model.name}" 吗？此操作不可撤销。`)) {
-    modelStore.deleteModel(model.id);
+  modelStore.deleteModel(model.id);
+  pendingDeleteId.value = null;
+};
+
+/*
+ * 删除走两段式行内确认：第一次点击只把卡片置入「确认删除？」态，
+ * 再点对勾才真删——替代原生 confirm()，与全站反馈体系同轨。
+ */
+const pendingDeleteId = ref<string | null>(null);
+const handleDeleteClick = (model: Model) => {
+  pendingDeleteId.value = model.id;
+};
+const confirmDeleteModel = (model: Model) => {
+  handleDeleteModel(model);
+};
+
+/*
+ * 上传失败反馈：与下载共用 AppNotice 通道（替代原生 alert）。
+ * 4 秒自清，也可手动关。
+ */
+const uploadNotice = ref<string | null>(null);
+let uploadNoticeTimer: number | undefined;
+const showUploadNotice = (message: string): void => {
+  uploadNotice.value = message;
+  if (uploadNoticeTimer !== undefined) {
+    window.clearTimeout(uploadNoticeTimer);
   }
+  uploadNoticeTimer = window.setTimeout(() => {
+    uploadNotice.value = null;
+    uploadNoticeTimer = undefined;
+  }, 4000);
 };
 
 const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') => {
@@ -568,45 +641,13 @@ const modelMeta = (model: Model): string =>
   padding: 20px;
 }
 
-.page-header {
-  text-align: center;
-  margin-bottom: 30px;
-  color: var(--text-2);
+/* 反馈条与下方区块的统一间距（AppNotice 由共享组件管外观） */
+.library-notice {
+  margin-bottom: 18px;
 }
 
-.page-header h1 {
-  font-size: 2.2rem;
-  margin-bottom: 10px;
-  color: var(--text-1);
-}
-
-.page-header p {
-  font-size: 1.1rem;
-  color: var(--text-2);
-}
-
-/* 下载反馈条：成功与失败用两套配色，3 秒后自动消失 */
-.download-notice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  border: 1px solid transparent;
-}
-
-.download-notice--success {
-  color: var(--success);
-  background-color: var(--bg-panel-raised);
-  border-color: var(--success);
-}
-
-.download-notice--error {
-  color: var(--danger);
-  background-color: var(--bg-panel-raised);
-  border-color: var(--danger);
+.modal-notice {
+  margin-bottom: 14px;
 }
 
 .category-tabs {
@@ -655,18 +696,15 @@ const modelMeta = (model: Model): string =>
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 14px;
 }
 
-.upload-hint {
-  font-size: 0.8rem;
-  color: var(--warning);
-  background-color: var(--accent-2-soft);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 6px 10px;
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .session-badge {
@@ -726,9 +764,18 @@ const modelMeta = (model: Model): string =>
 
 .models-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--grid-min), 1fr));
+  gap: var(--grid-gap);
   margin-bottom: 40px;
+}
+
+/* 占位条目整卡降饱和：能看见、但一眼知道它不是可用资产 */
+.model-card--placeholder {
+  opacity: 0.55;
+}
+
+.model-card--placeholder .model-thumbnail {
+  filter: grayscale(0.6);
 }
 
 .model-card {
@@ -786,46 +833,113 @@ const modelMeta = (model: Model): string =>
   transform: scale(1.05);
 }
 
+/*
+ * 卡片动作行：常驻在信息区底部（不再藏在缩略图上的 hover 浮层里）——
+ * hover-only 的 opacity:0 让触屏与键盘用户够不到主操作。
+ */
 .model-actions {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   display: flex;
-  gap: 5px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  gap: 6px;
+  align-items: center;
 }
 
-.model-card:hover .model-actions {
-  opacity: 1;
+.model-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  min-height: 28px;
+}
+
+.model-foot .session-badge {
+  margin: 0;
+}
+
+.model-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.model-name-row .model-name {
+  flex: 1;
+}
+
+.placeholder-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--text-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* 两段式删除确认态：动作行整行换成确认对 */
+.model-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.confirm-text {
+  font-size: var(--text-xs);
+  color: var(--danger);
 }
 
 .action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  /* 浮在缩略图上的遮罩圆钮：半透明黑是元素自带底色，与模态遮罩同源 */
-  background-color: rgba(0, 0, 0, 0.7);
-  color: #ffffff;
-  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  font-size: 0.8rem;
   transition: all 0.2s ease;
 }
 
 .action-btn:hover {
-  background-color: var(--accent-strong);
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+.action-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.action-btn--danger:hover {
+  background-color: rgba(240, 97, 106, 0.12);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.action-btn--confirm {
+  background-color: var(--danger-strong);
+  border-color: var(--danger-strong);
+  color: #ffffff;
+}
+
+.action-btn--confirm:hover {
+  background-color: var(--danger);
+  border-color: var(--danger);
   color: #ffffff;
 }
 
 .model-info {
-  padding: 15px;
+  padding: 12px 14px 14px;
 }
 
 .model-name {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   margin-bottom: 5px;
   color: var(--text-1);
   white-space: nowrap;
@@ -836,35 +950,14 @@ const modelMeta = (model: Model): string =>
 .model-meta {
   font-size: 0.85rem;
   color: var(--text-3);
-  display: flex;
-  justify-content: space-between;
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
+/* 统一空态（EmptyState 组件管内部结构，这里只给外围卡感） */
+.models-empty {
   background-color: var(--bg-panel-raised);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
-}
-
-.empty-state i {
-  font-size: 4rem;
-  color: var(--text-3);
-  margin-bottom: 20px;
-}
-
-.empty-state h3 {
-  font-size: 1.5rem;
-  margin-bottom: 10px;
-  color: var(--text-1);
-}
-
-.empty-state p {
-  font-size: 1rem;
-  color: var(--text-2);
-  margin-bottom: 30px;
 }
 
 /* 按钮样式 */
@@ -1095,10 +1188,10 @@ const modelMeta = (model: Model): string =>
   margin-top: 30px;
 }
 
-/* 模型详情样式 */
+/* 模型详情样式：预览略收、属性与动作略放——右半不再空旷 */
 .model-detail-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 25px;
 }
 
