@@ -1,394 +1,118 @@
 # Design System: 3D-Simulation-System
 
-> 本文件是本项目**唯一的设计令牌真源**。新增界面元素时，请引用这里的令牌名，不要写死颜色与尺寸。
-> 约定与门禁见 [Super Design skill](https://github.com/Eldergenix/SUPER-DESIGN)（MIT，本地安装于 `~/.minimax/skills/super-design`）。
+> 本文件描述本项目的设计系统。令牌的**唯一真源**是
+> [`src/assets/styles/tokens.css`](src/assets/styles/tokens.css)——那里定义什么，
+> 全站就长什么样；本文件负责解释语义与约束。改令牌前先读完第 4 节的闸门联动。
 
 ## 0. Meta
 
 ```yaml
-version: 1.0.0
+version: 2.0.0
 framework: vue-3.5 + vite-6 + hand-written-css
 css_framework: plain-css (css-variables, NO Tailwind)
 component_library: none
-theme_modes: light
-dark_mode_strategy: not-implemented (本项目当前只有浅色主题)
-tokens_source: src/assets/styles/app-global.css
+theme_modes: dark (单一深色主题)
+tokens_source: src/assets/styles/tokens.css
 ```
 
 **关于 Tailwind**：本仓库**没有**接 Tailwind（无依赖、无 postcss、无 tailwind.config）。
-模板里任何 `flex-1` / `lg:col-span-6` / `h-[calc(100%-46px)]` 之类的类名都是**死类名**、不生效。
-`scripts/check-tailwind-classes.mjs` 闸门盯着死类名数量不得超过 757。
-**新增样式一律走 CSS 变量，不要写 Tailwind 工具类。**
+模板里任何 `flex-1` / `lg:col-span-6` / `text-gray-300` 之类的类名都是**死类名**、不生效。
+`scripts/check-tailwind-classes.mjs` 闸门盯着死类名出现次数不得超过 **74**。
+**新增样式一律写 scoped CSS + 令牌变量。**
 
-## 1. Brand Narrative & Philosophy
+## 1. 调性：深色专业工具风
 
-**品牌关键词：靛紫 · 浅色科技网络 · 克制**
+**关键词：深灰阶 · 靛紫单强调 · 克制**
 
-本项目是一个**工程化**的 3D 场景编辑与仿真平台，不是玩具 demo。它的视觉语言建立在三个约束上：
+本项目是 3D 场景编辑与仿真平台——工具软件，不是营销页。视觉建立在四条约束上：
 
-1. **浅色优先**：3D 视口本身是深色的（需要对比），界面层一律浅色，避免深浅打架。
-2. **靛紫单主色**：全站只有一个品牌色 `#6E5AF0`，它同时是导航图标、强调边框、标签底色。
-   琥珀 `#ffa117` 只用于"目标/高亮"语义，且已因对比度不足（白底 2.03:1）改为深琥珀 `#96560a`。
-3. **网络即背景**：背景是浅色靛紫科技网络（Canvas 2D 绘制），透明度极低（0.035–0.55），
-   只提供纵深，不与内容争夺注意力。
+1. **全站深色**：类 VS Code / Blender 的深色工作台。3D 视口与工具面板不再深浅打架。
+2. **靛紫单主色**：品牌色沿袭 `#6E5AF0` 家族——深底上作文字用提亮档 `--accent`（#8d7ef5），
+   作按钮底用 `--accent-strong`（#6e5af0）。琥珀 `--accent-2` 只作次强调（AI 演武场域）。
+3. **背景安静**：画布是 `--bg-canvas` 纯深底 + alpha 0.03 的 48px 静态网格纹理
+   （`App.vue` 的 `.app-background`）。**没有动画背景**——科技感交给 3D 视口与数据面板本体。
+4. **信息层级优先**：面板底、边框、文字三级（`--text-1/2/3`）撑起层次，不靠渐变与光晕。
 
-**反面清单**（这些在浅色底上都是错色，已被 `scripts/check-light-contrast.mjs` 列为禁用色）：
+**反面清单**（构建闸门 `scripts/check-light-contrast.mjs` 直接拦）：
 
-- `#ffd700` 金色 —— 不属于本项目色系，且浅底上几乎不可读
-- 纯白 `#fff` 作为浅底上的前景色 —— 不可见
-- 浅灰 `#f0f0f0` 作为浅底上的前景色 —— 不可见
+- `#ffd700` 金色 / `rgba(255,215,0,*)` —— 不属于项目色系（AI 域琥珀一律 `--accent-2` = #ffa117）
+- `#f0f0f0` 浅灰前景 —— 浅色时代遗留
+- 深底上的纯黑前景 `#000` —— 不可见（白底面板上则禁纯白前景）
+- `@media` 块内出现任何颜色声明 —— 闸门只覆盖基础字号，media 里塞颜色无法对账
+- 组件里写硬编码 hex —— 一律引用 `var(--token)`
 
-### 1.2 两套工具层，别混用
+## 2. 令牌层（真源：`src/assets/styles/tokens.css`）
 
-仓库里有两套互不相干的面板工具层，**各有各的适用页面**：
+### 2.1 基础层：深灰阶
 
-| 工具层 | 文件 | 外观 | 用在 |
-|---|---|---|---|
-| `ai-*` | `src/assets/styles/ai-panel-kit.css` | 近黑底 `rgba(10,12,18,.7)` + 琥珀 `#ffa117` | **AI 演武场**那套 HUD 界面 |
-| `sim-*` | `src/assets/styles/simulation-panel-kit.css` | 白底 `#FFFFFF` + 靛紫 `#6E5AF0` | **浅色页面**（仿真实验室右栏等） |
-
-把 `ai-*` 搬进浅色页面，整页会像装了两个 App；把 `sim-*` 搬进 AI 演武场，深色 HUD 上又会变成一片白板。
-**`scripts/check-light-contrast.mjs` 会在构建时拦住这种混用**：浅色页面里出现 `ai-bg-panel` / `ai-t-amber` 之类的类名，直接红。
-
-## 2. Color System
-
-### 2.1 Primitive palette（原始值）
-
-| 名称 | 值 | 用途 |
+| Token | 值 | 角色 |
 |---|---|---|
-| Indigo 500 | `#6E5AF0` | 品牌主色（`rgb(110, 90, 240)`） |
-| Indigo 700 | `#4B37C9` | 靛紫加深，浅底上仍达 AA |
-| Indigo 050 | `#E9E8FB` | 靛紫浅底（标签、徽章底） |
-| Indigo 100 | `#E1DFFA` | 靛紫 hover 浅底 |
-| Slate 900 | `#333333` | 正文 |
-| Slate 600 | `#666666` | 次级文字 |
-| Cloud 050 | `#F7F8FC` | 页面底色 |
-| Cloud 100 | `#FFFFFF` | 卡片 / 面板 |
-| Cloud 200 | `#E4E9F5` | 导航 active 底 / 边框 |
-| Amber 700 | `#96560A` | 目标色（深琥珀，AA 合规） |
-| Neutral 200 | `#DDDDDD` | 分隔线 |
-| Neutral 100 | `#F5F5F5` | 轨道 / 占位底 |
+| `--ink-950` | `#0e1015` | 画布（最深） |
+| `--ink-900` | `#12151c` | 常规面板 |
+| `--ink-850` | `#171b25` | 浮起面板 / 卡片 |
+| `--ink-800` | `#1d2230` | 输入框 / 嵌入区 |
+| `--ink-700` | `#262c3d` | hover 面 / 强边框 |
 
-### 2.2 Semantic layer（组件只引用这一层）
+### 2.2 语义层（组件只引用这一层）
 
-> 本项目**只有浅色主题**，所以 Light / Dark 两列同值。深色模式尚未实现（见 §0）。
-
-| Token | Light | Dark | Role | 实测对比度 |
-|---|---|---|---|---|
-| `--color-bg` | `#F7F8FC` | `#F7F8FC` | 页面底 | — |
-| `--color-surface` | `#FFFFFF` | `#FFFFFF` | 卡片 / 面板 | — |
-| `--color-surface-raised` | `#FFFFFF` | `#FFFFFF` | 浮层（弹窗 / 下拉） | — |
-| `--color-fg` | `#333333` | `#333333` | 正文 | 11.91:1 on bg |
-| `--color-fg-muted` | `#666666` | `#666666` | 次级正文 | 5.41:1 on bg |
-| `--color-fg-subtle` | `#8A8A99` | `#8A8A99` | 弱化说明 | 3.40:1 on surface |
-| `--color-fg-on-accent` | `#FFFFFF` | `#FFFFFF` | 主色底上的文字 | 4.79:1 on accent |
-| `--color-border` | `#E4E9F5` | `#E4E9F5` | 装饰性分隔 | 1.16:1 on surface（装饰用途） |
-| `--color-border-strong` | `#8A8A99` | `#8A8A99` | **作为唯一指示的 UI 边界** | 3.40:1 on surface |
-| `--color-border-subtle` | `#F5F5F5` | `#F5F5F5` | 极弱分隔 / 骨架屏 | — |
-| `--color-accent` | `#6E5AF0` | `#6E5AF0` | 品牌主色 | 4.51:1 on bg |
-| `--color-accent-hover` | `#4B37C9` | `#4B37C9` | 靛紫加深 | 6.47:1 on accent-subtle |
-| `--color-accent-subtle` | `#E9E8FB` | `#E9E8FB` | 靛紫浅底 | — |
-| `--color-focus-ring` | `#6E5AF0` | `#6E5AF0` | 焦点环 | 4.79:1 on surface |
-| `--color-target` | `#96560A` | `#96560A` | 目标 / 高亮（深琥珀） | 5.78:1 on surface |
-| `--color-target-subtle` | `#FFF3E0` | `#FFF3E0` | 目标浅底 | — |
-| `--color-danger` | `#C62828` | `#C62828` | 危险（新增语义） | 5.62:1 on surface |
-| `--color-danger-subtle` | `#F5C6CB` | `#F5C6CB` | 危险浅底 | — |
-| `--color-success` | `#2E7D32` | `#2E7D32` | 成功（新增语义） | 5.13:1 on surface |
-| `--color-success-subtle` | `#E8F5E9` | `#E8F5E9` | 成功浅底 | — |
-| `--color-warning` | `#B26A00` | `#B26A00` | 警告（新增语义） | 4.62:1 on surface |
-| `--color-warning-subtle` | `#FFF4E5` | `#FFF4E5` | 警告浅底 | — |
-| `--color-info` | `#3498DB` | `#3498DB` | 信息（新增语义） | 2.79:1 on surface ⚠️ |
-| `--color-info-subtle` | `#E1F0FA` | `#E1F0FA` | 信息浅底 | — |
-
-> ⚠️ `--color-info` `#3498DB` 在白底上只有 **2.79:1**，**不可用于正文**（需 ≥4.5:1）。
-> 要么只用于图标/边框这类 UI 元素，要么换成 `#2166AC`（5.10:1）。本项目当前还没用到信息态，**先按 UI 元素用**。
-
-### 2.2.1 使用方式
-
-```css
-:root {
-  --color-bg: #F7F8FC;
-  --color-surface: #FFFFFF;
-  --color-fg: #333333;
-  --color-fg-muted: #666666;
-  --color-border: #E4E9F5;
-  --color-border-strong: #8A8A99;
-  --color-accent: #6E5AF0;
-  --color-accent-hover: #4B37C9;
-  --color-accent-subtle: #E9E8FB;
-  --color-focus-ring: #6E5AF0;
-  --color-target: #96560A;
-  --color-danger: #C62828;
-  --color-success: #2E7D32;
-  --color-warning: #B26A00;
-  --color-info: #3498DB;
-}
-```
-
-### 2.3 语义色对照表（WCAG 2.2 AA 实测值）
-
-| 前景 | 背景 | 对比度 | 判定 |
-|---|---|---|---|
-| `--color-fg` `#333333` | `--color-bg` `#F7F8FC` | **11.91:1** | AA（正文） |
-| `--color-fg-muted` `#666666` | `--color-bg` `#F7F8FC` | **5.41:1** | AA（正文） |
-| `--color-accent` `#6E5AF0` | `--color-bg` `#F7F8FC` | **4.51:1** | AA（正文/图标） |
-| `--color-accent-hover` `#4B37C9` | `--color-accent-subtle` `#E9E8FB` | **6.47:1** | AA |
-| `--color-accent` `#6E5AF0` | `--color-accent-subtle` `#E1DFFA` | **6.16:1** | AA |
-| `--color-target` `#96560A` | `#FFFFFF` | **5.78:1** | AA |
-| `--color-target` `#96560A` | `#E4E9F5` | **4.76:1** | AA |
-| `--color-focus-ring` `#6E5AF0` | `#FFFFFF` | **4.79:1** | ≥3:1 ✅ |
-
-> 表格由 `scripts/check-light-contrast.mjs` 在构建时校验，改色值会让构建失败。
-
-### 2.4 Forced-colors mode（Windows 高对比度）
-
-在 `forced-colors: active` 下，浏览器会丢弃作者颜色、只保留系统色。此时**必须**让结构仍然可辨：
-
-```css
-@media (forced-colors: active) {
-  .nav-item.active .icon::before { border: 2px solid ButtonText; }
-  .btn-primary { border: 2px solid ButtonText; }
-}
-```
-
-**不要**在 `forced-colors` 下用 `forced-color-adjust: none` 强行保留品牌色——那会破坏用户的系统设置。
-
-### 2.5 已知缺口
-
-**① 状态色尚未落地。** `--color-danger` / `--color-success` / `--color-warning` / `--color-info` 是**新增语义**。
-当前代码里还没有成体系的成功/警告/错误状态色（只有模板遗留的 `#f5c6cb`、`#3498db` 等零散值）。
-**新增交互时优先用这四个语义名**，并同步把散落的遗留色替换掉。
-
-**② 遗留边框色达不到 UI 边界阈值。** 代码里 `#DDDDDD`（8 处）、`#E0E0E0`（7 处）作为边框使用时，
-与白底的对比度只有 1.4–1.5:1，**不足以作为"唯一的边界指示"**。它们应归为装饰性 `--color-border`；
-凡是边界本身就是唯一可交互线索的地方（输入框边框、选中态描边），改用 `--color-border-strong` `#8A8A99`（3.40:1）。
-
-**③ 模板遗留色需要一次清理。** 早期模板的扁平化配色仍在代码里：
-`#2c3e50`（9 处）、`#34495e`（7 处）、`#3d5a7c`（3 处）、`#3498db`（6 处）、`#ffd700`（12 处）。
-其中 `#ffd700` 已被总览页对比度闸门列为禁用色。清理时按语义映射到上表的令牌名。
-
-
-## 3. Typography
-
-### 3.1 Font families
-
-```css
---font-sans: 'Microsoft YaHei', 'Arial', sans-serif;
---font-mono: 'Consolas', 'SFMono-Regular', monospace;
-```
-
-中文优先字体栈（`Microsoft YaHei` 先行），西文回退 `Arial`。
-**不引入 webfont**：外链字体是渲染阻塞源，且本项目到海外 CDN 的链路不稳定。
-
-### 3.2 实际使用的字号阶梯
-
-从代码统计出的真实阶梯（不是理想值，是现状）：
-
-| 令牌 | 值 | 实际用途 |
+| Token | 值 | 角色 / 对比度 |
 |---|---|---|
-| `--text-2xs` | 11px | 极小标签 |
-| `--text-xs` | 12px | 徽章 / 次要说明 |
-| `--text-sm` | 13px | 紧凑正文 |
-| `--text-base` | 14px | **正文默认**（导航、面板） |
-| `--text-md` | 16px | 卡片标题 |
-| `--text-lg` | 18px | 区块标题 |
-| `--text-xl` | 20px | 面板标题 |
-| `--text-2xl` | 24px | 页面副标题 |
-| `--text-3xl` | 28px | 区块主标题 |
-| `--text-4xl` | 32px | 页面主标题（总览页） |
-| `--text-5xl` | 48px | 展示级标题（总览页） |
+| `--bg-canvas` / `--bg-panel` / `--bg-panel-raised` / `--bg-inset` | 映射 `--ink-*` | 画布 / 面板 / 浮起面板 / 嵌入区 |
+| `--border-subtle` | `rgba(255,255,255,.08)` | 常规分隔 |
+| `--border-strong` | `rgba(255,255,255,.16)` | 强分隔 / hover 边 |
+| `--text-1` | `#e9ebf3` | 主文字（on canvas ≈15:1） |
+| `--text-2` | `#a9aec1` | 次级（≈8:1） |
+| `--text-3` | `#828aa3` | 弱化标注（≈5:1） |
+| `--accent` | `#8d7ef5` | 强调**文字**（on panel ≈5:1） |
+| `--accent-strong` | `#6e5af0` | 强调**底**（其上白字 ≈4.8:1） |
+| `--accent-strong-hover` | `#7f6ff3` | 按钮悬停（深色下 hover 提亮，不是压暗） |
+| `--accent-soft` | `rgba(124,106,242,.16)` | 选中底 / 高亮底 |
+| `--accent-2` | `#ffa117` | 琥珀次强调（AI 域） |
+| `--danger` / `--success` / `--warning` | `#f0616a` / `#43c07f` / `#ffa117` | 状态**文字** |
+| `--danger-strong` / `--success-strong` | `#b91c1c` / `#15803d` | 状态**底**（配白字） |
+| `--radius-sm/md/lg` | `4/8/12px`、`--shadow-panel/pop` | 几何 |
+| `--text-xs…2xl` | `12…26px` | 字号阶 |
 
-> 缺口：`--text-2xl`–`--text-4xl` 在 token 层尚未定义（只有 11/12/13/14/16/18/20/24/28/32/40/48 的实际值），
-> 补齐后本页表格即成为真源。
+## 3. 两套工具层，各守各的域
 
-### 3.3 字重
-
-`400`（正文）/ `500`（强调）/ `600`（标题）/ `700`（强强调）。中文场景下 400 与 500 差别很小，
-**不要**用 300 以下（中文细体在小字号下会糊）。
-
-## 4. Spacing
-
-### 4.1 Base scale（4px 网格）
-
-`--space-1: 4px` · `--space-2: 8px` · `--space-3: 12px` · `--space-4: 16px` · `--space-5: 20px` · `--space-6: 24px` · `--space-8: 32px` · `--space-10: 40px` · `--space-12: 48px`
-
-### 4.2 逻辑属性（i18n / RTL）
-
-间距一律用 `margin-inline` / `padding-inline` / `inset-inline`，
-**不要**写 `margin-left` / `padding-right`。本项目目前只有中文，但这是零成本的未来兼容。
-
-## 5. Radius & Shape
-
-```css
---radius-sm: 4px;    /* 标签、内联元素（代码里最常用，14 处） */
---radius-md: 8px;    /* 按钮、输入框 */
---radius-lg: 12px;   /* 卡片 */
---radius-xl: 20px;   /* 大面板 */
---radius-full: 9999px; /* 头像 / 药丸 */
-```
-
-实际使用：4px(14) · 6px(3) · 8px(11) · 10px(5) · 12px(5) · 16px(1) · 20px(1) · 30px(1) · 50px(1)。
-**新代码只允许 4 / 8 / 12 / 20 / 9999 这五档**，其余视为遗留。
-
-## 6. Elevation & Shadow
-
-```css
---shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.06);
---shadow-md: 0 4px 12px rgba(17, 24, 39, 0.08);
---shadow-lg: 0 12px 32px rgba(17, 24, 39, 0.10);
-```
-
-### Focus ring（双层，保证任意底色上 ≥3:1）
-
-```css
-:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--color-surface), 0 0 0 5px var(--color-focus-ring);
-}
-```
-
-内层用 `--color-surface` 把焦点环与元素本身隔开，外层用 `--color-focus-ring`。
-这样焦点环在**任何底色**上都保持 3:1 对比（内层造出一圈表面色）。
-
-## 7. Motion
-
-### 7.1 Duration & easing
-
-```css
---duration-fast: 120ms;
---duration-base: 200ms;
---duration-slow: 400ms;
---ease-out: cubic-bezier(0.16, 1, 0.3, 1);
---ease-in: cubic-bezier(0.4, 0, 1, 1);
-```
-
-### 7.2 规则
-
-- 只动 `transform` 和 `opacity`。**不要**动 `width` / `height` / `top` / `left`（会触发布局）。
-- 时长 ≤ 300ms（`--duration-slow` 仅用于页面级淡入）。
-- 必须挂在 `prefers-reduced-motion` 之下：
-
-```css
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-```
-
-## 8. Component State Matrix
-
-每个交互元素必须覆盖这些状态，缺一个就是缺陷。
-
-### 8.1 Button
-
-| 状态 | 表现 | 令牌 |
+| 工具层 | 文件 | 适用域 |
 |---|---|---|
-| `hover` | 靛紫加深 | `--color-accent-hover` |
-| `focus-visible` | 双层焦点环 | `--color-focus-ring` + `--color-surface` |
-| `active` | 轻微缩放 `scale(0.98)` | transform only |
-| `disabled` | 降低对比 + 禁止指针事件 | `opacity: 0.5` |
-| `loading` | `aria-busy="true"` + 禁止重复提交 | — |
+| `ai-*` | `src/assets/styles/ai-panel-kit.css` | **AI 演武场**（`AIPlayground.vue` + `components/three/ai/`） |
+| `sim-*` | `src/assets/styles/simulation-panel-kit.css` | **仿真实验室**（`SimulationLab.vue` + `components/simulations/`） |
 
-### 8.2 Input
+两层的色彩语义完全一致（同一套令牌），只是类名前缀与服务的页面域不同。
+**`scripts/check-light-contrast.mjs` 白名单闸门**：`ai-*` 类出现在 AI 域之外、
+或 `sim-*` 出现在实验室域之外，构建直接红——工具层串门 = 一个应用装出两套观感。
 
-| 状态 | 令牌 |
-|---|---|
-| `hover` | `--color-border-strong` |
-| `focus-visible` | `--color-focus-ring` |
-| `error` | `--color-danger` + `--color-danger-subtle` |
-| `readonly` | `--color-fg-muted` + `cursor: not-allowed` |
-| `disabled` | `--color-border-subtle` + `opacity: 0.6` |
+## 4. 闸门联动（改样式必读）
 
-### 8.3 屏幕状态
+`npm run build` 会跑 **`check-light-contrast`**：从 `tokens.css` 解析 `--bg-canvas`/
+`--bg-panel` 作对账底色，展开组件里的 `var(--token)` 后逐条算 WCAG AA
+（正文 4.5:1、大字 3:1）。改令牌值 = 改全站底色 = 闸门标准变——
+改之前想清楚三级文字还能不能达标。
 
-`loading`（骨架屏用 `--color-border-subtle` 派生，不写死灰）· `empty` · `error` · `success`。
-骨架屏颜色必须由 surface 派生，不要硬编码。
+**CSS 注释陷阱**：注释里写 `--bg-*/--text-*` 这类字符串，其中的 `*/` 会把注释
+提前闭合，剩余文本变成非法 token、**毒化整个 :root 块**（tokens.css 曾因此整批
+失效）。注释里写通配记号请用顿号或加空格：`--bg-*、--text-*`。
 
-## 9. Layout & Responsive
+## 5. 常用模板
 
-### 9.1 Breakpoints
-
-`320` · `375` · `768` · `1024` · `1440` · `1920`
-
-### 9.2 规则
-
-- 布局在 `320px` 下**不得横向滚动**。
-- 侧边导航在 `≤768px` 收成抽屉（`inset-inline-start` 定位）。
-- 3D 视口高度必须**有确定值**（当前 560px）——曾因 `h-[calc(100%-46px)]`（无效 CSS）导致高度退化成 `auto`，
-  画布与布局互相顶高成 1338×1849px 的反馈循环。**写视口高度时用真实 CSS，不要用无效 calc。**
-- 3D 画布尺寸用 `getBoundingClientRect()` 读取，不要读 `window.innerWidth`（视口 ≠ 容器）。
-
-## 10. Agent Prompt Guide
-
-### 10.1 写界面时的正确姿势
-
-```
-按 DESIGN.md 的令牌写这个组件：所有颜色引用 --color-* 名，所有间距引用 --space-*，
-所有字号引用 --text-*，所有圆角引用 --radius-*。
-交互元素补齐 hover / focus-visible / active / disabled（按钮加 loading，输入框加 error 与 readonly）。
-焦点环用双层 box-shadow。不要写死任何色值与魔法数字。
+```css
+/* 面板 */
+.panel {
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
+}
+/* 主按钮：accent 底 + 白字 */
+.btn-primary { background: var(--accent-strong); color: #ffffff; }
+.btn-primary:hover { background: var(--accent-strong-hover); }
+/* 次按钮：透明底 + 描边 */
+.btn-ghost { background: transparent; border: 1px solid var(--border-strong); color: var(--text-1); }
+/* 输入框 */
+.input { background: var(--bg-inset); border: 1px solid var(--border-subtle); color: var(--text-1); }
 ```
 
-### 10.2 起步方式
-
-本项目已有锁定的令牌层，**直接从 `DESIGN.md` 开始**，不要从截图反推。
-
-### 10.3 迭代
-
-改完跑一次校验：
-
-```bash
-# DESIGN.md 本身
-bash ~/.minimax/skills/super-design/scripts/lint-design-md.sh DESIGN.md
-node ~/.minimax/skills/super-design/scripts/contrast-check.mjs DESIGN.md
-
-# 本项目自带的门禁（改完 UI 必跑）
-npm run verify:light-contrast     # 浅色页面配色（总览 / 首页 / 仿真实验室面板）
-npm run build                      # 含全部闸门
-```
-
-## 附：品牌标识
-
-站点标识的**矢量母版**是 `src/assets/images/logo.svg`。它由 `npm run gen:brand`
-栅格化成 `src/assets/images/logo.png`（页头用）与 `public/favicon.ico`——
-**要改设计就改母版 SVG，然后重跑生成命令**，不要手改那两个产物。
-
-### 设计语义
-
-| 元素 | 含义 |
-| --- | --- |
-| 等距立方体 | 3D 场景里的一个对象 |
-| 引出标注线 + 琥珀节点 | 对这个对象做测量 / 分析 / 仿真——项目的内核 |
-| 靛紫三面 | `--color-accent` / `--color-accent-hover` / 浅靛，靠明度差分出三个受光面 |
-
-### 配色
-
-| 用途 | 值 | 对应令牌 |
-| --- | --- | --- |
-| 顶面 | `#8E80F7` | 浅靛（accent 的高光面） |
-| 左面 | `#6E5AF0` | `--color-accent` |
-| 右面 | `#4B37C9` | `--color-accent-hover` |
-| 引出线 | `#6E5AF0` | `--color-accent` |
-| 节点 | `#FFA117` | 琥珀（深底上的强调色） |
-
-琥珀只出现在一枚节点上——**大面积用琥珀会毁掉主色的单一性**。
-
-### 尺寸适配
-
-标识在 16px 仍要成立（favicon 32px、页头 46px、圆形徽标）。构图刻意留出
-四周安全边距：方形与圆形裁切下都不切到节点。
-
-## 附：门禁清单
-
-| 脚本 | 守什么 |
-|---|---|
-| `scripts/check-light-contrast.mjs` | 浅色页面的 WCAG AA + 禁用色 + 浅色页面不许引用深色工具层 |
-| `scripts/check-no-babylon.mjs` | Babylon 残留（背景已换成 Canvas 2D） |
-| `scripts/check-no-emit-artifacts.mjs` | `src/` 下的编译产物污染 |
-| `scripts/check-docs.mjs` | 文档不能是 0 字节 |
-| `scripts/check-entry-bundle-size.mjs` | 入口 chunk 体积上限 |
-| `scripts/check-dead-deps.mjs` | 零引用依赖不得复活（20 项） |
-| `scripts/check-tailwind-classes.mjs` | 死 Tailwind 类名不得增加（基线 757） |
+主按钮上的白字是**唯一允许的裸 `#ffffff` 前景**——元素自带底色时对比度闸门
+会按实际底色对账，不要在无底色的深面上直接写白字。
