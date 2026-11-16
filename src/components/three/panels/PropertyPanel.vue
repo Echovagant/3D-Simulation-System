@@ -431,8 +431,8 @@ const updateScale = () => {
 .property-panel {
   width: 100%;
   padding: 15px;
-  background-color: #f5f5f5;
-  border-left: 1px solid #ddd;
+  background-color: var(--bg-panel);
+  border-left: 1px solid var(--border-subtle);
   overflow-y: auto;
   height: 100%;
   box-sizing: border-box;
@@ -441,9 +441,9 @@ const updateScale = () => {
 h3 {
   margin: 0 0 20px 0;
   font-size: 16px;
-  color: #333;
+  color: var(--text-1);
   padding-bottom: 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .property-group {
@@ -454,51 +454,54 @@ h3 {
   display: block;
   margin-bottom: 6px;
   font-size: 13px;
-  color: #666;
+  color: var(--text-2);
   font-weight: 500;
 }
 
 .property-group input {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   font-size: 14px;
+  color: var(--text-1);
+  background-color: var(--bg-inset);
+  color-scheme: dark;
   box-sizing: border-box;
   transition: border-color 0.2s;
 }
 
 .property-group input:focus {
   outline: none;
-  border-color: #3498db;
-  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
 .empty-state {
   text-align: center;
   padding: 30px 10px;
-  color: #888;
+  color: var(--text-2);
 }
 
 .empty-state .hint {
   margin-top: 10px;
   font-size: 12px;
-  color: #aaa;
+  color: var(--text-3);
 }
 
 .delete-btn {
   width: 100%;
   padding: 10px;
-  background-color: #e53e3e;
-  color: white;
+  background-color: var(--danger-strong);
+  color: #ffffff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   margin-top: 20px;
-  transition: background-color 0.2s;
+  transition: filter 0.2s;
 }
 
 .delete-btn:hover {
-  background-color: #c53030;
+  filter: brightness(1.15);
 }
 </style>

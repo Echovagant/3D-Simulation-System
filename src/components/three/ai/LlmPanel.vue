@@ -481,7 +481,7 @@ const explain = async (): Promise<void> => {
 .llm-explanation {
   line-height: 1.7;
   padding: 0.5rem;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg-inset);
   border-radius: 4px;
   border-left: 2px solid rgba(255, 161, 23, 0.5);
 }

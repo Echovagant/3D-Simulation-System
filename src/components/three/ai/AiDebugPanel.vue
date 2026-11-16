@@ -329,7 +329,7 @@ const formatDifficulty = (difficulty: string) => {
   margin: 0 0 0.5rem;
   font-size: 0.7rem;
   line-height: 1.5;
-  color: #9ca3af;
+  color: var(--text-2);
   opacity: 0.85;
 }
 
