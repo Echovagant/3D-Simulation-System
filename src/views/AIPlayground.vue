@@ -1,56 +1,32 @@
 <template>
   <div class="ai-playground-container">
-    <!-- 顶部标题条：标题与一句话说明并排，把纵向空间让给 3D 视图 -->
-    <div class="page-header">
-      <div class="header-glow"></div>
-      <div class="header-row">
-        <h1 class="ai-title">
-          <span class="title-text">
-            <span class="ai-title-emoji">🧠</span>AI演武场
-          </span>
-        </h1>
-        <p class="ai-lead">
-          智能体在
-          <span class="ai-lead-accent">真实渲染的 3D 场地</span>里读感知、绕障碍、自主移动；
-          <span class="ai-lead-muted">碰撞与运动由 Rapier 刚体引擎求解</span>。
-        </p>
-      </div>
-    </div>
-
-    <!-- 主内容区域 -->
-    <div
-      class="ai-layout"
+    <!-- 页头：标题 + 一句话说明；右侧 actions 区放运行状态 chip（原页脚的三态状态上移收敛） -->
+    <PageHeader
+      title="AI演武场"
+      lead="智能体在真实渲染的 3D 场地里读感知、绕障碍、自主移动"
     >
+      <template #actions>
+        <span class="ai-status-chip">
+          <span class="ai-status-dot" :class="footerDotClass"></span>
+          {{ footerStatusText }}
+        </span>
+      </template>
+    </PageHeader>
+
+    <!-- 主内容区域：24 栏栅格，左 5 / 中 14 / 右 5 -->
+    <div class="ai-layout">
       <!-- 左侧面板 -->
       <div class="ai-col-side ai-col-left">
-        <div class="panel left-panel animate-fade-in-right">
-          <div class="panel-glow"></div>
-          <div class="panel-header">
-            <span class="ai-panel-title">
-              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"
-                />
-              </svg>
-              环境配置
-            </span>
+        <div class="panel">
+          <div class="panel-head">
+            <PanelHeader title="环境配置" />
           </div>
           <AiEnvironmentPanel />
         </div>
 
-        <div class="panel left-panel animate-fade-in-right delay-100">
-          <div class="panel-glow"></div>
-          <div class="panel-header">
-            <span class="ai-panel-title">
-              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              AI控制器
-            </span>
+        <div class="panel">
+          <div class="panel-head">
+            <PanelHeader title="AI控制器" />
           </div>
           <AiController />
         </div>
@@ -58,46 +34,26 @@
 
       <!-- 中间3D视图 -->
       <!--
-        注意：本仓库没有接 Tailwind，模板里 h-[...] / flex-1 / lg:col-span-* 这些工具类
-        都不生效。视口高度由 scoped CSS 的 .ai-viewport 给出（否则视口高度会被画布内容顶起来，
+        注意：本仓库没有接 Tailwind，模板里的工具类都不生效。
+        视口高度由 scoped CSS 的 .ai-viewport 给出（否则视口高度会被画布内容顶起来，
         画布尺寸又反过来影响视口高度，形成反馈）。
       -->
-      <div class="ai-col-center panel center-panel animate-fade-in-up">
-        <div class="panel-glow"></div>
-        <div class="panel-header">
-          <span class="ai-panel-title">
-            <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
-              <path
-                fill-rule="evenodd"
-                d="M12.395 2.553a1 1 0 00-1.45-.385c-.345.23-.614.558-.822.88-.214.33-.403.713-.57 1.116-.334.804-.614 1.768-.84 2.734a31.365 31.365 0 00-.613 3.58 2.64 2.64 0 01-.945-1.067c-.328-.68-.398-1.534-.398-2.654A1 1 0 005.05 6.05 6.981 6.981 0 003 11a7 7 0 1011.95-4.95c-.592-.591-.98-.985-1.348-1.467-.363-.476-.724-1.063-1.207-2.03zM12.12 15.12A3 3 0 017 13s.879.5 2.5.5c0-1 .5-4 1.25-4.5.5 1 .786 1.293 1.371 1.879A2.99 2.99 0 0113 13a2.99 2.99 0 01-.879 2.121z"
-                clip-rule="evenodd"
-              />
-            </svg>
-            3D环境视图
-          </span>
-          <div class="ai-dots">
-            <span class="ai-dot ai-dot-red"></span>
-            <span
-              class="ai-dot ai-dot-amber"
-              style="animation-delay: 0.2s"
-            ></span>
-            <span
-              class="ai-dot ai-dot-green"
-              style="animation-delay: 0.4s"
-            ></span>
-          </div>
+      <div class="ai-col-center panel">
+        <div class="panel-head">
+          <PanelHeader title="3D环境视图">
+            <!-- 物理现状说明从视口正下方的常驻长文案收敛成 InfoTip -->
+            <InfoTip
+              text="碰撞与运动由 Rapier 刚体引擎求解：智能体与障碍物都是真实刚体（有质量、摩擦与弹性），撞上障碍会被挡下并沿箱体滑开；感知数据（视野内障碍数、最近距离）直接来自引擎的形状查询。默认不调用任何外部模型；自行填入 API Key 后，右侧 LLM 面板可开启决策与旁路解释。"
+              label="物理与感知说明"
+            />
+          </PanelHeader>
         </div>
 
         <div ref="viewportRef" class="ai-viewport">
-          <!-- 加载状态优化 -->
-          <div
-            v-if="isLoading"
-            class="ai-loading"
-          >
+          <!-- 加载状态 -->
+          <div v-if="isLoading" class="ai-loading">
             <div class="ai-loading-inner">
-              <div
-                class="ai-spinner"
-              ></div>
+              <div class="ai-spinner"></div>
               <p class="ai-loading-title">加载3D环境...</p>
               <p class="ai-loading-sub">正在初始化3D场景与智能体</p>
               <div class="ai-progress">
@@ -106,25 +62,21 @@
             </div>
           </div>
 
-          <!-- 操作提示卡片 -->
-          <div
-            class="ai-hint"
-          >
+          <!-- 操作提示卡片：H 键整体显隐（hintVisible，见 script） -->
+          <div v-if="hintVisible" class="ai-hint">
             <p class="ai-hint-row">
-              <span class="control-key">🖱️</span> 鼠标拖动: 旋转视角
+              <span class="control-key">左键</span>拖动旋转视角
             </p>
             <p class="ai-hint-row">
-              <span class="control-key">↕️</span> 滚轮: 缩放
+              <span class="control-key">滚轮</span>缩放视角
             </p>
-            <p class="ai-panel-title">
-              <span class="control-key">⇧</span> Shift+拖动: 平移
+            <p class="ai-hint-row ai-hint-row-last">
+              <span class="control-key">Shift</span>+拖动平移视角
             </p>
           </div>
 
-          <!-- 视角指示器 -->
-          <div
-            class="ai-camera-panel"
-          >
+          <!-- 视角指示器：与左下提示卡一起由 H 键显隐 -->
+          <div v-if="hintVisible" class="ai-camera-panel">
             <div class="ai-camera-title">
               <svg class="ai-icon" fill="currentColor" viewBox="0 0 20 20">
                 <path
@@ -176,7 +128,8 @@
               >
                 E
               </div>
-              <div class="ai-key ai-key-blank"></div>
+              <!-- H 键：切换提示层显隐（操作提示卡 + 本面板一起收起），无按下态 -->
+              <div class="ai-key">H</div>
 
               <div
                 class="ai-key ai-key-wide"
@@ -186,80 +139,28 @@
               </div>
             </div>
             <p class="ai-camera-hint">
-              W/S 前后 · A/D 左右 · Q/E 升降 · R 复位
+              W/S 前后 · A/D 左右 · Q/E 升降 · R 复位 · H 提示
             </p>
           </div>
         </div>
-
-        <!-- 物理现状的页面可见说明：碰撞由 Rapier 刚体引擎求解 -->
-        <p class="physics-note">
-          物理由 Rapier 刚体引擎求解：智能体与障碍物都是真实刚体，有质量、摩擦与弹性，
-          撞上障碍物会被挡下并沿着箱体滑开；感知（视野内障碍物数量、最近距离）
-          直接来自引擎的形状查询，碰撞判定来自接触流形。默认不调用任何外部模型；
-          若自行填入 API Key，右侧面板还可开启 LLM 决策与旁路解释。
-        </p>
       </div>
 
       <!-- 右侧面板 -->
       <div class="ai-col-side ai-col-right">
-        <div class="panel right-panel animate-fade-in-left">
-          <div class="panel-glow"></div>
-          <div class="panel-header">
-            <span class="ai-panel-title">
-              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              调试信息
-            </span>
+        <div class="panel">
+          <div class="panel-head">
+            <PanelHeader title="调试信息" />
           </div>
           <AiDebugPanel />
         </div>
 
-        <div class="panel right-panel animate-fade-in-left delay-100">
-          <div class="panel-glow"></div>
-          <div class="panel-header">
-            <span class="ai-panel-title">
-              <svg class="ai-icon-amber" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fill-rule="evenodd"
-                  d="M10 3a3 3 0 00-3 3v1a3 3 0 00-2 5.2A3 3 0 007 17h1a1 1 0 001-1v-2h2v2a1 1 0 001 1h1a3 3 0 004-4.8A3 3 0 0015 7V6a3 3 0 00-3-3H10zm0 2h2a1 1 0 011 1v1a1 1 0 001 1 1 1 1 0 011 1 1 1 0 00-1 1v1a1 1 0 01-1 1h-1a1 1 0 01-1-1v-2H9v2a1 1 0 01-1 1H7a1 1 0 01-1-1 1 1 0 00-1-1 1 1 0 010-2 1 1 0 001-1V6a1 1 0 011-1z"
-                  clip-rule="evenodd"
-                />
-              </svg>
-              LLM 增强
-            </span>
+        <div class="panel">
+          <div class="panel-head">
+            <PanelHeader title="LLM 增强" />
           </div>
           <LlmPanel :agent-id="explainTargetId" :get-snapshot="getSnapshot" />
         </div>
       </div>
-    </div>
-
-    <!-- 页脚 -->
-    <div class="ai-footer">
-      <div class="footer-divider"></div>
-      <p class="ai-footer-row">
-        <span class="ai-panel-title">
-          <span
-            class="ai-dot ai-dot-amber ai-dot-inline"
-          ></span>
-          AI演武场 v1.0
-        </span>
-        <span class="ai-dot-sep"></span>
-        <span class="ai-panel-title"> 使用Three.js和Vue构建 </span>
-        <span class="ai-dot-sep"></span>
-        <span class="ai-panel-title">
-          <span
-            class="ai-dot ai-dot-inline"
-            :class="footerDotClass"
-            style="animation-delay: 0.4s"
-          ></span>
-          {{ footerStatusText }}
-        </span>
-      </p>
     </div>
   </div>
 </template>
@@ -276,6 +177,9 @@ import { arenaFraming } from '@/config/sceneFraming'
 import { useAI } from '@/composables/useAI'
 import { useAiStore } from '@/stores/aiStore'
 import { useLlmStore } from '@/stores/llmStore'
+import PageHeader from '@/components/common/PageHeader.vue'
+import PanelHeader from '@/components/common/PanelHeader.vue'
+import InfoTip from '@/components/common/InfoTip.vue'
 import AiController from '@/components/three/ai/AiController.vue'
 import AiDebugPanel from '@/components/three/ai/AiDebugPanel.vue'
 import AiEnvironmentPanel from '@/components/three/ai/AiEnvironmentPanel.vue'
@@ -284,6 +188,9 @@ import LlmPanel from '@/components/three/ai/LlmPanel.vue'
 // DOM引用
 const viewportRef = ref<HTMLDivElement | null>(null)
 const isLoading = ref(true)
+
+/** 提示层显隐：H 键切换——左下操作提示与右上键位图一起收起，默认展开 */
+const hintVisible = ref(true)
 
 // 组合式函数实例（useThree 是模块级单例，这几个实例共享同一套 three 上下文）
 const three = useThree()
@@ -295,7 +202,7 @@ const ai = useAI()
 const aiStore = useAiStore()
 const llmStore = useLlmStore()
 
-/** 页脚状态——真实反映仿真与 LLM 控制器的状态 */
+/** 运行状态 chip（原页脚三态，收敛到页头 actions 区）：LLM 降级红 / 运行中绿 / 暂停琥珀 */
 const footerStatusText = computed(() => {
   if (llmStore.degraded) return 'LLM 已降级'
   return aiStore.simulationActive ? '系统运行中' : '已暂停'
@@ -331,13 +238,14 @@ const clock = new THREE.Clock()
 const DEFAULT_CAMERA_POSITION = arenaFraming.position
 /** 视野角：75° 太广，收窄到 50° 后透视畸变小得多 */
 const DEFAULT_CAMERA_FOV = arenaFraming.fov
-/** 键盘移动相机的速度（米/秒） */
+/** 键盘平移相机的速度（米/秒） */
 const CAMERA_KEY_SPEED = 14
 
 /**
  * 当前按下的键——用 reactive 的 Set，按键指示器靠它高亮。
  *
  * ⚠️ 指示器画的就是这里真正响应的键：W/S/A/D/Q/E 平移相机，R 复位视角。
+ * H 键只切换提示层显隐（见 handleKeyDown），没有按下态，不进 pressedKeys、不画；
  * 方向键没有被绑定，所以不画。
  */
 const pressedKeys = reactive(new Set<string>())
@@ -358,6 +266,10 @@ const handleKeyDown = (event: KeyboardEvent) => {
       DEFAULT_CAMERA_POSITION.y,
       DEFAULT_CAMERA_POSITION.z,
     )
+    return
+  }
+  if (key === 'h') {
+    hintVisible.value = !hintVisible.value
     return
   }
   if ('wasdqe'.includes(key)) pressedKeys.add(key)
@@ -483,250 +395,13 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.ai-playground-container {
-  min-height: 100vh;
-  height: 100%;
-  padding-bottom: 1rem;
-}
-
-/* 标题样式：静态淡光，不再循环呼吸 */
-.title-text {
-  text-shadow: 0 0 12px rgba(255, 161, 23, 0.35);
-}
-
-.header-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 400px;
-  height: 150px;
-  background: radial-gradient(rgba(255, 161, 23, 0.25), transparent 70%);
-  filter: blur(25px);
-  z-index: -1;
-}
-
-.footer-divider {
-  width: 100%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 161, 23, 0.4), transparent);
-  margin: 0 auto;
-}
-
-/* 面板通用样式 */
-.panel {
-  background: var(--bg-panel);
-  border-radius: 16px;
-  border: 1px solid rgba(255, 161, 23, 0.3);
-  box-shadow: var(--shadow-panel);
-  overflow: hidden;
-  position: relative;
-  transition: all 0.3s ease;
-}
-
-.panel:hover {
-  border-color: rgba(255, 161, 23, 0.4);
-  transform: translateY(-3px);
-}
-
-.panel-glow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: radial-gradient(circle at 50% 0%, rgba(255, 161, 23, 0.15), transparent 70%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.panel:hover .panel-glow {
-  opacity: 1;
-}
-
-.panel-header {
-  background: linear-gradient(90deg, var(--bg-panel-raised), var(--bg-inset));
-  padding: 1rem 1.2rem;
-  border-bottom: 1px solid rgba(255, 161, 23, 0.3);
-  font-weight: 600;
-  color: var(--text-1);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 1.1rem;
-}
-
-/* 左右面板特定样式 */
-.left-panel {
-  box-shadow:
-    var(--shadow-panel),
-    -8px 0 20px rgba(255, 161, 23, 0.15);
-}
-
-.right-panel {
-  box-shadow:
-    var(--shadow-panel),
-    8px 0 20px rgba(255, 161, 23, 0.15);
-}
-
-.center-panel {
-  box-shadow:
-    var(--shadow-panel),
-    0 0 30px rgba(255, 161, 23, 0.2);
-}
-
-/* 3D 视口：高度不写死，由中间的列分配——面板头与说明文字之外的空间全是它。
-   宽度跟着容器走，Viewport 组件用 ResizeObserver 盯着真实尺寸，
-   相机的宽高比会跟着一起改（否则视口一变窄，场景就被拉成竖长条）。 */
-.ai-viewport {
-  position: relative;
-  width: 100%;
-  flex: 1;
-  min-height: 260px;
-  overflow: hidden;
-}
-
-/* 物理现状说明：告诉用户碰撞是解析式的，不是有摩擦/反弹/质量的刚体物理 */
-.physics-note {
-  margin: 0;
-  padding: 0.5rem 0.9rem;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  color: var(--text-2);
-  background: var(--bg-panel);
-  border-top: 1px solid rgba(255, 161, 23, 0.15);
-}
-
-/* 控制键样式 */
-.control-key {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: rgba(255, 161, 23, 0.2);
-  border: 1px solid rgba(255, 161, 23, 0.4);
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-/* 进度条动画 */
-.progress-bar {
-  animation: progress-loading 2s ease-in-out infinite;
-  width: 60%;
-}
-
-@keyframes progress-loading {
-  0% {
-    width: 30%;
-  }
-  50% {
-    width: 70%;
-  }
-  100% {
-    width: 30%;
-  }
-}
-
-/* 入场动画 */
-.animate-fade-in-right {
-  animation: fade-in-right 0.7s ease-out forwards;
-}
-
-.animate-fade-in-left {
-  animation: fade-in-left 0.7s ease-out forwards;
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.7s ease-out forwards;
-}
-
-.delay-100 {
-  animation-delay: 0.15s;
-}
-
-@keyframes fade-in-right {
-  from {
-    opacity: 0;
-    transform: translateX(-30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes fade-in-left {
-  from {
-    opacity: 0;
-    transform: translateX(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 响应式调整 */
-@media (max-width: 1180px) {
-  .ai-playground-container {
-    grid-template-rows: auto 1fr auto;
-  }
-
-  .ai-col-center {
-    order: -1;
-  }
-
-  .ai-col-left {
-    margin-bottom: 1rem;
-  }
-}
-
-@media (max-width: 768px) {
-  .svg-bg {
-    filter: blur(0.3px);
-  }
-
-  .panel-header {
-    padding: 0.8rem 1rem;
-    font-size: 1rem;
-  }
-
-  .control-key {
-    width: 24px;
-    height: 24px;
-    font-size: 12px;
-  }
-}
-
-/* 为面板内容添加内边距 */
-:deep(.panel-content) {
-  padding: 1.5rem;
-}
-
 /* ==========================================================================
-   页面骨架与语义色
+   AI 演武场：深色驾驶舱（与场景编辑器、仿真实验室的 3D 视口同语言）
    --------------------------------------------------------------------------
-   本仓库**没有**接 Tailwind（无依赖、无 postcss、无 tailwind.config），
-   模板里 `grid-cols-12` / `lg:col-span-*` / `text-white` 这类工具类
-   **全是死类名、不生效**。这一段把页面真正需要的布局与配色用真实 CSS 写出来。
-
-   配色沿用项目令牌层（见仓库根目录 DESIGN.md）：
-   演武场是**深色驾驶舱**（与场景编辑器、仿真实验室的 3D 视口一致），
-   浅色靛紫主色属于界面层，所以这里用的是"深底上的琥珀"var(--accent-2)
-   （对深底画布对比度 9.65:1），而不是浅底上的暗琥珀。
+   本仓库**没有**接 Tailwind，模板里出现的工具类全是死类名；
+   布局与配色全部用这里的真实 CSS + 项目令牌层（见仓库根目录 DESIGN.md）写出。
+   演武场用「深底上的琥珀」var(--accent-2)（对深底画布对比度 9.65:1），
+   而不是浅底上的暗琥珀。工具卡不 hover 抬升、不入场动画。
    ========================================================================== */
 
 .ai-playground-container {
@@ -734,29 +409,37 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   /* 一屏占满：高度跟着页面容器走。
-     普通布局要扣掉顶栏(30px)与内容区上下内边距(各30px)——这一页因此矮 90px；
-     页面进入「铺满」模式时这 90px 全部让掉，3D 场景直接占满整个窗口。
-     锁定高度后，这一页不再出现整页滚动条——高度由下面的栅格分配。 */
+     --page-content-block 在普通布局是内容区上下内边距（60px），
+     铺满模式（本页走这条）为 0px——3D 场景直接占满整个窗口，
+     不出现整页滚动条，高度由下面的栅格分配。 */
   height: calc(100vh - var(--page-content-block, 90px));
   min-height: 520px;
   overflow: hidden;
-  /* 深色底：与全站令牌同一画布色，不再依赖被删掉的 SVG 背景兜底 */
+  /* 深色底：与全站令牌同一画布色 */
   background: var(--bg-canvas);
 }
 
-/* 顶部标题条：标题与说明并排，纵向空间尽量让给 3D 视图 */
-.page-header {
-  position: relative;
-  z-index: 10;
-  padding: 1.25rem 1.5rem 0.75rem;
-  width: 100%;
+/* 页头右侧的运行状态 chip：原页脚三态状态上移收敛成一枚 */
+.ai-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--text-2);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 9999px;
+  white-space: nowrap;
 }
 
-.header-row {
-  display: flex;
-  align-items: baseline;
-  gap: 1.5rem;
-  width: 100%;
+/* 状态点形状；颜色类（ai-dot-red / ai-dot-green / ai-dot-amber）见下方语义色段 */
+.ai-status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
 }
 
 /* 24 栏主栅格：左 5 / 中 14 / 右 5 —— 3D 视图是主角，宽度优先给它。
@@ -810,103 +493,30 @@ onUnmounted(() => {
   flex: 0 0 auto;
 }
 
-/* 页头文字 */
-.ai-title {
+/* 面板：安静的工具卡——不 hover 抬升、不发光、不入场 */
+.panel {
+  background: var(--bg-panel);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 161, 23, 0.3);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
   position: relative;
-  margin: 0;
-  color: var(--text-1);
-  font-size: clamp(1.5rem, 2.4vw, 2rem);
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  line-height: 1.2;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.ai-title-emoji {
-  display: inline-block;
-  margin-right: 0.5rem;
-  animation: pulse 2s ease-in-out infinite;
+/* 面板头：统一 PanelHeader 的留白壳（标题条不再自绘底色与分隔线） */
+.panel-head {
+  padding: 0.875rem 1.2rem 0;
 }
 
-.ai-lead {
+/* 3D 视口：高度不写死，由中间的列分配——面板头之外的空间全是它。
+   宽度跟着容器走，Viewport 组件用 ResizeObserver 盯着真实尺寸，
+   相机的宽高比会跟着一起改（否则视口一变窄，场景就被拉成竖长条）。 */
+.ai-viewport {
+  position: relative;
+  width: 100%;
   flex: 1;
-  min-width: 0;
-  margin: 0;
-  color: var(--text-1);
-  font-size: 0.9375rem;
-  font-weight: 300;
-  line-height: 1.6;
-}
-
-.ai-lead-accent {
-  color: var(--accent-2);
-  font-weight: 500;
-}
-
-.ai-lead-muted {
-  color: var(--text-2);
-}
-
-/* 面板标题与图标 */
-.ai-panel-title {
-  display: flex;
-  align-items: center;
-}
-
-.ai-icon-amber {
-  width: 1.25rem;
-  height: 1.25rem;
-  margin-right: 0.5rem;
-  color: var(--accent-2);
-  flex-shrink: 0;
-}
-
-.ai-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  margin-right: 0.5rem;
-  flex-shrink: 0;
-}
-
-/* 状态点 */
-.ai-dots {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.ai-dot {
-  width: 0.75rem;
-  height: 0.75rem;
-  border-radius: 9999px;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.ai-dot-red {
-  background: var(--danger);
-}
-
-.ai-dot-amber {
-  background: var(--accent-2);
-}
-
-.ai-dot-green {
-  background: var(--success);
-}
-
-.ai-dot-inline {
-  display: inline-block;
-  width: 0.625rem;
-  height: 0.625rem;
-  margin-right: 0.5rem;
-}
-
-.ai-dot-sep {
-  display: inline-block;
-  width: 0.25rem;
-  height: 0.25rem;
-  border-radius: 9999px;
-  background: var(--border-strong);
+  min-height: 260px;
+  overflow: hidden;
 }
 
 /* 加载态 */
@@ -966,7 +576,7 @@ onUnmounted(() => {
   background: var(--accent-2);
 }
 
-/* 操作提示卡 */
+/* 操作提示卡：按需显示（H 键切换），常驻噪音已去掉 */
 .ai-hint {
   position: absolute;
   left: 1.25rem;
@@ -979,14 +589,6 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 161, 23, 0.4);
   border-radius: 0.75rem;
   box-shadow: var(--shadow-pop);
-  transition:
-    background 0.3s ease,
-    border-color 0.3s ease;
-}
-
-.ai-hint:hover {
-  background: rgba(0, 0, 0, 0.9);
-  border-color: rgba(255, 161, 23, 0.6);
 }
 
 .ai-hint-row {
@@ -997,6 +599,22 @@ onUnmounted(() => {
 
 .ai-hint-row-last {
   margin-bottom: 0;
+}
+
+/* 提示行里的键位小徽标：内容是文字（左键 / 滚轮 / Shift），宽度随内容走 */
+.control-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 22px;
+  margin-right: 0.5rem;
+  padding: 0 0.45rem;
+  background: rgba(255, 161, 23, 0.2);
+  border: 1px solid rgba(255, 161, 23, 0.4);
+  border-radius: 6px;
+  font-size: var(--text-xs);
+  flex-shrink: 0;
 }
 
 /* 视角指示器 */
@@ -1020,6 +638,13 @@ onUnmounted(() => {
   justify-content: center;
   margin-bottom: 0.5rem;
   font-weight: 500;
+}
+
+.ai-icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-right: 0.5rem;
+  flex-shrink: 0;
 }
 
 .ai-keygrid {
@@ -1059,34 +684,50 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-/* 页脚：贴底的一条状态栏，不再往上撑出一大片空白 */
-.ai-footer {
-  position: relative;
-  z-index: 10;
-  flex-shrink: 0;
-  margin: 0;
-  padding: 0.5rem 0 0.25rem;
-  color: var(--text-2);
-  font-size: 0.8125rem;
-  text-align: center;
+/* 语义色状态点（页头状态 chip 用）：红=LLM 降级、绿=运行中、琥珀=已暂停 */
+.ai-dot-red {
+  background: var(--danger);
 }
 
-.ai-footer-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 0.4rem;
+.ai-dot-amber {
+  background: var(--accent-2);
 }
 
-.ai-footer-item {
-  display: flex;
-  align-items: center;
+.ai-dot-green {
+  background: var(--success);
 }
 
-/* 窄屏：放弃「一屏占满」，回到正常滚动的堆叠布局。
-   3D 视图排到最前（order 由第一段样式里的 .ai-col-center { order: -1 } 给到）。 */
+/* ==========================================================================
+   响应式
+   ========================================================================== */
+
+/* 1180–1439px：24 栏下左右各 5 栏只有 245–290px，环境配置与调试面板被挤扁。
+   改 6/12/6：中栏让出约 2 栏（≈100px），侧栏回到 ≈300px 以上。
+   取舍：不用「侧栏加 min-width」——轨道是 minmax(0, 1fr)，item 的 min-width
+   撑不大轨道、只会让面板溢出压到中栏上；也不动 1440 以上的 5/14/5
+   （那时侧栏已 ≥300px，够用）。窄于 1180 直接堆叠，见下一个断点。 */
+@media (max-width: 1439px) {
+  .ai-col-left,
+  .ai-col-right {
+    grid-column: span 6;
+  }
+
+  .ai-col-center {
+    grid-column: span 12;
+  }
+}
+
+/* 窄屏：放弃「一屏占满」，回到正常滚动的堆叠布局；3D 视图排到最前。
+   写在 1439px 断点之后：≤1180 时堆叠的 span 1 / span 2 覆盖上面的 6/12/6。 */
 @media (max-width: 1180px) {
+  .ai-col-center {
+    order: -1;
+  }
+
+  .ai-col-left {
+    margin-bottom: 1rem;
+  }
+
   .ai-playground-container {
     height: auto;
     min-height: 100vh;
@@ -1120,19 +761,13 @@ onUnmounted(() => {
 }
 
 @media (max-width: 768px) {
-  .ai-layout {
-    grid-template-columns: minmax(0, 1fr);
-    padding: 0 1rem 1rem;
+  .control-key {
+    min-width: 24px;
+    height: 20px;
+    font-size: 11px;
   }
 
-  .ai-col-right {
-    grid-column: span 1;
-  }
-
-  .ai-lead {
-    font-size: 0.9375rem;
-  }
-
+  /* 触屏没有键盘操作，悬浮提示层直接不渲染 */
   .ai-hint {
     display: none;
   }
