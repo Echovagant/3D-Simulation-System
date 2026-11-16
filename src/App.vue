@@ -1,8 +1,6 @@
 <template>
   <div class="app">
-    <div class="app-background">
-      <TechGridUniverse />
-    </div>
+    <div class="app-background"></div>
     <div class="app-container">
       <!-- 侧边导航 -->
       <aside class="shell" v-show="showNavigate()" :class="{ show: sidebarShow }">
@@ -106,13 +104,8 @@
 <script lang="ts" setup name="App">
 import Header from './components/layout/Header.vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { defineAsyncComponent, ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import '@/assets/styles/app-global.css'
-
-// 背景是纯装饰组件，用异步组件加载：即使它只有几 KB，也不该阻塞首屏渲染。
-const TechGridUniverse = defineAsyncComponent(
-  () => import('./components/common/Background/TechGridUniverse.vue'),
-)
 
 const isMobile = ref(false)
 // 监听窗口大小变化，更新设备类型
@@ -215,14 +208,18 @@ onUnmounted(() => {
 
 <style scoped>
 /*
- * 背景容器：背景是纯装饰组件，异步加载期间用它占位，避免闪白。
- * 底色与背景 canvas 铺的底色一致（#f7f8fc 浅色靛紫网络的画布底色），
- * 异步分块到位时不会有可见的跳变。
+ * 背景容器：纯静态底——深色画布 + 极淡的靛紫网格纹理（alpha 0.03）。
+ * 没有动画、没有 JS：科技感交给 3D 视口与数据面板本体，底子保持安静。
+ * 网格用 48px 间隔与令牌 accent 同色系，肉眼只余质感、不抢内容。
  */
 .app-background {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: #f7f8fc;
+  background-color: var(--bg-canvas);
+  background-image:
+    linear-gradient(rgba(124, 106, 242, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 106, 242, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
 }
 </style>

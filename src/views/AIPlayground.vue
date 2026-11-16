@@ -1,76 +1,5 @@
 <template>
   <div class="ai-playground-container">
-    <!-- 使用您提供的SVG背景 -->
-    <svg
-      class="svg-bg"
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 1440 1000"
-      preserveAspectRatio="xMidYMid slice"
-    >
-      <path
-        fill="url(#yellowBlackGradient)"
-        fill-opacity="0.9"
-        d="M0,320L48,320C96,320,192,320,288,309.3C384,299,480,277,576,250.7C672,224,768,192,864,181.3C960,171,1056,181,1152,197.3C1248,213,1344,235,1392,245.3L1440,256L1440,1000L1392,1000C1344,1000,1248,1000,1152,1000C1056,1000,960,1000,864,1000C768,1000,672,1000,576,1000C480,1000,384,1000,288,1000C192,1000,96,1000,48,1000L0,1000Z"
-      >
-        <animate
-          attributeName="d"
-          values="
-            M0,320L48,320C96,320,192,320,288,309.3C384,299,480,277,576,250.7C672,224,768,192,864,181.3C960,171,1056,181,1152,197.3C1248,213,1344,235,1392,245.3L1440,256L1440,1000L1392,1000C1344,1000,1248,1000,1152,1000C1056,1000,960,1000,864,1000C768,1000,672,1000,576,1000C480,1000,384,1000,288,1000C192,1000,96,1000,48,1000L0,1000Z;
-            M0,288L48,304C96,320,192,352,288,341.3C384,331,480,277,576,250.7C672,224,768,224,864,240C960,256,1056,288,1152,282.7C1248,277,1344,235,1392,213.3L1440,192L1440,1000L1392,1000C1344,1000,1248,1000,1152,1000C1056,1000,960,1000,864,1000C768,1000,672,1000,576,1000C480,1000,384,1000,288,1000C192,1000,96,1000,48,1000L0,1000Z;
-            M0,320L48,320C96,320,192,320,288,309.3C384,299,480,277,576,250.7C672,224,768,192,864,181.3C960,171,1056,181,1152,197.3C1248,213,1344,235,1392,245.3L1440,256L1440,1000L1392,1000C1344,1000,1248,1000,1152,1000C1056,1000,960,1000,864,1000C768,1000,672,1000,576,1000C480,1000,384,1000,288,1000C192,1000,96,1000,48,1000L0,1000Z
-          "
-          dur="20s"
-          repeatCount="indefinite"
-        />
-      </path>
-
-      <circle cx="200" cy="150" r="10" fill="#FFD700" opacity="0.8">
-        <animate attributeName="cy" values="150;170;150" dur="4s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.6;0.9;0.6" dur="6s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="400" cy="200" r="8" fill="#000000" opacity="0.7">
-        <animate attributeName="cy" values="200;220;200" dur="6s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="1000" cy="100" r="12" fill="#FFD700" opacity="0.9">
-        <animate attributeName="cy" values="100;130;100" dur="5s" repeatCount="indefinite" />
-        <animate attributeName="r" values="12;14;12" dur="8s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="1200" cy="300" r="6" fill="#000000" opacity="0.6">
-        <animate attributeName="cy" values="300;320;300" dur="7s" repeatCount="indefinite" />
-      </circle>
-
-      <circle cx="700" cy="400" r="5" fill="#FFD700" opacity="0.5">
-        <animate attributeName="cx" values="700;730;700" dur="10s" repeatCount="indefinite" />
-      </circle>
-      <circle cx="300" cy="600" r="7" fill="#FFD700" opacity="0.6">
-        <animate attributeName="cx" values="300;280;300" dur="8s" repeatCount="indefinite" />
-      </circle>
-
-      <defs>
-        <linearGradient id="yellowBlackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#111111" stop-opacity="0.95" />
-          <stop offset="40%" stop-color="#222222" stop-opacity="0.9" />
-          <stop offset="50%" stop-color="#FFD700" stop-opacity="0.15" />
-          <stop offset="60%" stop-color="#222222" stop-opacity="0.9" />
-          <stop offset="100%" stop-color="#111111" stop-opacity="0.95" />
-        </linearGradient>
-
-        <radialGradient id="yellowSpot" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-          <stop offset="0%" stop-color="#FFD700" stop-opacity="0.3" />
-          <stop offset="100%" stop-color="#FFD700" stop-opacity="0" />
-        </radialGradient>
-
-        <circle cx="800" cy="200" r="200" fill="url(#yellowSpot)">
-          <animate
-            attributeName="opacity"
-            values="0.3;0.5;0.3"
-            dur="15s"
-            repeatCount="indefinite"
-          />
-        </circle>
-      </defs>
-    </svg>
-
     <!-- 顶部标题条：标题与一句话说明并排，把纵向空间让给 3D 视图 -->
     <div class="page-header">
       <div class="header-glow"></div>
@@ -560,31 +489,9 @@ onUnmounted(() => {
   padding-bottom: 1rem;
 }
 
-.svg-bg {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: -1;
-  filter: blur(0.5px);
-}
-
-/* 标题样式 */
+/* 标题样式：静态淡光，不再循环呼吸 */
 .title-text {
-  text-shadow: 0 0 15px rgba(255, 215, 0, 0.7);
-  animation: title-glow 3s ease-in-out infinite alternate;
-}
-
-@keyframes title-glow {
-  from {
-    text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
-  }
-  to {
-    text-shadow:
-      0 0 25px rgba(255, 215, 0, 0.9),
-      0 0 40px rgba(255, 215, 0, 0.7);
-  }
+  text-shadow: 0 0 12px rgba(255, 161, 23, 0.35);
 }
 
 .header-glow {
@@ -594,7 +501,7 @@ onUnmounted(() => {
   transform: translate(-50%, -50%);
   width: 400px;
   height: 150px;
-  background: radial-gradient(rgba(255, 215, 0, 0.25), transparent 70%);
+  background: radial-gradient(rgba(255, 161, 23, 0.25), transparent 70%);
   filter: blur(25px);
   z-index: -1;
 }
@@ -602,7 +509,7 @@ onUnmounted(() => {
 .footer-divider {
   width: 100%;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.4), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 161, 23, 0.4), transparent);
   margin: 0 auto;
 }
 
@@ -611,7 +518,7 @@ onUnmounted(() => {
   background: rgba(10, 12, 18, 0.75);
   backdrop-filter: blur(12px);
   border-radius: 16px;
-  border: 1px solid rgba(255, 215, 0, 0.25);
+  border: 1px solid rgba(255, 161, 23, 0.25);
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -621,7 +528,7 @@ onUnmounted(() => {
 }
 
 .panel:hover {
-  border-color: rgba(255, 215, 0, 0.4);
+  border-color: rgba(255, 161, 23, 0.4);
   box-shadow:
     0 12px 40px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
@@ -634,7 +541,7 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at 50% 0%, rgba(255, 215, 0, 0.15), transparent 70%);
+  background: radial-gradient(circle at 50% 0%, rgba(255, 161, 23, 0.15), transparent 70%);
   opacity: 0;
   transition: opacity 0.3s ease;
   pointer-events: none;
@@ -647,7 +554,7 @@ onUnmounted(() => {
 .panel-header {
   background: linear-gradient(90deg, rgba(30, 30, 40, 0.8) 0%, rgba(40, 40, 50, 0.8) 100%);
   padding: 1rem 1.2rem;
-  border-bottom: 1px solid rgba(255, 215, 0, 0.25);
+  border-bottom: 1px solid rgba(255, 161, 23, 0.25);
   font-weight: 600;
   color: #e0e0e0;
   display: flex;
@@ -661,21 +568,21 @@ onUnmounted(() => {
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    -8px 0 20px rgba(255, 215, 0, 0.15);
+    -8px 0 20px rgba(255, 161, 23, 0.15);
 }
 
 .right-panel {
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    8px 0 20px rgba(255, 215, 0, 0.15);
+    8px 0 20px rgba(255, 161, 23, 0.15);
 }
 
 .center-panel {
   box-shadow:
     0 10px 40px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 0 30px rgba(255, 215, 0, 0.2);
+    0 0 30px rgba(255, 161, 23, 0.2);
 }
 
 /* 3D 视口：高度不写死，由中间的列分配——面板头与说明文字之外的空间全是它。
@@ -697,7 +604,7 @@ onUnmounted(() => {
   line-height: 1.5;
   color: #9ca3af;
   background: rgba(10, 12, 18, 0.6);
-  border-top: 1px solid rgba(255, 215, 0, 0.15);
+  border-top: 1px solid rgba(255, 161, 23, 0.15);
 }
 
 /* 控制键样式 */
@@ -707,8 +614,8 @@ onUnmounted(() => {
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: rgba(255, 215, 0, 0.2);
-  border: 1px solid rgba(255, 215, 0, 0.4);
+  background: rgba(255, 161, 23, 0.2);
+  border: 1px solid rgba(255, 161, 23, 0.4);
   border-radius: 6px;
   font-size: 14px;
 }
@@ -842,18 +749,8 @@ onUnmounted(() => {
   height: calc(100vh - var(--page-content-block, 90px));
   min-height: 520px;
   overflow: hidden;
-  /* 深色底：SVG 顶部是透明的，必须由容器兜底，否则页头白字会浮在浅色应用底上 */
-  background: #0a0c12;
-}
-
-/* 深色底纹：必须盖住整个视口，否则会露出应用的浅色页面底 */
-.svg-bg {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  pointer-events: none;
+  /* 深色底：与全站令牌同一画布色，不再依赖被删掉的 SVG 背景兜底 */
+  background: var(--bg-canvas);
 }
 
 /* 顶部标题条：标题与说明并排，纵向空间尽量让给 3D 视图 */

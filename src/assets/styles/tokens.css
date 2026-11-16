@@ -1,0 +1,65 @@
+/**
+ * 设计令牌——全站唯一的颜色 / 圆角 / 阴影 / 字号真源。
+ *
+ * 调性：深色专业工具风（类 VS Code / Blender 的深色工作台）。
+ * 组件里的颜色一律引用这里的变量，不许写硬编码 hex；
+ * scripts/check-light-contrast.mjs 从本文件读底色做 WCAG AA 对账，
+ * 改令牌值之前先想清楚对应的前景色还能不能达标。
+ *
+ * 分两层：基础层（--ink-* 调色板）与语义层（--bg-*、--text-*、--accent-* 三个族）。
+ * 组件只允许用语义层；换主题改基础层即可。
+ */
+
+:root {
+  /* ---- 基础层：深灰阶画布 ---- */
+  --ink-950: #0e1015; /* 最深底：页面画布 */
+  --ink-900: #12151c; /* 常规面板 */
+  --ink-850: #171b25; /* 悬浮面板 / 卡片 */
+  --ink-800: #1d2230; /* 输入框、嵌入区、工具条 */
+  --ink-700: #262c3d; /* hover 面、边框强调 */
+
+  /* ---- 语义层：底 ---- */
+  --bg-canvas: var(--ink-950);
+  --bg-panel: var(--ink-900);
+  --bg-panel-raised: var(--ink-850);
+  --bg-inset: var(--ink-800);
+  --bg-hover: rgba(255, 255, 255, 0.05);
+
+  /* ---- 语义层：边框 ---- */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* ---- 语义层：文字（对比度按 --bg-canvas / --bg-panel 计） ---- */
+  --text-1: #e9ebf3; /* 主文字，≈15:1 */
+  --text-2: #a9aec1; /* 次级文字，≈8:1 */
+  --text-3: #828aa3; /* 弱化标注，≈5:1，正文达标线以上 */
+
+  /* ---- 语义层：强调 ---- */
+  --accent: #8d7ef5; /* 作文字用：on panel ≈5:1 */
+  --accent-strong: #6e5af0; /* 作按钮底用：其上白字 ≈5:1 */
+  --accent-strong-hover: #7f6ff3; /* 按钮悬停：深色底下 hover 提亮而不是压暗 */
+  --accent-rgb: 124, 106, 242;
+  --accent-soft: rgba(124, 106, 242, 0.16); /* 选中底、高亮底 */
+  --accent-2: #ffa117; /* 次强调琥珀（AI 域沿用） */
+  --accent-2-soft: rgba(255, 161, 23, 0.14);
+
+  /* ---- 语义层：状态 ---- */
+  --danger: #f0616a;
+  --warning: #ffa117;
+  --success: #43c07f;
+
+  /* ---- 几何 ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-pop: 0 6px 18px rgba(0, 0, 0, 0.5);
+
+  /* ---- 字号阶 ---- */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+}

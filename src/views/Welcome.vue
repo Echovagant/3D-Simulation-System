@@ -106,13 +106,13 @@ export default {
 
 h1 {
   font-size: 3rem;
-  color: #333333;
+  color: var(--text-1);
   margin-bottom: 20px;
   min-height: 4rem; /* 防止文字变化时布局跳动 */
 }
 
 .subtitle {
-  color: #666666;
+  color: var(--text-2);
   font-size: 1.1rem;
   line-height: 1.8;
   margin-bottom: 10px;
@@ -121,7 +121,7 @@ h1 {
 .start-button {
   padding: 14px 36px;
   font-size: 1.3rem;
-  background-color: #4b37c9;
+  background-color: var(--accent-strong);
   color: #ffffff;
   border: none;
   border-radius: 50px;
@@ -130,18 +130,18 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(75, 55, 201, 0.25);
+  box-shadow: 0 4px 12px rgba(110, 90, 240, 0.25);
 }
 
 .start-button:hover {
-  background-color: #3b2bab;
+  background-color: var(--accent-strong-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(75, 55, 201, 0.3);
+  box-shadow: 0 6px 16px rgba(110, 90, 240, 0.3);
 }
 
 .footer-text {
   margin-top: 60px;
-  color: #666666;
+  color: var(--text-2);
   font-size: 0.9rem;
 }
 
@@ -149,7 +149,7 @@ h1 {
 h1::after {
   content: "|";
   animation: blink 1s step-end infinite;
-  color: #4b37c9;
+  color: var(--accent);
 }
 
 @keyframes blink {
