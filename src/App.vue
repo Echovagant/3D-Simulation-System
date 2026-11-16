@@ -25,7 +25,7 @@
               @click="setActiveNav('overview')"
             >
               <RouterLink to="/overview" class="nav-link" title="返回主门户">
-                <div class="icon">🏠</div>
+                <div class="icon"><i class="fa-solid fa-house"></i></div>
                 <div class="text">总览</div>
               </RouterLink>
             </li>
@@ -36,7 +36,7 @@
               @click="setActiveNav('scene-editor')"
             >
               <RouterLink to="/scene-editor" class="nav-link" title="构建和编辑3D场景">
-                <div class="icon">🛠️</div>
+                <div class="icon"><i class="fa-solid fa-cubes"></i></div>
                 <div class="text">场景编辑器</div>
               </RouterLink>
             </li>
@@ -47,7 +47,7 @@
               @click="setActiveNav('simulation-lab')"
             >
               <RouterLink to="/simulation-lab" class="nav-link" title="运行和观察物理仿真">
-                <div class="icon">🔬</div>
+                <div class="icon"><i class="fa-solid fa-flask"></i></div>
                 <div class="text">仿真实验室</div>
               </RouterLink>
             </li>
@@ -58,7 +58,7 @@
               @click="setActiveNav('model-library')"
             >
               <RouterLink to="/model-library" class="nav-link" title="管理3D资产">
-                <div class="icon">📦</div>
+                <div class="icon"><i class="fa-solid fa-box-open"></i></div>
                 <div class="text">模型库</div>
               </RouterLink>
             </li>
@@ -69,7 +69,7 @@
               @click="setActiveNav('ai-playground')"
             >
               <RouterLink to="/ai-playground" class="nav-link" title="AI与3D环境交互">
-                <div class="icon">🧠</div>
+                <div class="icon"><i class="fa-solid fa-robot"></i></div>
                 <div class="text">AI演武场</div>
               </RouterLink>
             </li>
@@ -78,7 +78,6 @@
       </aside>
 
       <main class="main-container">
-        <Header />
         <div class="page-content" :class="{ 'page-content--full': isFullBleed }">
           <RouterView />
         </div>
@@ -86,12 +85,13 @@
     </div>
 
     <!-- 移动端菜单按钮 -->
-    <div class="mobile-menu-btn" @click="toggleSidebar" v-show="showNavigate()">☰</div>
+    <div class="mobile-menu-btn" @click="toggleSidebar" v-show="showNavigate()">
+      <i class="fa-solid fa-bars"></i>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup name="App">
-import Header from './components/layout/Header.vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import '@/assets/styles/app-global.css'

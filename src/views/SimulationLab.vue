@@ -1,8 +1,5 @@
 <template>
   <div class="simulation-lab">
-    <!-- 顶部应用标题栏 -->
-    <Header />
-
     <!-- 消息提示 -->
     <div v-if="message" class="message-toast">
       {{ message }}
@@ -223,7 +220,6 @@ import { ref, onMounted, computed, onUnmounted, watch } from 'vue'
 import * as THREE from 'three'
 import { Vector3, Object3D, Scene } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
-import Header from '@/components/layout/Header.vue'
 import InfoTip from '@/components/common/InfoTip.vue'
 import SimulationBatchPanel from '@/components/simulations/SimulationBatchPanel.vue'
 import RenderPanel from '@/components/simulations/RenderPanel.vue'
