@@ -12,7 +12,7 @@
       <button @click="retryInit" class="retry-btn">重试</button>
     </div>
 
-    <Toolbar class="editor-toolbar" />
+    <Toolbar class="editor-toolbar ws-toolbar" />
     <div class="editor-main-content">
       <!-- ThreeScene组件在整个生命周期都需要存在，负责初始化和管理场景 -->
       <ThreeScene
@@ -23,7 +23,7 @@
       />
 
       <!-- Viewport组件也在整个生命周期存在，负责渲染场景 -->
-      <div class="viewport-wrapper">
+      <div class="viewport-wrapper ws-viewport">
         <Viewport
           :scene="sceneStore.getScene()"
           :camera="sceneStore.getCamera()"
@@ -33,7 +33,38 @@
           @update-camera="handleUpdateCamera"
         />
       </div>
-      <PropertyPanel class="property-panel" />
+
+      <!-- 右栏：属性编辑与场景管理两条动线分 tab，v-show 保持挂载（选中状态不丢） -->
+      <aside class="editor-side ws-side">
+        <div class="side-tabs" role="tablist" aria-label="编辑器侧栏">
+          <button
+            type="button"
+            class="side-tab"
+            :class="{ active: editorTab === 'props' }"
+            role="tab"
+            :aria-selected="editorTab === 'props'"
+            @click="editorTab = 'props'"
+          >
+            属性
+          </button>
+          <button
+            type="button"
+            class="side-tab"
+            :class="{ active: editorTab === 'scenes' }"
+            role="tab"
+            :aria-selected="editorTab === 'scenes'"
+            @click="editorTab = 'scenes'"
+          >
+            场景
+          </button>
+        </div>
+        <div v-show="editorTab === 'props'" class="side-body">
+          <PropertyPanel />
+        </div>
+        <div v-show="editorTab === 'scenes'" class="side-body">
+          <SceneList />
+        </div>
+      </aside>
     </div>
   </div>
 </template>
@@ -45,6 +76,7 @@ import * as THREE from 'three'
 import ThreeScene from '@/components/three/core/ThreeScene.vue'
 import Toolbar from '@/components/three/panels/Toolbar.vue'
 import PropertyPanel from '@/components/three/panels/PropertyPanel.vue'
+import SceneList from '@/components/three/panels/SceneList.vue'
 import Viewport from '@/components/three/panels/Viewport.vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import { useModelStore } from '@/stores/modelStore'
@@ -53,6 +85,10 @@ import { useModelStore } from '@/stores/modelStore'
 const threeScene = ref<InstanceType<typeof ThreeScene> | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref('')
+
+// 右栏当前 tab：「属性」编辑与「场景」管理两条动线分开。
+// 两个面板都 v-show 挂载——切换 tab 不卸载组件，选中状态与场景列表不丢。
+const editorTab = ref<'props' | 'scenes'>('props')
 
 // 状态管理
 const sceneStore = useSceneEditorStore()
@@ -206,6 +242,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/*
+ * 骨架类分工：.ws-toolbar（工具条底色/分隔）、.ws-viewport（视口底色）、
+ * .ws-side（右栏底色/边框）由 app-global.css 统一提供，
+ * 这里只保留各容器的差异化布局。
+ */
 .scene-editor {
   display: flex;
   flex-direction: column;
@@ -228,12 +269,79 @@ onUnmounted(() => {
   flex: 1 1 auto;
   position: relative;
   height: 100%;
-  background: var(--bg-canvas); /* 添加深黑背景以便更好地显示3D内容（视口允许比面板更深） */
 }
 
-.property-panel {
+.editor-side {
   flex: 0 0 300px;
-  height: 100%;
+  /* tab 常驻：滚动交给 .side-body，骨架类的 overflow-y:auto 在此收口 */
+  overflow: hidden;
+}
+
+/* 「属性 | 场景」tab 条：样式对齐 ModelLibrary 的 category-tab 风格 */
+.side-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex: 0 0 auto;
+}
+
+.side-tab {
+  flex: 1 1 0;
+  padding: 7px 12px;
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.side-tab.active {
+  background-color: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.side-tab:hover:not(.active) {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+.side-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 窄屏：视口在上（固定高度），右栏全宽落到下方，整页纵向滚动 */
+@media (max-width: 992px) {
+  .scene-editor {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .editor-main-content {
+    flex: 0 0 auto;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .viewport-wrapper {
+    flex: 0 0 auto;
+    width: 100%;
+    height: 420px;
+    min-height: 420px;
+  }
+
+  .editor-side {
+    flex: 0 0 auto;
+    width: 100%;
+    border-left: 0;
+  }
 }
 
 .loading-overlay {
