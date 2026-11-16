@@ -266,20 +266,26 @@ watch(
 </script>
 
 <style scoped>
+/*
+ * 底色、边框、内边距与组间距由 app-global.css 的工作台骨架类 .ws-toolbar
+ * 统一提供（SceneEditor 给根元素附加了 ws-toolbar），这里只保留差异部分。
+ */
 .toolbar {
   display: flex;
   align-items: center;
-  padding: 0 15px;
   height: 50px;
-  background-color: var(--bg-panel-raised);
   color: var(--text-1);
-  border-bottom: 1px solid var(--border-subtle);
-  gap: 10px;
 }
 
 .toolbar-group {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+}
+
+/* 组与组之间的分隔：靠兄弟选择器画一条淡分隔线，不再依赖纯间距猜分组 */
+.toolbar-group + .toolbar-group {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 10px;
 }
 
 .toolbar-btn {

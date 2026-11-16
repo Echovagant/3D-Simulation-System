@@ -191,10 +191,9 @@ watch(
 </script>
 
 <style scoped>
+/* 挂在编辑器右栏「场景」tab 下：tab 条已提供分隔与留白，这里不再重复画线 */
 .scene-list {
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid var(--border-subtle);
+  padding: 0;
 }
 
 .scene-list h3 {

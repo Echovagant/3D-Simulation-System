@@ -17,145 +17,160 @@
           placeholder="对象名称"
         />
       </div>
-      <div class="property-group">
-        <label>位置 X:</label>
-        <input
-          type="number"
-          step="0.1"
-          :value="positionX"
-          @input="handlePositionXInput"
-          @change="commit(updatePosition)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="X坐标"
-        />
-      </div>
-      <div class="property-group">
-        <label>位置 Y:</label>
-        <input
-          type="number"
-          step="0.1"
-          :value="positionY"
-          @input="handlePositionYInput"
-          @change="commit(updatePosition)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="Y坐标"
-        />
-      </div>
-      <div class="property-group">
-        <label>位置 Z:</label>
-        <input
-          type="number"
-          step="0.1"
-          :value="positionZ"
-          @input="handlePositionZInput"
-          @change="commit(updatePosition)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="Z坐标"
-        />
-      </div>
-
-      <!-- 旋转属性编辑 -->
-      <div class="property-group">
-        <label>旋转 X (度):</label>
-        <input
-          type="number"
-          step="1"
-          :value="rotationX"
-          @input="handleRotationXInput"
-          @change="commit(updateRotation)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="X轴旋转"
-        />
-      </div>
-      <div class="property-group">
-        <label>旋转 Y (度):</label>
-        <input
-          type="number"
-          step="1"
-          :value="rotationY"
-          @input="handleRotationYInput"
-          @change="commit(updateRotation)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="Y轴旋转"
-        />
-      </div>
-      <div class="property-group">
-        <label>旋转 Z (度):</label>
-        <input
-          type="number"
-          step="1"
-          :value="rotationZ"
-          @input="handleRotationZInput"
-          @change="commit(updateRotation)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="Z轴旋转"
-        />
+      <!-- 位置：组标题一行 + 三轴一行（3 列网格），替代原先 9 行逐轴堆叠 -->
+      <div class="transform-group">
+        <span class="group-title">位置</span>
+        <div class="axis-grid">
+          <label class="axis-field">
+            <span class="axis-name">X</span>
+            <input
+              type="number"
+              step="0.1"
+              :value="positionX"
+              @input="handlePositionXInput"
+              @change="commit(updatePosition)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="X坐标"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">Y</span>
+            <input
+              type="number"
+              step="0.1"
+              :value="positionY"
+              @input="handlePositionYInput"
+              @change="commit(updatePosition)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="Y坐标"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">Z</span>
+            <input
+              type="number"
+              step="0.1"
+              :value="positionZ"
+              @input="handlePositionZInput"
+              @change="commit(updatePosition)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="Z坐标"
+            />
+          </label>
+        </div>
       </div>
 
-      <!-- 缩放属性编辑 -->
-      <div class="property-group">
-        <label>缩放 X:</label>
-        <input
-          type="number"
-          step="0.1"
-          :value="scaleX"
-          @input="handleScaleXInput"
-          @change="commit(updateScale)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="X轴缩放"
-          min="0.1"
-        />
-      </div>
-      <div class="property-group">
-        <label>缩放 Y:</label>
-        <input
-          type="number"
-          step="0.1"
-          :value="scaleY"
-          @input="handleScaleYInput"
-          @change="commit(updateScale)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="Y轴缩放"
-          min="0.1"
-        />
-      </div>
-      <div class="property-group">
-        <label>缩放 Z:</label>
-        <input
-          type="number"
-          step="0.1"
-          :value="scaleZ"
-          @input="handleScaleZInput"
-          @change="commit(updateScale)"
-          @focus="startEditing"
-          @blur="stopEditing"
-          placeholder="Z轴缩放"
-          min="0.1"
-        />
+      <!-- 旋转（单位：度） -->
+      <div class="transform-group">
+        <span class="group-title">旋转 · 度</span>
+        <div class="axis-grid">
+          <label class="axis-field">
+            <span class="axis-name">X</span>
+            <input
+              type="number"
+              step="1"
+              :value="rotationX"
+              @input="handleRotationXInput"
+              @change="commit(updateRotation)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="X轴旋转"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">Y</span>
+            <input
+              type="number"
+              step="1"
+              :value="rotationY"
+              @input="handleRotationYInput"
+              @change="commit(updateRotation)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="Y轴旋转"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">Z</span>
+            <input
+              type="number"
+              step="1"
+              :value="rotationZ"
+              @input="handleRotationZInput"
+              @change="commit(updateRotation)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="Z轴旋转"
+            />
+          </label>
+        </div>
       </div>
 
-      <!-- 删除按钮 - 移除重复的删除功能，保留在Toolbar中即可 -->
-      <!-- <button
-        class="delete-btn"
-        @click="handleRemoveObject"
-      >
-        删除选中对象
-      </button> -->
+      <!-- 缩放 -->
+      <div class="transform-group">
+        <span class="group-title">缩放</span>
+        <div class="axis-grid">
+          <label class="axis-field">
+            <span class="axis-name">X</span>
+            <input
+              type="number"
+              step="0.1"
+              :value="scaleX"
+              @input="handleScaleXInput"
+              @change="commit(updateScale)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="X轴缩放"
+              min="0.1"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">Y</span>
+            <input
+              type="number"
+              step="0.1"
+              :value="scaleY"
+              @input="handleScaleYInput"
+              @change="commit(updateScale)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="Y轴缩放"
+              min="0.1"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">Z</span>
+            <input
+              type="number"
+              step="0.1"
+              :value="scaleZ"
+              @input="handleScaleZInput"
+              @change="commit(updateScale)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="Z轴缩放"
+              min="0.1"
+            />
+          </label>
+        </div>
+      </div>
     </template>
 
     <!-- 未选中物体时显示提示 -->
     <template v-else>
-      <div class="empty-state">
-        <p>未选择任何对象</p>
-        <p class="hint">点击3D视图中的物体进行编辑</p>
+      <EmptyState
+        icon="fa-solid fa-cube"
+        title="未选择任何对象"
+        description="点击3D视图中的物体进行编辑"
+      >
+        <template #cta>
+          <button class="empty-cta-btn" type="button" @click="handleAddCube">添加立方体</button>
+        </template>
+      </EmptyState>
+      <div class="empty-tips">
         <InfoTip
           label="关于属性编辑"
           text="这里没有质量、摩擦系数与弹性系数——它们在仿真实验室按全局生效。"
@@ -166,24 +181,32 @@
         />
       </div>
     </template>
-
-    <!-- 我的场景：已保存的场景在这里列出、打开、删除 -->
-    <SceneList />
   </div>
 </template>
 
 <script setup>
 import * as THREE from 'three'
-import { computed, watch, ref } from 'vue'
+import { computed, watch, ref, inject } from 'vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
-import SceneList from '@/components/three/panels/SceneList.vue'
 import InfoTip from '@/components/common/InfoTip.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 // 获取场景编辑器状态
 const store = useSceneEditorStore()
 
 // 从store中获取当前选中的物体
 const selectedObject = computed(() => store.selectedObject)
+
+// 注入「添加立方体」（与 Toolbar 同一套 inject 协议）：空态 CTA 用。
+// 没有上游提供时兜底成「返回 false」的空实现，点了不炸。
+const addCube = inject('addCube') ?? (() => false)
+
+// 空态引导：添加一个立方体，选中后本面板自动切换到属性表单
+const handleAddCube = () => {
+  if (!addCube()) {
+    console.warn('[PropertyPanel] 立方体添加失败（场景可能尚未初始化）')
+  }
+}
 
 // 使用ref来存储属性值，避免计算属性的setter循环
 const objectName = ref('')
@@ -427,27 +450,27 @@ const updateScale = () => {
 </script>
 
 <style scoped>
-/* 保留原有样式并添加新样式 */
+/*
+ * 底色、左边框与滚动口径由工作台骨架类 .ws-side（挂在外层 .editor-side 上）
+ * 统一提供；本组件只负责内容排版。
+ */
 .property-panel {
   width: 100%;
   padding: 15px;
-  background-color: var(--bg-panel);
-  border-left: 1px solid var(--border-subtle);
-  overflow-y: auto;
-  height: 100%;
   box-sizing: border-box;
 }
 
 h3 {
-  margin: 0 0 20px 0;
+  margin: 0 0 14px 0;
   font-size: 16px;
   color: var(--text-1);
   padding-bottom: 8px;
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* 名称字段：保持「label 上、input 下」的单字段结构 */
 .property-group {
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .property-group label {
@@ -458,12 +481,67 @@ h3 {
   font-weight: 500;
 }
 
-.property-group input {
+/* 位置 / 旋转 / 缩放：组标题一行 + 三轴一行（3 列网格） */
+.transform-group {
+  margin-bottom: 12px;
+}
+
+.group-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.axis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.axis-field {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.axis-name {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.axis-field input {
   width: 100%;
-  padding: 8px 10px;
+  min-width: 0;
+  padding: 6px 7px;
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
+  color: var(--text-1);
+  background-color: var(--bg-inset);
+  color-scheme: dark;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.axis-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* 共用输入框规格：名称字段与轴字段保持一致 */
+.property-group input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 13px;
   color: var(--text-1);
   background-color: var(--bg-inset);
   color-scheme: dark;
@@ -477,31 +555,28 @@ h3 {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-.empty-state {
-  text-align: center;
-  padding: 30px 10px;
-  color: var(--text-2);
-}
-
-.empty-state .hint {
-  margin-top: 10px;
-  font-size: 12px;
-  color: var(--text-3);
-}
-
-.delete-btn {
-  width: 100%;
-  padding: 10px;
-  background-color: var(--danger-strong);
+/* 空态 CTA：引导用户先放一个物体进场景 */
+.empty-cta-btn {
+  padding: 7px 14px;
+  background-color: var(--accent-strong);
   color: #ffffff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  margin-top: 20px;
-  transition: filter 0.2s;
+  font-size: 13px;
+  transition: background-color 0.2s;
 }
 
-.delete-btn:hover {
-  filter: brightness(1.15);
+.empty-cta-btn:hover {
+  background-color: var(--accent-strong-hover);
+}
+
+/* 空态补充说明：两条 InfoTip 纵向居中排列，与 EmptyState 同轴 */
+.empty-tips {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 16px;
 }
 </style>
