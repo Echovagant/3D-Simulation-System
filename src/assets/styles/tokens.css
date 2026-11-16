@@ -44,9 +44,12 @@
   --accent-2-soft: rgba(255, 161, 23, 0.14);
 
   /* ---- 语义层：状态 ---- */
-  --danger: #f0616a;
+  --danger: #f0616a; /* 作文字用 */
   --warning: #ffa117;
-  --success: #43c07f;
+  --success: #43c07f; /* 作文字用 */
+  /* 作底色用（配白字，≈5:1）——深色工具风的状态按钮/徽章 */
+  --danger-strong: #b91c1c;
+  --success-strong: #15803d;
 
   /* ---- 几何 ---- */
   --radius-sm: 4px;

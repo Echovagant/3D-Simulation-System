@@ -451,15 +451,15 @@ onBeforeUnmount(() => {
 /* 面板标题：这一页的 h3 沿用旧样式（深蓝字 + 蓝下划线），
    面板按 DESIGN.md 走品牌靛紫，不跟旧样式混 */
 .sim-render-panel h3 {
-  color: #6e5af0;
-  border-bottom-color: #6e5af0;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 /* 进度条：用品牌靛紫，与这一页的浅色面板同一套配色 */
 .sim-render-progress-bar {
   width: 100%;
   height: 6px;
-  accent-color: #6e5af0;
+  accent-color: var(--accent);
 }
 
 /* 任务 ID 是 32 位十六进制，挤在一行里会把状态文字压成竖排 */
