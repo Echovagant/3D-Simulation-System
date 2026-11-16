@@ -58,6 +58,10 @@
   --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.45);
   --shadow-pop: 0 6px 18px rgba(0, 0, 0, 0.5);
 
+  /* ---- 卡片网格统一参数（三页各自为政的 minmax/gap 收敛于此） ---- */
+  --grid-min: 220px;
+  --grid-gap: 20px;
+
   /* ---- 字号阶 ---- */
   --text-xs: 12px;
   --text-sm: 13px;
