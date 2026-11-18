@@ -23,7 +23,7 @@
 
 <table>
   <tr>
-    <td align="center"><b>177.15 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>17.52 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>436</b><br><sub>测试用例 · 46 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
@@ -349,7 +349,7 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 6.46 MB |
+| 产物体积 | 6.11 MB |
 | 运行时依赖 | 6 个 |
 | 可加载模型 | 9 个（全部程序化生成） |
 | 类型检查 | 0 错误 |
