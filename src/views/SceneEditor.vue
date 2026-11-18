@@ -85,6 +85,10 @@ import { useModelStore } from '@/stores/modelStore'
 const threeScene = ref<InstanceType<typeof ThreeScene> | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref('')
+// 加载动画最短可见时长：本地热缓存下 Three.js 初始化瞬间完成，动画会
+// 一闪而过（用户感知为「加载动画取消了」），低于此时长则补足剩余时间。
+const LOADING_MIN_MS = 600
+const loadingStartedAt = Date.now()
 
 // 右栏当前 tab：「属性」编辑与「场景」管理两条动线分开。
 // 两个面板都 v-show 挂载——切换 tab 不卸载组件，选中状态与场景列表不丢。
@@ -139,11 +143,20 @@ const handleInitError = (err: string) => {
 
 // 处理场景初始化成功
 const handleSceneInitSuccess = () => {
-  isLoading.value = false
   errorMessage.value = ''
 
   // 启用物理模拟
   sceneStore.togglePlayState()
+
+  // 加载动画保底可见：不足最短时长则补足后再收起遮罩
+  const remain = LOADING_MIN_MS - (Date.now() - loadingStartedAt)
+  if (remain > 0) {
+    window.setTimeout(() => {
+      isLoading.value = false
+    }, remain)
+  } else {
+    isLoading.value = false
+  }
 }
 
 // 重试初始化
