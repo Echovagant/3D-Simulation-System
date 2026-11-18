@@ -20,18 +20,20 @@ tokens_source: src/assets/styles/tokens.css
 `scripts/check-tailwind-classes.mjs` 闸门盯着死类名出现次数不得超过 **74**。
 **新增样式一律写 scoped CSS + 令牌变量。**
 
-## 1. 调性：深色专业工具风
+## 1. 调性：power 深底工业风
 
-**关键词：深灰阶 · 靛紫单强调 · 克制**
+**关键词：近黑微暖灰阶 · 单橙强调 · 等宽数字 · 克制**
 
 本项目是 3D 场景编辑与仿真平台——工具软件，不是营销页。视觉建立在四条约束上：
 
-1. **全站深色**：类 VS Code / Blender 的深色工作台。3D 视口与工具面板不再深浅打架。
-2. **靛紫单主色**：品牌色沿袭 `#6E5AF0` 家族——深底上作文字用提亮档 `--accent`（#8d7ef5），
-   作按钮底用 `--accent-strong`（#6e5af0）。琥珀 `--accent-2` 只作次强调（AI 演武场域）。
-3. **背景安静**：画布是 `--bg-canvas` 纯深底 + alpha 0.03 的 48px 静态网格纹理
-   （`App.vue` 的 `.app-background`）。**没有动画背景**——科技感交给 3D 视口与数据面板本体。
-4. **信息层级优先**：面板底、边框、文字三级（`--text-1/2/3`）撑起层次，不靠渐变与光晕。
+1. **全站深色**：近黑微暖灰阶画布（不偏蓝、不发棕）。3D 视口与工具面板不再深浅打架。
+2. **单橙主色**：品牌色 `#FF6101` 一族——深底上作文字与实底同值 `--accent`/`--accent-strong`，
+   实底上配 `--accent-on` 深字（白字只有 ≈3:1，不达 AA）。琥珀 `--accent-2` 只作次强调（AI 演武场域）。
+3. **背景有氛围但不抢戏**：画布是 `--bg-canvas` 纯深底 + 主橙低透明度星云光斑
+   （异周期缓漂，`App.vue` 的 `.app-background`，reduced-motion 全静止）+
+   alpha 0.05 的 48px 网格纹理。星云只是氛围层——信息主体永远比背景亮一档。
+4. **信息层级优先**：面板底、边框、文字三级（`--text-1/2/3`）撑起层次；
+   仿真参数、坐标、FPS、统计值走 `--font-mono` 等宽数字体系。
 
 **反面清单**（构建闸门 `scripts/check-light-contrast.mjs` 直接拦）：
 
@@ -43,15 +45,15 @@ tokens_source: src/assets/styles/tokens.css
 
 ## 2. 令牌层（真源：`src/assets/styles/tokens.css`）
 
-### 2.1 基础层：深灰阶
+### 2.1 基础层：近黑微暖灰阶
 
 | Token | 值 | 角色 |
 |---|---|---|
-| `--ink-950` | `#0e1015` | 画布（最深） |
-| `--ink-900` | `#12151c` | 常规面板 |
-| `--ink-850` | `#171b25` | 浮起面板 / 卡片 |
-| `--ink-800` | `#1d2230` | 输入框 / 嵌入区 |
-| `--ink-700` | `#262c3d` | hover 面 / 强边框 |
+| `--ink-950` | `#0e0d0c` | 画布（最深） |
+| `--ink-900` | `#131211` | 常规面板 |
+| `--ink-850` | `#191715` | 浮起面板 / 卡片 |
+| `--ink-800` | `#1f1c1a` | 输入框 / 嵌入区 |
+| `--ink-700` | `#292522` | hover 面 / 强边框 |
 
 ### 2.2 语义层（组件只引用这一层）
 
@@ -60,18 +62,19 @@ tokens_source: src/assets/styles/tokens.css
 | `--bg-canvas` / `--bg-panel` / `--bg-panel-raised` / `--bg-inset` | 映射 `--ink-*` | 画布 / 面板 / 浮起面板 / 嵌入区 |
 | `--border-subtle` | `rgba(255,255,255,.08)` | 常规分隔 |
 | `--border-strong` | `rgba(255,255,255,.16)` | 强分隔 / hover 边 |
-| `--text-1` | `#e9ebf3` | 主文字（on canvas ≈15:1） |
-| `--text-2` | `#a9aec1` | 次级（≈8:1） |
-| `--text-3` | `#828aa3` | 弱化标注（≈5:1） |
-| `--accent` | `#8d7ef5` | 强调**文字**（on panel ≈5:1） |
-| `--accent-strong` | `#6e5af0` | 强调**底**（其上白字 ≈4.8:1） |
-| `--accent-strong-hover` | `#7f6ff3` | 按钮悬停（深色下 hover 提亮，不是压暗） |
-| `--accent-soft` | `rgba(124,106,242,.16)` | 选中底 / 高亮底 |
+| `--text-1` | `#ececeb` | 主文字（on canvas ≈16:1） |
+| `--text-2` | `#a9a8a6` | 次级（≈9:1） |
+| `--text-3` | `#85827e` | 弱化标注（≈5:1） |
+| `--accent` | `#ff6101` | 强调**文字**（on canvas ≈6.3:1） |
+| `--accent-strong` | `#ff6101` | 强调**底**（其上文字必须配 `--accent-on`，≈5.9:1） |
+| `--accent-on` | `#1f1408` | 橙实底上的文字（深暖近黑，禁纯黑同源纪律） |
+| `--accent-strong-hover` | `#ff7c2b` | 按钮悬停（深色下 hover 提亮，不是压暗） |
+| `--accent-soft` | `rgba(255,97,1,.16)` | 选中底 / 高亮底 |
 | `--accent-2` | `#ffa117` | 琥珀次强调（AI 域） |
 | `--danger` / `--success` / `--warning` | `#f0616a` / `#43c07f` / `#ffa117` | 状态**文字** |
 | `--danger-strong` / `--success-strong` | `#b91c1c` / `#15803d` | 状态**底**（配白字） |
 | `--radius-sm/md/lg` | `4/8/12px`、`--shadow-panel/pop` | 几何 |
-| `--text-xs…2xl` | `12…26px` | 字号阶 |
+| `--text-xs…2xl` | `12…26px`、`--font-mono` | 字号阶 / 等宽数字体系 |
 
 ## 3. 两套工具层，各守各的域
 
@@ -105,8 +108,8 @@ tokens_source: src/assets/styles/tokens.css
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-panel);
 }
-/* 主按钮：accent 底 + 白字 */
-.btn-primary { background: var(--accent-strong); color: #ffffff; }
+/* 主按钮：accent 实底 + 深字（白字只有 ≈3:1 不达 AA） */
+.btn-primary { background: var(--accent-strong); color: var(--accent-on); }
 .btn-primary:hover { background: var(--accent-strong-hover); }
 /* 次按钮：透明底 + 描边 */
 .btn-ghost { background: transparent; border: 1px solid var(--border-strong); color: var(--text-1); }
@@ -114,5 +117,6 @@ tokens_source: src/assets/styles/tokens.css
 .input { background: var(--bg-inset); border: 1px solid var(--border-subtle); color: var(--text-1); }
 ```
 
-主按钮上的白字是**唯一允许的裸 `#ffffff` 前景**——元素自带底色时对比度闸门
-会按实际底色对账，不要在无底色的深面上直接写白字。
+状态实底（`--danger-strong` / `--success-strong`）上的白字是**唯一允许的裸 `#ffffff` 前景**——
+橙主色实底一律配 `var(--accent-on)`；元素自带底色时对比度闸门会按实际底色对账，
+不要在无底色的深面上直接写白字。
