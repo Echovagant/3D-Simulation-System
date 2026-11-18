@@ -210,13 +210,13 @@ for (let i = 0; i < nodes.length; i++) {
     const d = Math.hypot(dx, dy)
     if (d < 190) {
       lines.push(
-        `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}" stroke="#8d7ef5" stroke-width="1" opacity="${(0.13 * (1 - d / 190)).toFixed(3)}"/>`,
+        `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}" stroke="#ff6101" stroke-width="1" opacity="${(0.13 * (1 - d / 190)).toFixed(3)}"/>`,
       )
     }
   }
 }
 const dots = nodes
-  .map((n) => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r.toFixed(1)}" fill="#8d7ef5" opacity="${n.a.toFixed(2)}"/>`)
+  .map((n) => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r.toFixed(1)}" fill="#ff6101" opacity="${n.a.toFixed(2)}"/>`)
   .join('')
 const amberDots = nodes
   .filter(() => rnd() > 0.86)
@@ -260,14 +260,14 @@ const coverHtml = `<!doctype html>
   .logo svg { width:100%; height:100%; display:block; }
   h1 { font-size:58px; line-height:1.1; color:#e9ebf3; font-weight:800; letter-spacing:.02em; }
   .en { font-size:15px; color:#828aa3; letter-spacing:.34em; margin-top:9px; text-transform:uppercase; }
-  .rule { width:76px; height:3px; border-radius:2px; background:#8d7ef5; margin:18px auto 0; opacity:.85; }
+  .rule { width:76px; height:3px; border-radius:2px; background:#ff6101; margin:18px auto 0; opacity:.85; }
   .sub { margin-top:16px; font-size:21px; color:#a9aec1; letter-spacing:.01em; }
   .metrics { display:flex; gap:14px; justify-content:center; margin-top:30px; }
   .metric {
     min-width:132px; padding:13px 20px 11px; border-radius:12px; background:#171b25;
     border:1px solid rgba(255,255,255,0.08); box-shadow:0 2px 8px rgba(0,0,0,0.4);
   }
-  .metric-value { font-size:25px; font-weight:800; color:#8d7ef5; line-height:1.15; letter-spacing:-0.01em; }
+  .metric-value { font-size:25px; font-weight:800; color:#ff6101; line-height:1.15; letter-spacing:-0.01em; }
   .metric-label { font-size:12px; color:#828aa3; margin-top:3px; letter-spacing:.04em; }
 </style></head>
 <body>
@@ -359,7 +359,7 @@ const DEMO_SCENE = {
 
 /** 物体配色（场景编辑器建体时随机上色，截图要稳定就得这里定死） */
 const DEMO_COLORS = {
-  '立方体 A': 0x6e5af0,
+  '立方体 A': 0xff6101,
   '立方体 B': 0x3b82f6,
   '球体 A': 0xf97316,
   '球体 B': 0x10b981,
