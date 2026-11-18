@@ -392,7 +392,7 @@ onUnmounted(() => {
 .retry-btn {
   padding: 10px 20px;
   background: var(--accent-strong);
-  color: #ffffff;
+  color: var(--accent-on);
   border: none;
   border-radius: 4px;
   cursor: pointer;

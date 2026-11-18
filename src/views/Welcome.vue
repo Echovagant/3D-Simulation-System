@@ -27,7 +27,7 @@
       </ul>
 
       <div class="footer-text">
-        <p>© 2025 仿真系统 | 为您提供专业的模拟体验</p>
+        <p>© 2026 仿真系统</p>
       </div>
     </div>
   </div>
@@ -122,7 +122,7 @@ h1 {
   padding: 13px 30px;
   font-size: 1.05rem;
   background-color: var(--accent-strong);
-  color: #ffffff;
+  color: var(--accent-on);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;

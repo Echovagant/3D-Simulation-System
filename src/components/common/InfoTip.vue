@@ -93,9 +93,9 @@ onBeforeUnmount(() => {
   font-size: 10px;
   line-height: 1;
   font-weight: 700;
-  color: #6e5af0;
+  color: var(--accent);
   background: transparent;
-  border: 1px solid rgba(110, 90, 240, 0.45);
+  border: 1px solid rgba(var(--accent-rgb), 0.45);
   border-radius: 50%;
   cursor: help;
   transition: background-color 0.15s ease;
@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
 
 .info-tip__trigger:hover,
 .info-tip__trigger:focus-visible {
-  background: rgba(110, 90, 240, 0.12);
+  background: var(--accent-soft);
   outline: none;
 }
 
@@ -118,11 +118,11 @@ onBeforeUnmount(() => {
   padding: 8px 10px;
   font-size: 0.75rem;
   line-height: 1.55;
-  color: #333333;
-  background: #ffffff;
-  border: 1px solid rgba(110, 90, 240, 0.28);
+  color: var(--text-1);
+  background: var(--bg-panel-raised);
+  border: 1px solid rgba(var(--accent-rgb), 0.28);
   border-radius: 6px;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  box-shadow: var(--shadow-pop);
   text-align: left;
   white-space: normal;
 }
