@@ -1,11 +1,8 @@
 <template>
   <div class="app">
-    <!-- 背景三层：深空底色 + 星云漂移（纯 CSS 合成层动画）+ 视差网格 -->
+    <!-- 背景单层：WebGL 动态背景（黑金波浪/漂浮点，AI 页路由切冻结流体） -->
     <div class="app-background">
-      <div class="nebula nebula-1"></div>
-      <div class="nebula nebula-2"></div>
-      <div class="nebula nebula-3"></div>
-      <div class="parallax-grid" :style="gridStyle"></div>
+      <canvas ref="bgCanvas" class="bg-webgl" aria-hidden="true"></canvas>
     </div>
     <div class="app-container">
       <!-- 侧边导航 -->
@@ -100,38 +97,19 @@
 <script lang="ts" setup name="App">
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import {
+  mountWebGLBackground,
+  type BackgroundMode,
+  type WebGLBackgroundHandle,
+} from '@/background/webgl-background'
 import '@/assets/styles/app-global.css'
 
 /*
- * 星云视差：pointermove 给目标偏移，rAF 里 lerp 阻尼追过去——
- * 「平时安静，动鼠标才回应你」。prefers-reduced-motion 时整段不装，
- * 星云动画也会被 media 查询关掉，背景退回纯静态。
- * 当前值不走 Vue 响应式（每帧 set ref 会触发无谓重渲染），直接写 style。
+ * 背景单层 .bg-webgl：WebGL 动态背景（blackgold：白灰波浪 + 漂浮金点；
+ * AI 演武场路由切 frozen 冻结流体，保证该页观感整体不变）。
  */
-const gridStyle = ref({ transform: 'translate3d(0px, 0px, 0px)' })
-let parallaxRaf = 0
-let reducedMotion = false
-let targetX = 0
-let targetY = 0
-let curX = 0
-let curY = 0
-
-const onPointerMove = (event: PointerEvent) => {
-  targetX = (event.clientX / window.innerWidth - 0.5) * 16 // ±8px
-  targetY = (event.clientY / window.innerHeight - 0.5) * 12 // ±6px
-}
-
-const startParallax = () => {
-  const tick = () => {
-    curX += (targetX - curX) * 0.06
-    curY += (targetY - curY) * 0.06
-    gridStyle.value = {
-      transform: `translate3d(${curX.toFixed(2)}px, ${curY.toFixed(2)}px, 0)`,
-    }
-    parallaxRaf = requestAnimationFrame(tick)
-  }
-  parallaxRaf = requestAnimationFrame(tick)
-}
+const bgCanvas = ref<HTMLCanvasElement | null>(null)
+let bgHandle: WebGLBackgroundHandle | null = null
 
 const isMobile = ref(false)
 // 监听窗口大小变化，更新设备类型
@@ -208,6 +186,10 @@ watch(
     }
     activeNavKey.value = keyMap[newPath] || 'overview' // 默认值避免空值
 
+    // AI 演武场路由：背景切冻结模式；其余页面走黑金缎面
+    const bgMode: BackgroundMode = newPath === '/ai-playground' ? 'frozen' : 'blackgold'
+    bgHandle?.setMode(bgMode)
+
     // 路由跳转后关闭侧边栏
     if (sidebarShow.value) {
       sidebarShow.value = false
@@ -221,11 +203,9 @@ onMounted(() => {
   window.addEventListener('resize', checkIsMobile)
   // 添加点击事件监听，用于关闭侧边栏
   document.addEventListener('click', handleOutsideClick)
-  // 星云视差：reduced-motion 用户不装，保持纯静态
-  reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  if (!reducedMotion) {
-    window.addEventListener('pointermove', onPointerMove, { passive: true })
-    startParallax()
+  // WebGL 背景：reduced-motion 时模块内部只画一帧静态氛围
+  if (bgCanvas.value) {
+    bgHandle = mountWebGLBackground(bgCanvas.value, 'blackgold')
   }
 })
 
@@ -234,26 +214,21 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkIsMobile)
   // 移除点击事件监听
   document.removeEventListener('click', handleOutsideClick)
-  window.removeEventListener('pointermove', onPointerMove)
-  cancelAnimationFrame(parallaxRaf)
+  bgHandle?.dispose()
+  bgHandle = null
 })
 </script>
 
 <style scoped>
 /*
- * 背景：深空底色 + 三片星云漂移 + 视差网格。
+ * 背景：WebGL 动态背景（黑金体系：白灰波浪 + 漂浮金点）。
  *
  * 分层（自底向上）：
- *   .app-background —— 纯 --bg-canvas 底，overflow 裁掉光斑溢出；
- *   .nebula-1/2/3   —— 大尺寸橙/琥珀 radial-gradient 光斑，transform
- *                      关键帧异周期漂移（24/32/40s，肉眼可感知的缓漂），
- *                      纯合成层动画，主线程零占用；
- *                      异周期避免「同步循环」的机械感；
- *   .parallax-grid  —— 48px 网格纹理层，跟随鼠标 ±8px 阻尼偏移（JS 侧
- *                      lerp）。平时安静，动鼠标才回应你。
- *
- * 颜色全部走 --accent-rgb 令牌族：换主题（过渡态的当前主题不是终点）
- * 只改 tokens.css 基础层，星云跟着换色。
+ *   .app-background —— 纯 --bg-canvas 底（WebGL 不可用时的回退底色）；
+ *   .bg-webgl       —— 全屏 canvas，动态背景 shader（见
+ *                      src/background/webgl-background.ts）。
+ *                      模式 uniform 切换：blackgold 为默认，
+ *                      AI 演武场路由切冻结流体模式。
  */
 .app-background {
   position: fixed;
@@ -263,74 +238,11 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.nebula {
+.bg-webgl {
   position: absolute;
-  border-radius: 50%;
-  will-change: transform;
-}
-
-/* 主星云：左上，主橙——透明度要让人一眼看出它存在，但只是氛围不是主角 */
-.nebula-1 {
-  width: 900px;
-  height: 700px;
-  left: -180px;
-  top: -160px;
-  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.30), rgba(var(--accent-rgb), 0) 70%);
-  animation: nebula-drift-1 24s ease-in-out infinite alternate;
-}
-
-/* 副星云：右下，主橙偏暗 */
-.nebula-2 {
-  width: 760px;
-  height: 620px;
-  right: -200px;
-  bottom: -180px;
-  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0) 70%);
-  animation: nebula-drift-2 32s ease-in-out infinite alternate;
-}
-
-/* 琥珀微光：中部偏右，AI 域色呼应，量压低——只给深空一点暖意分层 */
-.nebula-3 {
-  width: 520px;
-  height: 420px;
-  left: 56%;
-  top: 30%;
-  background: radial-gradient(ellipse at center, rgba(var(--accent-2-rgb), 0.10), rgba(var(--accent-2-rgb), 0) 70%);
-  animation: nebula-drift-3 40s ease-in-out infinite alternate;
-}
-
-@keyframes nebula-drift-1 {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(120px, 70px, 0); }
-}
-
-@keyframes nebula-drift-2 {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-100px, -60px, 0); }
-}
-
-@keyframes nebula-drift-3 {
-  from { transform: translate3d(0, 0, 0); }
-  to { transform: translate3d(-70px, 90px, 0); }
-}
-
-/* 网格纹理层：独立一层才能跟星云做差速视差 */
-.parallax-grid {
-  position: absolute;
-  inset: -24px; /* 四周多留 24px，视差偏移时不露边 */
-  background-image:
-    linear-gradient(rgba(var(--accent-rgb), 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(var(--accent-rgb), 0.05) 1px, transparent 1px);
-  background-size: 48px 48px;
-  will-change: transform;
-}
-
-/* 动画偏好：星云静止、视差不装（JS 侧），背景退回纯静态 */
-@media (prefers-reduced-motion: reduce) {
-  .nebula-1,
-  .nebula-2,
-  .nebula-3 {
-    animation: none;
-  }
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 </style>
