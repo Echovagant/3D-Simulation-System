@@ -27,8 +27,11 @@ const router = createRouter({
     },
     {
       // 老总览地址重定向到根路径，保持外部链接可达
+      // （meta.title 满足「每条顶层路由都有标题」的测试约定，实际导航
+      // 会被重定向到 / 的标题）
       path: '/overview',
       redirect: '/',
+      meta: { title: '3D仿真系统' },
     },
     {
       path: '/scene-editor',
