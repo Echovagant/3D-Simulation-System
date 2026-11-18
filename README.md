@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://www.npmjs.com/package/vue"><img alt="Vue 3.5.44" src="https://img.shields.io/badge/Vue-3.5.44-42b883?logo=vuedotjs&logoColor=35495e"></a>
   <a href="https://threejs.org/"><img alt="Three.js 0.180.0" src="https://img.shields.io/badge/Three.js-0.180.0-000000?logo=threedotjs&logoColor=000000"></a>
-  <a href="https://rapier.rs/"><img alt="Rapier3D 0.19.3" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
+  <a href="https://rapier.rs/"><img alt="Rapier3D 0.21.0" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.6" src="https://img.shields.io/badge/Vite-6.4.6-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
   <img alt="46 test files / 436 cases" src="https://img.shields.io/badge/test-46%20files%20%2F%20436%20cases-16a34a?logo=vitest&logoColor=fd9714">
@@ -164,7 +164,7 @@
 | 框架 | Vue | 3.5.44 |
 | 构建 / 语言 | Vite · TypeScript | 6.4.6 · 5.8.3 |
 | 渲染 | Three.js | 0.180.0 |
-| 物理 | Rapier3D（WASM） | 0.19.3 |
+| 物理 | Rapier3D（WASM） | 0.21.0 |
 | 状态 / 路由 | Pinia · Vue Router | 3.0.3 · 4.5.1 |
 | 测试 | Vitest + jsdom | 5.0.5 / 30.1.3 |
 | 文档 / 图标 | marked · DOMPurify · Font Awesome Free | 16.3.0 / 3.4.17 / 6.7.2 |
@@ -349,7 +349,7 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 4.81 MB |
+| 产物体积 | 6.46 MB |
 | 运行时依赖 | 6 个 |
 | 可加载模型 | 9 个（全部程序化生成） |
 | 类型检查 | 0 错误 |
