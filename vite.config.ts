@@ -3,13 +3,11 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import wasm from 'vite-plugin-wasm'
-import topLevelAwait from 'vite-plugin-top-level-await'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     wasm(), // 处理 Wasm
-    topLevelAwait(), // 支持顶级 await
     vue(), // Vue 插件
     vueDevTools(), // Vue 开发工具插件
   ],
@@ -68,14 +66,15 @@ export default defineConfig({
          */
         configure: (proxy) => {
           proxy.on('error', (_err, _req, res) => {
-            if (res.writeHead && !res.headersSent) {
-              res.writeHead(503, { 'Content-Type': 'application/json' })
-              res.end(
-                JSON.stringify({
-                  error: { code: 'backend_unavailable', message: '后端不可达', detail: null },
-                }),
-              )
-            }
+            /* vite 8 的 res 类型是 Socket | ServerResponse 联合——
+               用 in 收窄到 ServerResponse 才有 writeHead */
+            if (!('writeHead' in res) || res.headersSent) return
+            res.writeHead(503, { 'Content-Type': 'application/json' })
+            res.end(
+              JSON.stringify({
+                error: { code: 'backend_unavailable', message: '后端不可达', detail: null },
+              }),
+            )
           })
         },
       },
