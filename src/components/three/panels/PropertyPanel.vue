@@ -559,7 +559,7 @@ h3 {
 .empty-cta-btn {
   padding: 7px 14px;
   background-color: var(--accent-strong);
-  color: #ffffff;
+  color: var(--accent-on);
   border: none;
   border-radius: 4px;
   cursor: pointer;

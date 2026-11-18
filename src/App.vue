@@ -245,9 +245,10 @@ onUnmounted(() => {
  *
  * 分层（自底向上）：
  *   .app-background —— 纯 --bg-canvas 底，overflow 裁掉光斑溢出；
- *   .nebula-1/2/3   —— 大尺寸靛紫/琥珀 radial-gradient 光斑，transform
- *                      关键帧异周期漂移（60/75/90s），纯合成层动画，
- *                      主线程零占用；异周期避免「同步循环」的机械感；
+ *   .nebula-1/2/3   —— 大尺寸橙/琥珀 radial-gradient 光斑，transform
+ *                      关键帧异周期漂移（24/32/40s，肉眼可感知的缓漂），
+ *                      纯合成层动画，主线程零占用；
+ *                      异周期避免「同步循环」的机械感；
  *   .parallax-grid  —— 48px 网格纹理层，跟随鼠标 ±8px 阻尼偏移（JS 侧
  *                      lerp）。平时安静，动鼠标才回应你。
  *
@@ -268,34 +269,34 @@ onUnmounted(() => {
   will-change: transform;
 }
 
-/* 主星云：左上，靛紫 */
+/* 主星云：左上，主橙——透明度要让人一眼看出它存在，但只是氛围不是主角 */
 .nebula-1 {
   width: 900px;
   height: 700px;
   left: -180px;
   top: -160px;
-  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.13), rgba(var(--accent-rgb), 0) 70%);
-  animation: nebula-drift-1 60s ease-in-out infinite alternate;
+  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.30), rgba(var(--accent-rgb), 0) 70%);
+  animation: nebula-drift-1 24s ease-in-out infinite alternate;
 }
 
-/* 副星云：右下，靛紫偏暗 */
+/* 副星云：右下，主橙偏暗 */
 .nebula-2 {
   width: 760px;
   height: 620px;
   right: -200px;
   bottom: -180px;
-  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.10), rgba(var(--accent-rgb), 0) 70%);
-  animation: nebula-drift-2 75s ease-in-out infinite alternate;
+  background: radial-gradient(ellipse at center, rgba(var(--accent-rgb), 0.22), rgba(var(--accent-rgb), 0) 70%);
+  animation: nebula-drift-2 32s ease-in-out infinite alternate;
 }
 
-/* 琥珀微光：中部偏右，量极少——只给深空一点暖意 */
+/* 琥珀微光：中部偏右，AI 域色呼应，量压低——只给深空一点暖意分层 */
 .nebula-3 {
   width: 520px;
   height: 420px;
   left: 56%;
   top: 30%;
-  background: radial-gradient(ellipse at center, rgba(255, 161, 23, 0.05), rgba(255, 161, 23, 0) 70%);
-  animation: nebula-drift-3 90s ease-in-out infinite alternate;
+  background: radial-gradient(ellipse at center, rgba(var(--accent-2-rgb), 0.10), rgba(var(--accent-2-rgb), 0) 70%);
+  animation: nebula-drift-3 40s ease-in-out infinite alternate;
 }
 
 @keyframes nebula-drift-1 {
@@ -318,8 +319,8 @@ onUnmounted(() => {
   position: absolute;
   inset: -24px; /* 四周多留 24px，视差偏移时不露边 */
   background-image:
-    linear-gradient(rgba(124, 106, 242, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(124, 106, 242, 0.03) 1px, transparent 1px);
+    linear-gradient(rgba(var(--accent-rgb), 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.05) 1px, transparent 1px);
   background-size: 48px 48px;
   will-change: transform;
 }

@@ -30,9 +30,9 @@
 .sim-t-accent-soft {
   color: var(--accent);
 }
-/* 强调底上的文字（按钮）。 */
+/* 强调底上的文字（按钮）：橙实底配深字——白字只有 ≈3:1 不达 AA。 */
 .sim-t-on-accent {
-  color: #ffffff;
+  color: var(--accent-on);
 }
 /* 语义色：错误。 */
 .sim-t-danger {
@@ -55,7 +55,7 @@
 }
 /* 主色淡描边：卡片轮廓，不抢内容。 */
 .sim-b-accent {
-  border: 1px solid rgba(124, 106, 242, 0.4);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
 }
 /* 中性描边：输入框、分隔线。 */
 .sim-b-neutral {

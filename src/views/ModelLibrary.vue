@@ -964,8 +964,8 @@ const modelMeta = (model: Model): string =>
 .primary-btn {
   padding: 10px 20px;
   background-color: var(--accent-strong);
-  /* 主色实底上的白字：项目约定写法（见 simulation-panel-kit.css 的 .sim-t-on-accent） */
-  color: #ffffff;
+  /* 主色实底上的深字：项目约定写法（见 simulation-panel-kit.css 的 .sim-t-on-accent） */
+  color: var(--accent-on);
   border: none;
   border-radius: var(--radius-md);
   font-weight: bold;

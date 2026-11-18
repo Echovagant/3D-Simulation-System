@@ -1376,7 +1376,7 @@ window.addEventListener('resize', handleResize)
 .retry-btn {
   padding: 10px 20px;
   background: var(--accent-strong);
-  color: #ffffff;
+  color: var(--accent-on);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -1503,6 +1503,8 @@ window.addEventListener('resize', handleResize)
   display: flex;
   align-items: center;
   gap: 14px;
+  /* HUD 数字走等宽体系；中文落到栈尾 sans 回退 */
+  font-family: var(--font-mono);
   background: rgba(0, 0, 0, 0.7);
   color: var(--text-2);
   padding: 5px 10px;
@@ -1538,6 +1540,8 @@ window.addEventListener('resize', handleResize)
 }
 
 .status-item .value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 14px;
   font-weight: bold;
   color: var(--text-1);
@@ -1620,6 +1624,7 @@ window.addEventListener('resize', handleResize)
   background-color: var(--bg-inset);
   color: var(--text-1);
   color-scheme: dark;
+  font-family: var(--font-mono);
 }
 
 .parameter-item input[type='checkbox'] {
@@ -1629,7 +1634,7 @@ window.addEventListener('resize', handleResize)
 
 .export-btn {
   background-color: var(--accent-strong);
-  color: #ffffff;
+  color: var(--accent-on);
   border: none;
   padding: 6px 12px;
   border-radius: 3px;
