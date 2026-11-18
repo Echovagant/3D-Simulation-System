@@ -290,9 +290,12 @@ export function mountWebGLBackground(
   }
 
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
-  const resize = () => {
-    const w = Math.round(window.innerWidth * dpr)
-    const h = Math.round(window.innerHeight * dpr)
+  /* 实际渲染分辨率独立于 dpr：帧预算自适应降档时只降它（见 frame） */
+  let renderDpr = dpr
+  let slowFrames = 0
+  const resizeAt = (d: number) => {
+    const w = Math.round(window.innerWidth * d)
+    const h = Math.round(window.innerHeight * d)
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w
       canvas.height = h
@@ -309,6 +312,7 @@ export function mountWebGLBackground(
     gl.useProgram(petal.program)
     gl.uniform2f(petal.uniform('u_res'), canvas.width, canvas.height)
   }
+  const resize = () => resizeAt(renderDpr)
 
   /* CPU 粒子推进 + 回绕（wrap-around，参考 pen 的 repeatPos 思路） */
   const step = (dt: number, t: number) => {
@@ -391,6 +395,17 @@ export function mountWebGLBackground(
       drawPetals()
     } else {
       drawFluid(time)
+    }
+    const frameCost = performance.now() - now
+    if (frameCost > 50) {
+      slowFrames += 1
+      if (slowFrames >= 3 && renderDpr > 0.5) {
+        renderDpr = Math.max(0.5, renderDpr / 2)
+        slowFrames = 0
+        resizeAt(renderDpr)
+      }
+    } else {
+      slowFrames = 0
     }
     if (running) raf = requestAnimationFrame(frame)
   }
