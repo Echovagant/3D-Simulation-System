@@ -95,6 +95,51 @@ def test_friction_and_restitution_are_not_set_unless_overridden():
     assert collider.restitution == pytest.approx(0.8)
 
 
+def test_static_object_becomes_fixed_body():
+    """physics.type=static 的物体必须是固定刚体：不吃重力、不吃初始速度。
+
+    用户摆的地面/墙要是被建成 dynamic 会被落体撞飞，穿透深度爆表。
+    """
+    scene = _scene(_obj(uuid="wall", physics={"type": "static", "shape": "box", "mass": 0}))
+    sim = simulator.build_world(scene, simulator.SimulationParams())
+
+    assert sim.simulated[0].is_static is True
+    assert sim.simulated[0].body.is_fixed
+
+
+def test_static_ground_supports_falling_ball():
+    """用户 static 地面 + dynamic 落球：球必须稳稳落在地面上、零穿透。
+
+    这是「前后端真实契约」的回归：修复前地面被建成 dynamic 被撞飞，
+    穿透能到 20+ 米、全场景永远不 settle。
+    """
+    scene = _scene(
+        _obj(uuid="ground", y=-0.5, scale={"x": 10, "y": 1, "z": 10},
+             physics={"type": "static", "shape": "box", "mass": 0}),
+        _obj(uuid="ball", obj_type="sphere", y=2.0,
+             physics={"type": "dynamic", "shape": "sphere", "mass": 1}),
+    )
+    run = simulator.run_once(scene, simulator.SimulationParams.from_mapping({"steps": 120}))
+
+    ground = run["objects"][0]
+    ball = run["objects"][1]
+    assert ground["penetrationDepth"] == 0.0
+    assert ball["resting"] is True
+    assert ball["finalPosition"]["y"] == pytest.approx(0.5, abs=0.02)
+    assert ball["penetrationDepth"] == pytest.approx(0.0, abs=0.02)
+    assert run["metrics"]["maxPenetration"] < 0.1
+
+
+def test_kinematic_is_skipped_with_reason():
+    """运动学刚体后端暂不支持：跳过并写明原因，不能悄悄当 dynamic 跑。"""
+    scene = _scene(_obj(physics={"type": "kinematic", "shape": "box", "mass": 0}))
+    sim = simulator.build_world(scene, simulator.SimulationParams())
+
+    assert len(sim.objects) == 1
+    assert sim.objects[0].skipped == simulator.SKIP_KINEMATIC
+    assert sim.simulated == []
+
+
 def test_unsupported_type_is_skipped_with_reason():
     """模型等类型后端没有碰撞体：跳过，但要在结果里写明原因。"""
     scene = _scene(_obj(uuid="m1", obj_type="model"))
