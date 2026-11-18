@@ -154,7 +154,9 @@ const chrome = spawn(CHROME, [
   `--user-data-dir=${join(repoRoot, 'node_modules', '.cache', 'chrome-docs-assets')}`,
   '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
   '--force-device-scale-factor=1', '--window-size=1280,640', 'about:blank',
-], { stdio: ['ignore', 'pipe', 'pipe'] })
+], { stdio: 'ignore' }) /* stderr 必须丢弃：WebGL 花瓣背景引入后 SwiftShader 每帧
+   往 stderr 打渲染日志，pipe 无人消费会在约 60s 写满缓冲、Chrome 整进程
+   写阻塞，Page.captureScreenshot 永不返回（git 历史：gen:docs 曾因此超时） */
 
 let ws = null
 for (let i = 0; i < 40; i++) {
@@ -420,7 +422,9 @@ await evalJs(
 console.log(`✓ 预置演示场景 scene-${DEMO_SCENE_ID}（${DEMO_SCENE.objects.length} 个物体）`)
 
 for (const [route, name, wait] of SHOTS) {
-  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 2, mobile: false }, sessionId)
+  /* DPR 1：WebGL 花瓣背景的每帧成本随像素量增长，2x 下软渲染合成器
+     出不了帧（captureScreenshot 超时）；1x 下实测可承受 */
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }, sessionId)
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${DIST_PORT}${route}` }, sessionId)
   await sleep(wait)
   await evalJs(cdp, sessionId, `document.fonts ? document.fonts.ready.then(()=>1) : 1`)
