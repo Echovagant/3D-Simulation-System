@@ -25,5 +25,9 @@ export const loadRapier = async (): Promise<typeof RapierModule> => {
     initPromise = initPromise ?? maybeInit()
     await initPromise
   }
+  // 诊断钩子：性能测量脚本用它确认 wasm 已就绪（空闲预热生效与否）
+  if (typeof window !== 'undefined') {
+    (window as { __rapierWarm?: boolean }).__rapierWarm = true
+  }
   return rapierModule
 }

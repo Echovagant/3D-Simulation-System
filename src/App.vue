@@ -207,6 +207,18 @@ onMounted(() => {
   if (bgCanvas.value) {
     bgHandle = mountWebGLBackground(bgCanvas.value, 'blackgold')
   }
+  // 空闲预热 Rapier wasm：仿真实验室/场景编辑器首开免等引擎下载。
+  // 动态 import 发生在浏览器空闲时，不占首屏带宽与 LCP。
+  const warmRapier = () => {
+    void import('./composables/loadRapier')
+      .then((m) => m.loadRapier())
+      .catch(() => {}) // 预热失败不响应用户：真正进入页面时按需加载会重试
+  }
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(warmRapier, { timeout: 4000 })
+  } else {
+    setTimeout(warmRapier, 2500)
+  }
 })
 
 // 组件卸载时移除监听，避免内存泄漏
