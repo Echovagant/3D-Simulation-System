@@ -2,12 +2,13 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import wasm from 'vite-plugin-wasm'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    wasm(), // 处理 Wasm
+    // 不再用 vite-plugin-wasm：vite 8 的 rolldown 内核原生支持 wasm ESM 集成，
+    // 旧插件的转换叠在原生路径上会把 rapier 的 imports 接线打断
+    // （症状：WebAssembly.instantiate 报 "__wbg_call_*: function import requires a callable"）。
     vue(), // Vue 插件
     vueDevTools(), // Vue 开发工具插件
   ],

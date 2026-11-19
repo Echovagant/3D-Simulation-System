@@ -1,7 +1,6 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
-import wasm from 'vite-plugin-wasm'
 
 /**
  * 测试环境配置。
@@ -11,7 +10,8 @@ import wasm from 'vite-plugin-wasm'
  * 在测试里没有意义且会拖慢/干扰用例。dev server 仍然由 `vite.config.ts` 负责。
  */
 export default defineConfig({
-  plugins: [wasm(), vue()],
+  // wasm 插件已移除：测试环境用 compat 包（wasm 内联），rolldown 原生处理真 .wasm
+  plugins: [vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
