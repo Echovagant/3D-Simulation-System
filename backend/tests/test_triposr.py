@@ -413,3 +413,58 @@ def test_bake_texture_flag_follows_settings(monkeypatch: pytest.MonkeyPatch, tmp
     command = triposr_service.inference_command(tmp_path / "input.png", tmp_path / "workdir")
 
     assert "--bake-texture" not in command
+
+
+# --------------------------------------------------------------------------
+# 烘焙产物转换（上游 quirk：pyxatlas.export 把 OBJ 字节写进 mesh.glb）
+# --------------------------------------------------------------------------
+
+
+def test_baked_obj_bytes_are_converted_to_real_glb(tmp_path: Path):
+    """OBJ 字节 + texture.png → 真正的 glTF 头 GLB。"""
+    out = tmp_path / "0"
+    out.mkdir()
+    fake = out / "mesh.glb"
+    fake.write_text(
+        "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n",
+        encoding="utf-8",
+    )
+
+    glb = triposr_service._ensure_real_glb(fake)
+
+    assert glb is not None
+    assert glb.read_bytes()[:4] == b"glTF"
+    # OBJ 原件改名留档，转换产物占回 mesh.glb 的名字
+    assert (out / "mesh.obj").is_file()
+
+
+def test_gltf_headed_file_passes_through(tmp_path: Path):
+    """本来就是真 GLB 的产物原样放行，不做多余转换。"""
+    out = tmp_path / "0"
+    out.mkdir()
+    real = out / "mesh.glb"
+    real.write_bytes(b"glTF\x02\x00\x00\x00fake-body")
+
+    glb = triposr_service._ensure_real_glb(real)
+
+    assert glb == real
+    assert glb.read_bytes()[:4] == b"glTF"
+
+
+def test_stale_obj_original_does_not_break_conversion(tmp_path: Path):
+    """喂进来的是 OBJ 原件（上次转换的残件）也要能转出真 GLB，不能写回 OBJ。"""
+    out = tmp_path / "0"
+    out.mkdir()
+    # 残件场景：mesh.obj 是 OBJ 原件，调用方拿它当 candidate
+    stale = out / "mesh.obj"
+    stale.write_text(
+        "v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 0 0\nvt 1 0\nvt 0 1\nf 1/1 2/2 3/3\n",
+        encoding="utf-8",
+    )
+
+    glb = triposr_service._ensure_real_glb(stale)
+
+    assert glb is not None
+    # 产物必须落到 .glb 名且头部是 glTF——写回 .obj 名等于白转
+    assert glb.read_bytes()[:4] == b"glTF"
+    assert glb.suffix == ".glb"
