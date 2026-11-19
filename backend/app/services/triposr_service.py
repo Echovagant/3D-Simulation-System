@@ -380,6 +380,54 @@ def find_glb(workdir: Path) -> Path | None:
     return glb_files[0] if glb_files else None
 
 
+def _ensure_real_glb(candidate: Path) -> Path | None:
+    """把 run.py 的产物转成真正的 GLB。
+
+    上游 quirk（2026-11-20 实测）：``--bake-texture`` 路径下 pyxatlas.export
+    **不看扩展名**，mesh.glb 里写的是 OBJ 字节（v x y z 行）。这里：
+    有 glTF 头 → 原样放行；否则把 OBJ 原件挪到 .obj，用 trimesh 装上
+    烘焙的 texture.png 转出真正的 GLB（纹理内嵌）。
+
+    ⚠️ 导出目标恒为 ``.glb`` 后缀——trimesh 按扩展名选导出格式，
+    写回 .obj 名会得到又一份 OBJ（踩过）。
+    """
+    # GLB 目标恒为 .glb 后缀（残件场景下 candidate 是 OBJ 原件，产物落在旁边
+    # 的 mesh.glb）；trimesh 按扩展名选 loader/导出格式，OBJ 原件必须留在
+    # .obj 名上、导出必须写 .glb 名——两边都不能混（踩过）
+    glb_path = candidate.with_suffix(".glb")
+    if candidate.read_bytes()[:4] == b"glTF":
+        return glb_path
+
+    obj_src = candidate.with_suffix(".obj")
+    if obj_src == candidate:
+        pass  # candidate 本身就是 .obj 名（残件场景），OBJ 原件原地不动
+    else:
+        # 常规场景 candidate 就是 glb 名：OBJ 字节正躺在 glb 名上，
+        # rename 前不需要删任何东西；只有「残件 + 假 GLB 并存」才要清
+        if glb_path != candidate and glb_path.is_file():
+            glb_path.unlink()
+        candidate.rename(obj_src)
+    texture = obj_src.parent / "texture.png"
+
+    # trimesh 是后端轻量依赖（纯 Python），懒加载避免拖慢模块导入
+    import trimesh
+    from PIL import Image  # type: ignore[import-untyped]
+
+    mesh = trimesh.load(obj_src, process=False)
+    if not isinstance(mesh, trimesh.Trimesh):
+        logger.error("OBJ 转出来不是三角网格（%s），无法烘焙纹理", type(mesh))
+        return None
+    visual = mesh.visual
+    uvs = visual.uv if isinstance(visual, trimesh.visual.TextureVisuals) else None
+    if uvs is not None and texture.is_file():
+        mesh.visual = trimesh.visual.TextureVisuals(uv=uvs, image=Image.open(texture))
+    mesh.export(glb_path)
+    if glb_path.read_bytes()[:4] != b"glTF":
+        logger.error("GLB 转换后头部仍不是 glTF：%s", glb_path)
+        return None
+    return glb_path
+
+
 # --------------------------------------------------------------------------
 # 跑任务
 # --------------------------------------------------------------------------
@@ -434,6 +482,18 @@ def execute_job(job_id: str, *, runner: Runner | None = None) -> None:
                 error=f"推理失败：{detail}",
                 error_code=INFERENCE_FAILED,
                 detail=detail,
+            )
+            return
+
+        # 上游烘焙路径写的是 OBJ 字节，这里转成真 GLB；转不出来如实判失败
+        glb = _ensure_real_glb(glb)
+        if glb is None:
+            mark_failed(
+                session,
+                job_id,
+                error="推理失败：产物转换成 GLB 时失败（详见日志）",
+                error_code=INFERENCE_FAILED,
+                detail="GLB 头部校验未通过",
             )
             return
 
