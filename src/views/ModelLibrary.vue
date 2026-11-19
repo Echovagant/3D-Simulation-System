@@ -38,6 +38,9 @@
         <button class="primary-btn" @click="showUploadModal = true">
           <i class="fas fa-upload"></i> 上传新模型
         </button>
+        <button class="primary-btn" @click="openGenerateModal" title="单张图片生成 3D 模型（TripoSR 本地推理）">
+          <i class="fas fa-wand-magic-sparkles"></i> AI 生成
+        </button>
         <InfoTip
           label="关于导入模型的出生点"
           text="模型导入场景时落在随机出生点（X/Z 在 -2.5 ~ 2.5，Y = 2），不在原点；导入后用属性面板把它移到你要的位置。"
@@ -214,6 +217,87 @@
       </div>
     </div>
 
+    <!-- AI 生成模型模态框（TripoSR 本地推理） -->
+    <div class="modal-backdrop" v-if="showGenerateModal" @click="closeGenerateModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>AI 生成模型（单图 → 3D）</h2>
+          <button class="close-btn" @click="closeGenerateModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <AppNotice
+            type="warning"
+            message="TripoSR 在本机推理：图片不会离开这台电脑。CPU 推理约 1-5 分钟；生成的模型与上传模型一样只在当前会话有效。"
+            class="modal-notice"
+          />
+          <AppNotice
+            v-if="generateNotice"
+            :type="generateNotice.type"
+            :message="generateNotice.message"
+            dismissible
+            class="modal-notice"
+            @dismiss="generateNotice = null"
+          />
+          <form @submit.prevent="handleGenerate" v-if="!isGenerating">
+            <div class="form-group">
+              <label for="tripoName">模型名称</label>
+              <input
+                type="text"
+                id="tripoName"
+                v-model="tripoForm.name"
+                placeholder="留空则用图片文件名"
+              >
+            </div>
+            <div class="form-group">
+              <label for="tripoCategory">模型类别</label>
+              <select id="tripoCategory" v-model="tripoForm.category" required>
+                <option value="props">道具</option>
+                <option value="characters">角色</option>
+                <option value="environments">环境</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="tripoImage">输入图片</label>
+              <div class="file-upload-area">
+                <input
+                  type="file"
+                  id="tripoImage"
+                  accept=".png,.jpg,.jpeg,.webp"
+                  @change="handleGenerateFileSelect"
+                  required
+                >
+                <div class="upload-placeholder" v-if="!tripoFileName">
+                  <i class="fas fa-image"></i>
+                  <p>选一张主体清晰的图片（物品居中、背景干净效果最好）</p>
+                  <p class="file-formats">支持 .png, .jpg, .jpeg, .webp</p>
+                </div>
+                <div class="file-selected" v-if="tripoFileName">
+                  <i class="fas fa-file-image"></i>
+                  <span>{{ tripoFileName }}</span>
+                  <button type="button" class="remove-file" @click="clearGenerateFileSelection">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="cancel-btn" @click="closeGenerateModal">取消</button>
+              <button type="submit" class="primary-btn" :disabled="!isGenerateFormValid">
+                开始生成
+              </button>
+            </div>
+          </form>
+          <div v-else class="generate-progress">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>{{ generateStageText }}</p>
+            <p class="generate-hint">推理在后台进行，可以先关掉这个窗口去做别的；完成后模型会自动出现在库里。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 模型详情模态框 -->
     <div class="modal-backdrop" v-if="selectedModel" @click="selectedModel = null">
       <div class="modal-content model-detail-modal" @click.stop>
@@ -296,6 +380,8 @@ import { useModelStore } from '@/stores/modelStore';
 import { isPlaceholderModel } from '@/data/modelLibrary';
 import { resolveModelUrl } from '@/utils/modelLoader';
 import { reportError } from '@/services/api/telemetry';
+import { ApiError, isApiUnavailable } from '@/services/api/client';
+import { createTripoJob, getTripoJob, tripoModelUrl } from '@/services/api/triposr';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
 import PageHeader from '@/components/common/PageHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -372,6 +458,173 @@ const isUploadFormValid = computed<boolean>(() => {
   return !!newModel.value.name &&
          !!newModel.value.category &&
          newModel.value.file !== null;
+});
+
+// ===================== AI 生成（TripoSR 本地推理） =====================
+// 与上传同一套 modelStore 链路：生成的 GLB 包成 File 走 uploadModel，
+// 会话有效性与「仅当前会话」标注由 modelStore 统一负责。
+const TRIPO_POLL_INTERVAL_MS = 3000;
+
+const showGenerateModal = ref<boolean>(false);
+const isGenerating = ref<boolean>(false);
+const generateStage = ref<'idle' | 'submitting' | 'queued' | 'running' | 'importing'>('idle');
+const generateNotice = ref<{ type: 'success' | 'danger' | 'warning'; message: string } | null>(null);
+const tripoForm = ref<{
+  name: string;
+  category: 'characters' | 'environments' | 'props';
+  file: File | null;
+}>({ name: '', category: 'props', file: null });
+const tripoFileName = ref<string>('');
+let tripoPollTimer: number | undefined;
+
+const isGenerateFormValid = computed<boolean>(() => tripoForm.value.file !== null);
+
+const generateStageText = computed<string>(() => {
+  switch (generateStage.value) {
+    case 'submitting':
+      return '正在提交…';
+    case 'queued':
+      return '排队中…';
+    case 'running':
+      return '本机推理中…（CPU 分钟级）';
+    case 'importing':
+      return '生成完成，正在导入模型库…';
+    default:
+      return '';
+  }
+});
+
+const handleGenerateFileSelect = (e: Event): void => {
+  const target = e.target as HTMLInputElement;
+  const file = target.files?.[0] || null;
+  if (file) {
+    tripoForm.value.file = file;
+    tripoFileName.value = file.name;
+    // 自动填充模型名称（如果未填写）
+    if (!tripoForm.value.name) {
+      tripoForm.value.name = file.name.replace(/\.[^/.]+$/, '');
+    }
+  }
+};
+
+const clearGenerateFileSelection = (): void => {
+  tripoForm.value.file = null;
+  tripoFileName.value = '';
+  const input = document.getElementById('tripoImage') as HTMLInputElement | null;
+  if (input) input.value = '';
+};
+
+const resetTripoForm = (): void => {
+  tripoForm.value = { name: '', category: 'props', file: null };
+  tripoFileName.value = '';
+  clearGenerateFileSelection();
+};
+
+const stopTripoPolling = (): void => {
+  if (tripoPollTimer !== undefined) {
+    window.clearTimeout(tripoPollTimer);
+    tripoPollTimer = undefined;
+  }
+};
+
+const openGenerateModal = (): void => {
+  showGenerateModal.value = true;
+  generateNotice.value = null;
+};
+
+const closeGenerateModal = (): void => {
+  // 推理继续在后台跑：关掉只是不看进度，完成后模型照样进库
+  showGenerateModal.value = false;
+  if (!isGenerating.value) resetTripoForm();
+};
+
+/** 把生成的 GLB 拉回来包成 File，走既有上传链路 */
+const importGeneratedModel = async (jobId: string): Promise<void> => {
+  const response = await fetch(tripoModelUrl(jobId));
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+  }
+  const blob = await response.blob();
+  const baseName = tripoForm.value.name.trim() || 'TripoSR 生成';
+  const file = new File([blob], `${baseName}.glb`, { type: 'model/gltf-binary' });
+  await modelStore.uploadModel({
+    name: `${baseName}（TripoSR 本地生成）`,
+    category: tripoForm.value.category,
+    file,
+  });
+};
+
+const pollTripoJob = (jobId: string): void => {
+  stopTripoPolling();
+  tripoPollTimer = window.setTimeout(async () => {
+    try {
+      const job = await getTripoJob(jobId);
+      if (job.status === 'succeeded') {
+        generateStage.value = 'importing';
+        await importGeneratedModel(jobId);
+        showGenerateModal.value = false;
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        resetTripoForm();
+        downloadNotice.value = { type: 'success', message: '模型生成完成，已导入模型库（仅当前会话有效）' };
+        if (downloadNoticeTimer !== undefined) window.clearTimeout(downloadNoticeTimer);
+        downloadNoticeTimer = window.setTimeout(() => { downloadNotice.value = null; }, 6000);
+        return;
+      }
+      if (job.status === 'failed') {
+        generateNotice.value = { type: 'danger', message: job.error || '推理失败，换一张主体清晰的图片试试' };
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        return;
+      }
+      generateStage.value = job.status === 'running' ? 'running' : 'queued';
+      pollTripoJob(jobId);
+    } catch (error) {
+      // 后端抖动 ≠ 任务失败：任务在后台继续跑，下个周期再问
+      if (isGenerating.value && isApiUnavailable(error)) {
+        pollTripoJob(jobId);
+        return;
+      }
+      generateNotice.value = {
+        type: 'danger',
+        message: error instanceof Error ? error.message : '状态查询失败',
+      };
+      isGenerating.value = false;
+      generateStage.value = 'idle';
+      reportError(error, '/model-library');
+    }
+  }, TRIPO_POLL_INTERVAL_MS);
+};
+
+const handleGenerate = async (): Promise<void> => {
+  if (!tripoForm.value.file) return;
+  isGenerating.value = true;
+  generateStage.value = 'submitting';
+  generateNotice.value = null;
+  try {
+    const created = await createTripoJob(
+      tripoForm.value.file,
+      tripoForm.value.name.trim() || undefined,
+    );
+    generateStage.value = 'queued';
+    pollTripoJob(created.jobId);
+  } catch (error) {
+    isGenerating.value = false;
+    generateStage.value = 'idle';
+    if (error instanceof ApiError && error.code === 'triposr_env_missing') {
+      // 环境问题后端已经说清楚缺什么——原样转告，不吞提示
+      generateNotice.value = { type: 'danger', message: `TripoSR 环境没就绪：${error.message}` };
+    } else if (error instanceof ApiError) {
+      generateNotice.value = { type: 'danger', message: error.message };
+    } else {
+      generateNotice.value = { type: 'danger', message: '后端不可达——确认 backend 已启动后再试' };
+    }
+    reportError(error, '/model-library');
+  }
+};
+
+onUnmounted(() => {
+  stopTripoPolling();
 });
 
 // ===================== 计算属性与方法 =====================
@@ -1262,5 +1515,25 @@ const modelMeta = (model: Model): string =>
   .form-actions button {
     width: 100%;
   }
+}
+
+/* AI 生成（TripoSR）：后台进度态 */
+.generate-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.generate-progress i {
+  font-size: 28px;
+}
+
+.generate-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  max-width: 320px;
 }
 </style>
