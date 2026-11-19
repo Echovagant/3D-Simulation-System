@@ -744,11 +744,24 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         return false
       }
 
+      // 尺度归一：GLB 的真实尺度方差极大（实测 9 个内置模型 maxDim 0.3~8.7 单位），
+      // 不归一的话 8 米级的城市/太空站会把相机整个罩住（表现为「导入成功但看不到」），
+      // 小模型又几乎不可见。统一归到 maxDim = 2（与机甲这个已知可视基准一致），
+      // 归一后重算包围盒——物理碰撞体与落地位置都按缩放后的来。
+      const rawBox = new THREE.Box3().setFromObject(model)
+      const rawSize = rawBox.getSize(new THREE.Vector3())
+      const rawMaxDim = Math.max(rawSize.x, rawSize.y, rawSize.z)
+      const TARGET_MAX_DIM = 2
+      if (rawMaxDim > 0 && Math.abs(rawMaxDim - TARGET_MAX_DIM) > 0.01) {
+        model.scale.multiplyScalar(TARGET_MAX_DIM / rawMaxDim)
+        model.updateMatrixWorld(true)
+      }
+
       // 设置模型位置
       model.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
       model.castShadow = true
 
-      // 创建物理刚体（简化处理，使用模型包围盒）
+      // 创建物理刚体（简化处理，使用模型包围盒）——注意在尺度归一之后取包围盒
       const box = new THREE.Box3().setFromObject(model)
       const size = box.getSize(new THREE.Vector3())
       const halfExtents = size.multiplyScalar(0.5)

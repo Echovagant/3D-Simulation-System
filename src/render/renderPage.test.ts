@@ -157,15 +157,36 @@ describe('渲染页 · 动作类型', () => {
 })
 
 describe('渲染页 · 场景文档', () => {
-  it('只还原立方体与球体；模型这类还原不了的类型被跳过', () => {
+  it('只还原基本体；未知类型被跳过（模型走独立加载链路）', () => {
     const specs = normalizeRenderScene({
       objects: [
         { type: 'cube', position: { x: 0, y: 2, z: 0 }, scale: { x: 1, y: 1, z: 1 } },
         { type: 'sphere', position: { x: 2, y: 4, z: 0 } },
-        { type: 'model', modelId: 'mech', position: { x: 1, y: 1, z: 1 } },
+        { type: 'light', position: { x: 1, y: 1, z: 1 } },
       ],
     })
     expect(specs.map((s) => s.kind)).toEqual(['cube', 'sphere'])
+  })
+
+  it('场景文档里的 ramp 不被丢弃：kind 原样进 spec（缩放默认 1）', () => {
+    const specs = normalizeRenderScene({
+      objects: [{ type: 'ramp', position: { x: 0, y: 0.5, z: 0 } }],
+    })
+    expect(specs).toHaveLength(1)
+    expect(specs[0].kind).toBe('ramp')
+    expect(specs[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+  })
+
+  it('场景文档里的 model 不再被丢弃：modelId 进 spec，缺 modelId 则跳过', () => {
+    const specs = normalizeRenderScene({
+      objects: [
+        { type: 'model', modelId: 'mech', position: { x: 1, y: 1, z: 1 } },
+        { type: 'model', position: { x: 0, y: 0, z: 0 } },
+      ],
+    })
+    expect(specs).toHaveLength(1)
+    expect(specs[0].kind).toBe('model')
+    expect((specs[0] as { modelId?: string }).modelId).toBe('mech')
   })
 
   it('场景文档里的 ramp 不被丢弃：kind 原样进 spec（缩放默认 1）', () => {
