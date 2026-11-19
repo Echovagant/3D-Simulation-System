@@ -13,9 +13,16 @@
  *    这样渲染出来的画面与编辑器里看到的是同一套。
  */
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { loadRapier } from '@/composables/loadRapier'
 import { RENDER_POWER_PREFERENCE } from '@/config/rendering'
-import { createRenderController, type RenderApi } from './renderPage'
+import { createModelLibrary } from '@/data/modelLibrary'
+import {
+  createRenderController,
+  normalizeRenderScene,
+  type RenderApi,
+  type RenderObjectSpec,
+} from './renderPage'
 
 /**
  * 取注入的场景。
@@ -103,12 +110,39 @@ const bootstrap = async (): Promise<void> => {
 
   const rapier = await loadRapier()
 
+  // 模型：GLB 异步加载必须在 ready 之前完成（录制器等 ready 才开始逐帧驱动）。
+  // 模型目录用静态数据（modelLibrary），渲染页不依赖 pinia。
+  const sceneDocument = readInjectedScene()
+  const specs = normalizeRenderScene(sceneDocument)
+  const modelCatalog = createModelLibrary()
+  const loader = new GLTFLoader()
+  const loadedModels: {
+    spec: RenderObjectSpec & { kind: 'model'; modelId: string }
+    scene: THREE.Object3D
+  }[] = []
+  for (const spec of specs) {
+    if (spec.kind !== 'model') continue
+    try {
+      const info = modelCatalog.find((m) => m.id === spec.modelId)
+      if (!info) continue
+      const gltf = await loader.loadAsync(info.modelUrl)
+      loadedModels.push({
+        spec: spec as RenderObjectSpec & { kind: 'model'; modelId: string },
+        scene: gltf.scene,
+      })
+    } catch {
+      // 单个模型加载失败：跳过，不让一个坏 GLB 卡死整段渲染。
+      // 跳过本身是确定性行为：同一场景重跑，跳过的还是同一个。
+    }
+  }
+
   const controller = createRenderController({
     rapier,
     scene,
     camera,
     draw: () => renderer.render(scene, camera),
-    sceneDocument: readInjectedScene(),
+    sceneDocument,
+    models: loadedModels,
   })
 
   // 先把 API 挂上去（ready=false），再置为 true：
