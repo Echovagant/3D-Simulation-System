@@ -1266,6 +1266,10 @@ onUnmounted(() => {
   // 移除窗口缩放监听：不解绑的话，页面来回切换会越挂越多份
   window.removeEventListener('resize', handleResize)
 
+  // 摘掉容器观察器（与 onMounted 成对清理）
+  viewportResizeObserver?.disconnect()
+  viewportResizeObserver = null
+
   // 释放场景里的几何体与材质
   if (scene) {
     clearPhysicsObjects()
@@ -1289,6 +1293,16 @@ const handleResize = () => {
 
 // resize 监听注册在 setup 顶层（不是 onMounted 里），卸载时在 onUnmounted 里成对摘除
 window.addEventListener('resize', handleResize)
+
+// 容器级尺寸变化同样要重排：导航轨 hover 展开只改容器宽度、不触发 window resize，
+// 只听 window 会让画布停在旧尺寸（表现为「画布没占满区域」）。
+// ResizeObserver 观察视口容器本身；jsdom 无此 API，守卫跳过。
+let viewportResizeObserver: ResizeObserver | null = null
+onMounted(() => {
+  if (!viewportRef.value || typeof ResizeObserver === 'undefined') return
+  viewportResizeObserver = new ResizeObserver(handleResize)
+  viewportResizeObserver.observe(viewportRef.value)
+})
 </script>
 
 <style scoped>
