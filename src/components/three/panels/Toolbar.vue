@@ -95,19 +95,22 @@
       {{ statusMessage }}
     </div>
   </div>
+  <ImportModelDialog
+    v-if="showImportDialog"
+    @close="showImportDialog = false"
+  />
 </template>
 
 <script setup>
 import { inject, computed, ref, watch } from 'vue';
 import { useSceneEditorStore } from '@/stores/sceneEditorStore';
-import { useRouter } from 'vue-router';
 import { useModelStore } from '@/stores/modelStore';
 import { reportError } from '@/services/api/telemetry';
 import InfoTip from '@/components/common/InfoTip.vue';
+import ImportModelDialog from './ImportModelDialog.vue';
 
 // 状态管理
 const store = useSceneEditorStore();
-const router = useRouter();
 const modelStore = useModelStore();
 
 // 从父组件注入的方法。兜底成「返回 false」的空实现：
@@ -121,6 +124,7 @@ const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
 // 状态
 const statusMessage = ref('');
 const importingModel = ref(false);
+const showImportDialog = ref(false);
 
 // 计算属性
 const isSceneInitialized = computed(() => getIsSceneInitialized());
@@ -180,12 +184,12 @@ const handleAddRamp = () => {
   }
 };
 
-// 导入模型
-const handleImportModel = async () => {
+// 导入模型：编辑器内直接选（不再跳模型库页）。
+// 选择写进 modelStore.selectedModelId，由下方 watch 消费——与「模型库页跳回
+// 编辑器」是同一条导入链路，导入逻辑零重复。
+const handleImportModel = () => {
   if (!isSceneInitialized.value) return;
-
-  // 跳转到模型库页面
-  await router.push(`/model-library?returnUrl=${encodeURIComponent(router.currentRoute.value.fullPath)}`);
+  showImportDialog.value = true;
 };
 
 // 删除选中对象
