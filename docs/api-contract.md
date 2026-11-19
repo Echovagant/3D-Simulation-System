@@ -4,12 +4,17 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：20
+后端版本：0.1.0　端点总数：29
 
 ## 端点
 
 | 方法 | 路径 | 操作 id | 说明 |
 | --- | --- | --- | --- |
+| `GET` | `/api/gym/sessions` | `list_gym_sessions_api_gym_sessions_get` | 列出在场会话 |
+| `POST` | `/api/gym/sessions` | `create_gym_session_api_gym_sessions_post` | 建一个 Gym 会话 |
+| `DELETE` | `/api/gym/sessions/{sessionId}` | `delete_gym_session_api_gym_sessions__sessionId__delete` | 销毁会话 |
+| `POST` | `/api/gym/sessions/{sessionId}/reset` | `reset_gym_session_api_gym_sessions__sessionId__reset_post` | 重建世界回到初始状态 |
+| `POST` | `/api/gym/sessions/{sessionId}/step` | `step_gym_session_api_gym_sessions__sessionId__step_post` | 推进一步（施加水平冲量） |
 | `GET` | `/api/health` | `health_api_health_get` | 存活探针 |
 | `POST` | `/api/llm/complete` | `complete_api_llm_complete_post` | 托管调用 |
 | `GET` | `/api/llm/keys` | `list_keys_api_llm_keys_get` | 查各厂商密钥配没配 |
@@ -30,6 +35,10 @@
 | `GET` | `/api/simulations/{jobId}` | `get_simulation_api_simulations__jobId__get` | 读取一个批量仿真任务的状态 |
 | `GET` | `/api/simulations/{jobId}/results` | `get_simulation_results_api_simulations__jobId__results_get` | 读取一个批量仿真的全部结果 |
 | `POST` | `/api/telemetry` | `ingest_api_telemetry_post` | 上报一批遥测事件 |
+| `GET` | `/api/triposr` | `list_triposr_jobs_api_triposr_get` | 列出最近的 TripoSR 任务 |
+| `POST` | `/api/triposr` | `create_triposr_job_api_triposr_post` | 提交一次单图生成 3D |
+| `GET` | `/api/triposr/{jobId}` | `get_triposr_job_api_triposr__jobId__get` | 读取一个 TripoSR 任务的状态 |
+| `GET` | `/api/triposr/{jobId}/model.glb` | `get_triposr_model_api_triposr__jobId__model_glb_get` | 下载生成的模型 |
 
 ## 统一错误形状
 

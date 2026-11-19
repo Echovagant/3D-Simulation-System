@@ -124,6 +124,25 @@ class Settings(BaseSettings):
     # 单次渲染最多多少帧。
     render_max_frames: int = 3600
 
+    # ---- TripoSR 本地推理（单图 → 3D）----
+
+    # TripoSR 环境根目录（内含 .venv/ 与 repo/）。**留空 = 挨个找常见位置**；
+    # 一旦显式配置就只认它——配错了要报错，不能悄悄换一台。
+    triposr_home: str = ""
+
+    # 推理完出**带纹理**的 GLB（烘焙纹理，走 moderngl/xatlas）。
+    # 机器缺 OpenGL 上下文导致烘焙失败时设成 false，退回无纹理网格。
+    triposr_bake_texture: bool = True
+
+    # 单张输入图最多接受多少字节，超出直接 413。
+    triposr_max_image_bytes: int = 10 * 1024 * 1024
+
+    # 输入图与产物的落盘目录。留空 = <backend>/backend_data/triposr
+    triposr_output_dir: str = ""
+
+    # 单次推理最长跑多久（秒）。CPU 推理是分钟级，超时算失败，不让它一直挂着。
+    triposr_timeout_seconds: int = 1800
+
 
 @lru_cache
 def get_settings() -> Settings:

@@ -375,3 +375,109 @@ class RenderJobDetail(ApiModel):
     artifact_url: str | None = None
     duration_ms: int | None = None
     created_at: datetime
+
+
+class TripoJobAccepted(ApiModel):
+    """TripoSR 排队成功。"""
+
+    job_id: str
+
+
+class TripoJobSummary(ApiModel):
+    """TripoSR 任务摘要（列表用）。"""
+
+    job_id: str
+    status: str
+    label: str | None = None
+    image_name: str
+    created_at: datetime
+    duration_ms: int | None = None
+
+
+class TripoJobDetail(ApiModel):
+    """TripoSR 任务详情。
+
+    与渲染不同，这里**没有 progress**：run.py 只在结束时产出结果，
+    中途拿不到可靠的进度，推理中就是等——不猜。
+    """
+
+    job_id: str
+    status: str
+    label: str | None = None
+    image_name: str
+    error: str | None = None
+    artifact_url: str | None = None
+    duration_ms: int | None = None
+    created_at: datetime
+
+
+class GymTarget(ApiModel):
+    """Gym 任务的目标点（水平面）。"""
+
+    x: float
+    z: float
+
+
+class GymSessionCreateRequest(ApiModel):
+    """建一个 Gym 会话。
+
+    ``scene`` 是**完整的前端场景文档**（与批量仿真同一口径）；
+    ``agentUuid`` 缺省时自动选第一个动态物体；
+    ``target`` 缺省 (5, 0)。
+    """
+
+    scene: dict[str, Any]
+    params: dict[str, Any] = Field(default_factory=dict)
+    agent_uuid: str | None = None
+    target: GymTarget = Field(default_factory=lambda: GymTarget(x=5.0, z=0.0))
+    max_steps: int = Field(default=300, ge=1, le=10000)
+
+
+class GymSessionCreated(ApiModel):
+    """建会话成功：会话 id + 初始观测。"""
+
+    session_id: str
+    observation: dict[str, Any]
+    reward: float
+    terminated: bool
+    truncated: bool
+
+
+class GymSessionSummary(ApiModel):
+    """Gym 会话摘要（列表用）。"""
+
+    session_id: str
+    agent_uuid: str
+    step: int
+    max_steps: int
+    terminated: bool
+    truncated: bool
+
+
+class GymResetResponse(ApiModel):
+    """reset 之后的观测载荷。"""
+
+    observation: dict[str, Any]
+    reward: float
+    terminated: bool
+    truncated: bool
+
+
+class GymStepRequest(ApiModel):
+    """一步的动作：施加在智能体上的水平力（牛）。
+
+    服务端按 ``冲量 = 力 × dt`` 换算，与前端同一口径。
+    """
+
+    force_x: float
+    force_z: float
+
+
+class GymStepResponse(ApiModel):
+    """一步的结果：观测 + reward + terminated/truncated + info。"""
+
+    observation: dict[str, Any]
+    reward: float
+    terminated: bool
+    truncated: bool
+    info: dict[str, Any]
