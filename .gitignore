@@ -46,3 +46,6 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .zcode/
+
+# 会话/调研临时目录（调研产物归档在 D:\Projects\_audit-archive，不入库）
+.tmp/
