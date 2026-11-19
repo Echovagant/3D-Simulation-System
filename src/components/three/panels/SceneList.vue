@@ -77,6 +77,7 @@ const probeDone = ref(false)
  */
 const addCube = inject<() => boolean>('addCube', () => false)
 const addSphere = inject<() => boolean>('addSphere', () => false)
+const addRamp = inject<() => boolean>('addRamp', () => false)
 
 const refresh = () => {
   scenes.value = store.listScenes()
@@ -170,6 +171,7 @@ onMounted(async () => {
   store.registerPrimitiveFactory({
     createCube: () => addCube(),
     createSphere: () => addSphere(),
+    createRamp: () => addRamp(),
   })
 
   // 后端是可选增强：探不通就安静降级，不打扰用户

@@ -11,11 +11,48 @@ import * as THREE from 'three'
  * 缩放走 `mesh.scale`（不动顶点），因此共用同一份几何体是标准做法。
  * 材质**不能**共享：选中高亮靠 `material.emissive`，共享材质会让所有物体一起变亮。
  */
-export type PrimitiveType = 'cube' | 'sphere'
+export type PrimitiveType = 'cube' | 'sphere' | 'ramp'
+
+/**
+ * 斜面（楔形）的基准顶点：占地 1×1、高 1，与立方体 BoxGeometry(1,1,1) 同一套
+ * 基准约定（缩放走 mesh.scale，物理侧按这份基准换算）。
+ *
+ * 直角三角形截面在 XY 平面：(-0.5,-0.5) → (0.5,-0.5) → (-0.5,0.5)，
+ * 斜面从低处 (+x) 升到高处 (−x)，沿 z 拉伸 ±0.5 成三棱柱。
+ * 导出给物理侧（trimesh 碰撞体）与渲染页（重建几何）复用——三处共用一份数据，
+ * 视觉与碰撞才不会脱节。
+ */
+export const WEDGE_VERTICES: readonly number[] = [
+  -0.5, -0.5, -0.5,
+  0.5, -0.5, -0.5,
+  -0.5, 0.5, -0.5,
+  -0.5, -0.5, 0.5,
+  0.5, -0.5, 0.5,
+  -0.5, 0.5, 0.5,
+]
+
+/** 楔形索引：2 个三角帽 + 3 个矩形面（各 2 三角）= 8 三角；绕组全部朝外 */
+export const WEDGE_INDICES: readonly number[] = [
+  0, 2, 1,
+  3, 5, 4,
+  0, 1, 3,
+  1, 4, 3,
+  0, 3, 2,
+  3, 5, 2,
+  1, 2, 4,
+  2, 5, 4,
+]
 
 const sharedGeometries: Record<PrimitiveType, THREE.BufferGeometry> = {
   cube: new THREE.BoxGeometry(1, 1, 1),
   sphere: new THREE.SphereGeometry(0.5, 32, 32),
+  ramp: (() => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([...WEDGE_VERTICES], 3))
+    geometry.setIndex([...WEDGE_INDICES])
+    geometry.computeVertexNormals()
+    return geometry
+  })(),
 }
 
 /** 取共享几何体（碰撞体的基准尺寸也按它换算：立方体半长 0.5、球体半径 0.5） */
@@ -46,4 +83,4 @@ export const createPrimitiveMesh = (
 
 /** 判断一个类型是不是「可重建的基本体」 */
 export const isPrimitiveType = (type: string): type is PrimitiveType =>
-  type === 'cube' || type === 'sphere'
+  type === 'cube' || type === 'sphere' || type === 'ramp'

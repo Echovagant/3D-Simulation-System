@@ -15,6 +15,7 @@
  *    「抓到的第 N 帧」严格对应「物理的第 N 步」，这是重跑帧数一致的前提。
  */
 import * as THREE from 'three'
+import { WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
 import type * as RapierModule from '@dimforge/rapier3d'
 
 type Rapier = typeof RapierModule
@@ -198,15 +199,15 @@ export const parseRenderAction = (raw: unknown): RenderAction => {
 
 /** 场景文档里能被渲染页还原的物体（模型需要 GLTF 加载器，不在渲染页范围内） */
 export interface RenderObjectSpec {
-  kind: 'cube' | 'sphere'
+  kind: 'cube' | 'sphere' | 'ramp'
   position: Vec3
   rotation: Vec3
   scale: Vec3
   bodyType: 'dynamic' | 'fixed' | 'kinematic'
 }
 
-const isCubeOrSphere = (type: unknown): type is 'cube' | 'sphere' =>
-  type === 'cube' || type === 'sphere'
+const isRenderablePrimitive = (type: unknown): type is 'cube' | 'sphere' | 'ramp' =>
+  type === 'cube' || type === 'sphere' || type === 'ramp'
 
 /**
  * 把场景文档读成一组可渲染的物体。
@@ -228,7 +229,7 @@ export const normalizeRenderScene = (raw: unknown): RenderObjectSpec[] => {
   for (const entry of objects) {
     if (!entry || typeof entry !== 'object') continue
     const obj = entry as Record<string, unknown>
-    if (!isCubeOrSphere(obj.type)) continue
+    if (!isRenderablePrimitive(obj.type)) continue
     if (!obj.position) {
       throw new Error(`场景物体 ${JSON.stringify(obj.name ?? obj.uuid ?? '')} 缺少 position`)
     }
@@ -328,8 +329,17 @@ export const createRenderController = (options: RenderControllerOptions): Render
 
   const items: RenderItem[] = []
 
+  /** 楔形几何：与场景编辑器同一份 WEDGE 数据（基准占地 1×1、高 1） */
+  const buildWedgeGeometry = (): THREE.BufferGeometry => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([...WEDGE_VERTICES], 3))
+    geometry.setIndex([...WEDGE_INDICES])
+    geometry.computeVertexNormals()
+    return geometry
+  }
+
   const createItem = (spec: {
-    kind: 'cube' | 'sphere'
+    kind: 'cube' | 'sphere' | 'ramp'
     position: Vec3
     rotation?: Vec3
     scale: Vec3
@@ -341,7 +351,9 @@ export const createRenderController = (options: RenderControllerOptions): Render
     const geometry =
       spec.kind === 'cube'
         ? new THREE.BoxGeometry(1, 1, 1)
-        : new THREE.SphereGeometry(0.5, 32, 32)
+        : spec.kind === 'ramp'
+          ? buildWedgeGeometry()
+          : new THREE.SphereGeometry(0.5, 32, 32)
     const material = new THREE.MeshStandardMaterial({
       color: OBJECT_COLORS[items.length % OBJECT_COLORS.length],
       metalness: 0.3,
@@ -375,6 +387,15 @@ export const createRenderController = (options: RenderControllerOptions): Render
     const sz = Math.abs(spec.scale.z) || 1
     if (spec.kind === 'cube') {
       world.createCollider(rapier.ColliderDesc.cuboid(0.5 * sx, 0.5 * sy, 0.5 * sz), body)
+    } else if (spec.kind === 'ramp') {
+      // 楔形 trimesh：基准顶点逐轴乘缩放，与编辑器同一份 WEDGE 数据
+      const scaled = new Float32Array(WEDGE_VERTICES.length)
+      for (let i = 0; i < WEDGE_VERTICES.length; i += 3) {
+        scaled[i] = WEDGE_VERTICES[i] * sx
+        scaled[i + 1] = WEDGE_VERTICES[i + 1] * sy
+        scaled[i + 2] = WEDGE_VERTICES[i + 2] * sz
+      }
+      world.createCollider(rapier.ColliderDesc.trimesh(scaled, new Uint32Array(WEDGE_INDICES)), body)
     } else {
       // Rapier 没有椭球碰撞体：球体的非等比缩放用三轴均值近似半径
       world.createCollider(rapier.ColliderDesc.ball(0.5 * ((sx + sy + sz) / 3)), body)

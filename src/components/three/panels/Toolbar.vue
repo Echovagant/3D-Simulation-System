@@ -46,6 +46,14 @@
       </button>
       <button
         class="toolbar-btn"
+        @click="handleAddRamp"
+        :disabled="!isSceneInitialized"
+        title="添加斜面"
+      >
+        <i class="fas fa-mountain"></i>
+      </button>
+      <button
+        class="toolbar-btn"
         @click="handleImportModel"
         :disabled="!isSceneInitialized"
         title="导入模型"
@@ -106,6 +114,7 @@ const modelStore = useModelStore();
 // 没有上游提供时按钮点了不炸，只提示失败
 const addCube = inject('addCube') ?? (() => false);
 const addSphere = inject('addSphere') ?? (() => false);
+const addRamp = inject('addRamp') ?? (() => false);
 const importModel = inject('importModel') ?? (async () => false);
 const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
 
@@ -158,6 +167,16 @@ const handleAddSphere = () => {
     showTempMessage('球体添加成功');
   } else {
     showTempMessage('球体添加失败', 3000);
+  }
+};
+
+// 添加斜面
+const handleAddRamp = () => {
+  const success = addRamp();
+  if (success) {
+    showTempMessage('斜面添加成功');
+  } else {
+    showTempMessage('斜面添加失败', 3000);
   }
 };
 

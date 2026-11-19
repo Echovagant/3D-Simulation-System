@@ -103,6 +103,7 @@ const router = useRouter()
 const sceneMethods = ref<{
   addCube: () => boolean
   addSphere: () => boolean
+  addRamp: () => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   // 物理推进函数接收 rAF 的时间戳：固定步长累加器靠它算真实时间
@@ -110,6 +111,7 @@ const sceneMethods = ref<{
 }>({
   addCube: () => false,
   addSphere: () => false,
+  addRamp: () => false,
   importModel: async () => false,
   getIsSceneInitialized: () => false,
   updatePhysics: () => {},
@@ -118,6 +120,7 @@ const sceneMethods = ref<{
 // 提供方法给Toolbar组件
 provide('addCube', () => sceneMethods.value.addCube())
 provide('addSphere', () => sceneMethods.value.addSphere())
+provide('addRamp', () => sceneMethods.value.addRamp())
 provide('importModel', (modelId: string) => sceneMethods.value.importModel(modelId))
 provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized())
 
@@ -125,6 +128,7 @@ provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized(
 const exposeMethods = (methods: {
   addCube: () => boolean
   addSphere: () => boolean
+  addRamp: () => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   updatePhysics: (timestamp?: number) => void
