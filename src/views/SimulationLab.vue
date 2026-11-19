@@ -17,6 +17,17 @@
       {{ message }}
     </div>
 
+    <!-- 只读分享条：链接即演示 -->
+    <div v-if="shareInfo" class="share-banner">
+      <span class="share-text">
+        只读分享 · {{ shareInfo.name }} —— 物理逐帧确定性，重放与首跑逐位一致
+      </span>
+      <button class="toolbar-btn share-btn" @click="replayShare" title="从零重建世界并重放">
+        重放
+      </button>
+      <button class="toolbar-btn share-btn" @click="copyShareLink">复制链接</button>
+    </div>
+
     <div class="simulation-container">
       <!-- 主视图区域 - 占据最大空间 -->
       <div class="main-content">
@@ -140,12 +151,15 @@
           <PanelHeader title="实验参数" />
         </div>
 
-        <!-- 课件卡：当前预设的教学目标与观察点（有 education 元数据的预设才显示） -->
-        <section v-if="selectedEducation" class="side-section courseware-card">
-          <PanelHeader title="课件" />
-          <p class="courseware-objective">{{ selectedEducation.objective }}</p>
-          <ul class="courseware-observations">
-            <li v-for="(item, i) in selectedEducation.observations" :key="i">{{ item }}</li>
+        <!-- 实验说明卡：当前预设的实验目的、观察点与作业题（有 experiment 元数据的预设才显示） -->
+        <section v-if="selectedExperiment" class="side-section experiment-card">
+          <PanelHeader title="实验说明" />
+          <p class="experiment-purpose">{{ selectedExperiment.purpose }}</p>
+          <ul class="experiment-observations">
+            <li v-for="(item, i) in selectedExperiment.observations" :key="i">{{ item }}</li>
+          </ul>
+          <ul v-if="selectedExperiment.assignments?.length" class="experiment-assignments">
+            <li v-for="(item, i) in selectedExperiment.assignments" :key="i">{{ item }}</li>
           </ul>
         </section>
 
@@ -332,6 +346,7 @@ import { useSimulationStore } from '@/stores/simulationStore'
 import { useModelStore } from '@/stores/modelStore'
 import { useRoute } from 'vue-router'
 import { reportError } from '@/services/api/telemetry'
+import { getScene } from '@/services/api/scenes'
 
 // 接收路由参数
 const props = defineProps<{
@@ -481,10 +496,10 @@ const presetDescription = computed(() => {
   return preset.description
 })
 
-// 课件卡：选中预设的教学目标与观察点（预设目录的 education 元数据）
-const selectedEducation = computed(() => {
+// 实验说明卡：选中预设的实验目的、观察点与作业题（预设目录的 experiment 元数据）
+const selectedExperiment = computed(() => {
   const preset = presets.value.find((entry) => entry.id === selectedPreset.value)
-  return preset?.education ?? null
+  return preset?.experiment ?? null
 })
 
 // 场景编辑器里保存过的场景（供「从编辑器加载」使用）
@@ -990,6 +1005,50 @@ const addModelToLab = async (objData: SceneDocumentObject): Promise<boolean> => 
 }
 
 /**
+ * 把一份场景文档落到实验室：清场 → 逐个建物体 → 初始化物理。
+ *
+ * 「从编辑器加载」与「只读分享回放」共用这一条路径——
+ * 两边必须是同一套加载语义，否则分享出去的演示就不是同一回事。
+ */
+const applySceneDocument = async (
+  doc: { name: string; objects: SceneDocumentObject[] },
+): Promise<void> => {
+  // 移除现有物体
+  clearPhysicsObjects()
+
+  for (const objData of doc.objects) {
+    if (objData.type === 'model') {
+      await addModelToLab(objData)
+      continue
+    }
+
+    // 场景编辑器用 cube / sphere / ramp 命名基本体，实验室用 box / sphere。
+    // ramp（楔形）在实验室降级为带旋转的 box：斜面碰撞面近似成立，
+    // 楔形视觉与 trimesh 精确碰撞待实验室对象系统升级后再补。
+    createPhysicsObject({
+      type: objData.type === 'sphere' ? 'sphere' : 'box',
+      name: objData.name,
+      position: objData.position,
+      rotation: objData.rotation,
+      scale: objData.scale,
+      physics: {
+        type: objData.physics?.type ?? 'dynamic',
+        mass: objData.physics?.mass ?? 1,
+        friction: 0.5,
+        restitution: 0.2,
+      },
+    })
+  }
+
+  // 初始化物理
+  await initPhysics(scene)
+  alignBodiesToMeshes()
+  applyPhysicsParameters()
+
+  simulationTime.value = 0
+}
+
+/**
  * 从场景编辑器加载已保存的场景。
  *
  * 以前这个按钮只会硬编码两个演示物体，跟编辑器毫无关系；
@@ -1010,44 +1069,56 @@ const loadSceneFromEditor = async () => {
   }
 
   try {
-    // 移除现有物体
-    clearPhysicsObjects()
-
-    for (const objData of doc.objects) {
-      if (objData.type === 'model') {
-        await addModelToLab(objData)
-        continue
-      }
-
-      // 场景编辑器用 cube / sphere / ramp 命名基本体，实验室用 box / sphere。
-      // ramp（楔形）在实验室降级为带旋转的 box：斜面碰撞面近似成立，
-      // 楔形视觉与 trimesh 精确碰撞待实验室对象系统升级后再补。
-      createPhysicsObject({
-        type: objData.type === 'sphere' ? 'sphere' : 'box',
-        name: objData.name,
-        position: objData.position,
-        rotation: objData.rotation,
-        scale: objData.scale,
-        physics: {
-          type: objData.physics?.type ?? 'dynamic',
-          mass: objData.physics?.mass ?? 1,
-          friction: 0.5,
-          restitution: 0.2,
-        },
-      })
-    }
-
-    // 初始化物理
-    await initPhysics(scene)
-    alignBodiesToMeshes()
-    applyPhysicsParameters()
-
-    simulationTime.value = 0
+    await applySceneDocument(doc)
     displayMessage(`已从场景编辑器加载: ${doc.name}`)
   } catch (error) {
     console.warn('[SimulationLab] 加载场景失败', error)
     reportError(error, '/simulation-lab')
     displayMessage('加载场景失败')
+  }
+}
+
+// ===================== 只读分享回放 =====================
+// 链接即演示：/simulation-lab/share/<sceneId> 从后端拉场景（跨设备可达），
+// 物理逐帧确定性——重放 = 从零重建世界再跑一遍，结果与首跑逐位一致。
+const shareInfo = ref<{ id: string; name: string } | null>(null)
+let shareDocument: { name: string; objects: SceneDocumentObject[] } | null = null
+
+const loadShareScene = async (sceneId: string): Promise<void> => {
+  try {
+    const detail = await getScene(sceneId)
+    shareDocument = detail.document
+    shareInfo.value = { id: detail.id, name: detail.name }
+    await applySceneDocument(detail.document)
+    displayMessage(`已加载分享场景（只读）: ${detail.name}`)
+  } catch (error) {
+    console.warn('[SimulationLab] 分享场景加载失败', error)
+    reportError(error, '/simulation-lab/share')
+    displayMessage('分享场景加载失败——确认后端在线且场景存在')
+  }
+}
+
+/** 确定性重放：从零重建世界再跑一遍。帧=物理步，结果与首跑逐位一致。 */
+const replayShare = async (): Promise<void> => {
+  if (!shareDocument) return
+  try {
+    await applySceneDocument(shareDocument)
+    displayMessage('已重放：同样的场景与初始条件，轨迹逐位一致')
+  } catch (error) {
+    console.warn('[SimulationLab] 重放失败', error)
+    reportError(error, '/simulation-lab/share')
+    displayMessage('重放失败')
+  }
+}
+
+const copyShareLink = async (): Promise<void> => {
+  if (!shareInfo.value) return
+  const url = `${window.location.origin}/simulation-lab/share/${encodeURIComponent(shareInfo.value.id)}`
+  try {
+    await navigator.clipboard.writeText(url)
+    displayMessage('分享链接已复制到剪贴板')
+  } catch {
+    displayMessage(`复制失败，手动复制：${url}`)
   }
 }
 
@@ -1220,6 +1291,12 @@ const startLabRuntime = () => {
     () => props.sceneId,
     (newSceneId) => {
       if (!newSceneId) return
+      // 分享路由（/simulation-lab/share/<id>）从后端拉场景；
+      // 普通 ?scene=<id> 深链接继续走本地（编辑器 localStorage）
+      if (route.path.startsWith('/simulation-lab/share/')) {
+        void loadShareScene(newSceneId as string)
+        return
+      }
       selectedSceneId.value = newSceneId as string
       loadSceneFromEditor()
     },
@@ -1755,19 +1832,18 @@ onMounted(() => {
     gap: 10px;
   }
 }
-/* 课件卡：教学目标与观察点（预设 education 元数据） */
-.courseware-card {
+/* 实验说明卡：实验目的、观察点与作业题（预设 experiment 元数据） */.experiment-card {
   background: var(--bg-panel-raised);
 }
 
-.courseware-objective {
+.experiment-purpose {
   margin: 0 0 8px;
   font-size: 0.8rem;
   line-height: 1.5;
   color: var(--text-1);
 }
 
-.courseware-observations {
+.experiment-observations {
   margin: 0;
   padding-left: 16px;
   display: grid;
@@ -1775,5 +1851,41 @@ onMounted(() => {
   font-size: 0.75rem;
   line-height: 1.5;
   color: var(--text-2);
+}
+
+.experiment-assignments {
+  margin: 8px 0 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+/* 只读分享条：链接即演示 */
+.share-banner {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  background: var(--bg-panel-raised);
+  border: 1px solid var(--border-1, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.share-text {
+  font-size: 0.78rem;
+  color: var(--text-2);
+}
+
+.share-btn {
+  font-size: 0.75rem;
 }
 </style>
