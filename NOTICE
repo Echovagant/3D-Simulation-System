@@ -23,7 +23,14 @@ project itself and is covered by the Apache License 2.0 in LICENSE:
   - the demo recording docs/assets/demo.gif and docs/assets/demo.mp4
     (scripts/record-demo.mjs)
 
-No third-party artwork, model or font is bundled.
+Third-party CC0 assets (public domain dedication, no attribution required):
+
+- Kenney (CC0 1.0) — Mini Characters, Space Kit, Nature Kit and Furniture Kit:
+  alien.glb, astronaut.glb, robot.glb, soldier.glb, rock_large.glb, tree_oak.glb,
+  tree_pine.glb, hangar_large.glb, station_corridor.glb, books.glb,
+  computer_screen.glb and rover.glb
+- Poly Haven (CC0 1.0) — cassette-player.glb, cross-pein-hammer.glb and
+  russian-food-cans.glb (converted to glTF-Binary with embedded textures)
 
 --------------------------------------------------------------------------------
 Software dependencies
