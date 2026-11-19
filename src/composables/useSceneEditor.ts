@@ -4,6 +4,7 @@ import { ref, watch, type Ref, onUnmounted } from 'vue'
 import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
+import { WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
 import { simulationConfig } from '../config/simulation'
 import { RENDER_POWER_PREFERENCE } from '../config/rendering'
 import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
@@ -53,6 +54,7 @@ type RapierWorld = World & {
 type ColliderShapeSpec =
   | { kind: 'cuboid'; halfExtents: { x: number; y: number; z: number } }
   | { kind: 'ball'; radius: number }
+  | { kind: 'trimesh'; vertices: Float32Array; indices: Uint32Array }
 
 // 模型库条目在导入流程里用到的字段（modelStore.models 的元素还带缩略图等元数据，这里用不上）
 interface Item {
@@ -74,9 +76,17 @@ interface Item {
  * ⚠️ 材质**不能**共享：点击高亮是通过 `material.emissive.set(0xffff00)` 实现的，
  * 共享材质会让所有同材质物体一起变黄。材质必须每对象独立。
  */
-const sharedGeometries: Record<'cube' | 'sphere', THREE.BufferGeometry> = {
+const sharedGeometries: Record<'cube' | 'sphere' | 'ramp', THREE.BufferGeometry> = {
   cube: new THREE.BoxGeometry(1, 1, 1),
   sphere: new THREE.SphereGeometry(0.5, 32, 32),
+  ramp: (() => {
+    // 楔形顶点/索引来自 primitiveFactory 的同一份数据：编辑器、渲染页、物理 trimesh 三处共用
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([...WEDGE_VERTICES], 3))
+    geometry.setIndex([...WEDGE_INDICES])
+    geometry.computeVertexNormals()
+    return geometry
+  })(),
 }
 
 export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) {
@@ -385,6 +395,18 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       return
     }
 
+    if (spec.kind === 'trimesh') {
+      // 楔形缩放：基准顶点逐轴乘缩放后重建 trimesh（Rapier 没有可缩放的 trimesh 形状）
+      const scaled = new Float32Array(spec.vertices.length)
+      for (let i = 0; i < spec.vertices.length; i += 3) {
+        scaled[i] = spec.vertices[i] * sx
+        scaled[i + 1] = spec.vertices[i + 1] * sy
+        scaled[i + 2] = spec.vertices[i + 2] * sz
+      }
+      collider.setShape(new rapier.TriMesh(scaled, new Uint32Array(spec.indices)))
+      return
+    }
+
     // Rapier 没有椭球碰撞体：球体的非等比缩放用三轴均值近似半径
     // （等比缩放时与视觉完全一致）
     const meanScale = (sx + sy + sz) / 3
@@ -540,7 +562,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     object: THREE.Object3D,
     rigidBody: RigidBody,
     collider: Collider,
-    shape: 'box' | 'sphere',
+    shape: 'box' | 'sphere' | 'mesh',
   ): void => {
     object.userData.physics = {
       ...(object.userData.physics ?? {}),
@@ -554,7 +576,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
   // 创建几何体（抽象通用方法）
   const createGeometry = (
-    type: 'cube' | 'sphere',
+    type: 'cube' | 'sphere' | 'ramp',
     geometry: THREE.BufferGeometry,
     size: number,
     name?: string,
@@ -596,22 +618,41 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       let colliderDesc: unknown // 使用unknown类型替代any
       if (type === 'cube') {
         colliderDesc = rapier.ColliderDesc.cuboid(size, size, size)
+      } else if (type === 'ramp') {
+        // 楔形用 trimesh 精确贴合斜面（cuboid 近似会让物体悬在斜面下方的空腔里）
+        colliderDesc = rapier.ColliderDesc.trimesh(
+          new Float32Array(WEDGE_VERTICES),
+          new Uint32Array(WEDGE_INDICES),
+        )
       } else {
         colliderDesc = rapier.ColliderDesc.ball(size)
       }
 
       const collider = physicsWorld.createCollider(colliderDesc, rigidBody)
       // 登记碰撞体基准尺寸：之后的缩放都以它为原点换算
-      colliderShapes.set(
-        mesh.uuid,
-        type === 'cube'
-          ? { kind: 'cuboid', halfExtents: { x: size, y: size, z: size } }
-          : { kind: 'ball', radius: size },
-      )
+      if (type === 'cube') {
+        colliderShapes.set(mesh.uuid, {
+          kind: 'cuboid',
+          halfExtents: { x: size, y: size, z: size },
+        })
+      } else if (type === 'ramp') {
+        colliderShapes.set(mesh.uuid, {
+          kind: 'trimesh',
+          vertices: new Float32Array(WEDGE_VERTICES),
+          indices: new Uint32Array(WEDGE_INDICES),
+        })
+      } else {
+        colliderShapes.set(mesh.uuid, { kind: 'ball', radius: size })
+      }
 
       // 设置userData以便反向查找
       ;(rigidBody as RapierRigidBody).userData = { object: mesh }
-      attachRigidBodyToUserData(mesh, rigidBody, collider, type === 'cube' ? 'box' : 'sphere')
+      attachRigidBodyToUserData(
+        mesh,
+        rigidBody,
+        collider,
+        type === 'cube' ? 'box' : type === 'ramp' ? 'mesh' : 'sphere',
+      )
 
       // 将物体添加到场景中
       if (scene) {
@@ -667,6 +708,12 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   const addSphere = (): boolean => {
     const sphere = createGeometry('sphere', sharedGeometries.sphere, 0.5, 'Sphere')
     return sphere !== null
+  }
+
+  // 添加斜面（楔形）：教学场景「斜面滑块/滚动」的基础地形件
+  const addRamp = (): boolean => {
+    const ramp = createGeometry('ramp', sharedGeometries.ramp, 1, 'Ramp')
+    return ramp !== null
   }
 
   // 导入模型（与模型库集成）
@@ -865,6 +912,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     cleanupEditor,
     addCube,
     addSphere,
+    addRamp,
     importModel,
     updatePhysics,
     getIsSceneInitialized: () => isSceneInitialized,

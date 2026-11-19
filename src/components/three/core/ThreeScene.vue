@@ -26,6 +26,7 @@ const emits = defineEmits<{
     methods: {
       addCube: () => boolean
       addSphere: () => boolean
+      addRamp: () => boolean
       importModel: (modelId: string) => Promise<boolean>
       getIsSceneInitialized: () => boolean
       updatePhysics: () => void
@@ -42,6 +43,7 @@ const {
   cleanupEditor,
   addCube,
   addSphere,
+  addRamp,
   importModel,
   getIsSceneInitialized,
   updatePhysics,
@@ -72,6 +74,7 @@ onMounted(() => {
     emits('expose-methods', {
       addCube,
       addSphere,
+      addRamp,
       importModel,
       getIsSceneInitialized,
       updatePhysics,

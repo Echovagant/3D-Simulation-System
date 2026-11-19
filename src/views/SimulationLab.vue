@@ -1004,7 +1004,9 @@ const loadSceneFromEditor = async () => {
         continue
       }
 
-      // 场景编辑器用 cube / sphere 命名基本体，实验室用 box / sphere
+      // 场景编辑器用 cube / sphere / ramp 命名基本体，实验室用 box / sphere。
+      // ramp（楔形）在实验室降级为带旋转的 box：斜面碰撞面近似成立，
+      // 楔形视觉与 trimesh 精确碰撞待实验室对象系统升级后再补。
       createPhysicsObject({
         type: objData.type === 'sphere' ? 'sphere' : 'box',
         name: objData.name,

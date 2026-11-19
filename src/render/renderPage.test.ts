@@ -168,6 +168,15 @@ describe('渲染页 · 场景文档', () => {
     expect(specs.map((s) => s.kind)).toEqual(['cube', 'sphere'])
   })
 
+  it('场景文档里的 ramp 不被丢弃：kind 原样进 spec（缩放默认 1）', () => {
+    const specs = normalizeRenderScene({
+      objects: [{ type: 'ramp', position: { x: 0, y: 0.5, z: 0 } }],
+    })
+    expect(specs).toHaveLength(1)
+    expect(specs[0].kind).toBe('ramp')
+    expect(specs[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+  })
+
   it('位置缺失就是数据坏了，要报错', () => {
     expect(() => normalizeRenderScene({ objects: [{ type: 'cube' }] })).toThrow(/position/)
     expect(() => normalizeRenderScene({ objects: 'nope' })).toThrow(/objects/)
