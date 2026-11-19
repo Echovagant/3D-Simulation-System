@@ -129,6 +129,11 @@ export interface PresetCatalogEntry {
   description: string
   thumbnail: string
   scene: PresetScene
+  /** 课件层：教学目标与课堂观察点（实验室右栏「课件」卡展示；缺省则不显示课件卡） */
+  education?: {
+    objective: string
+    observations: string[]
+  }
 }
 
 // 跨组件共享状态一律用 Pinia 的 useXxxStore()，其类型由 store 自动推导。

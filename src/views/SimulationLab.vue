@@ -140,6 +140,15 @@
           <PanelHeader title="实验参数" />
         </div>
 
+        <!-- 课件卡：当前预设的教学目标与观察点（有 education 元数据的预设才显示） -->
+        <section v-if="selectedEducation" class="side-section courseware-card">
+          <PanelHeader title="课件" />
+          <p class="courseware-objective">{{ selectedEducation.objective }}</p>
+          <ul class="courseware-observations">
+            <li v-for="(item, i) in selectedEducation.observations" :key="i">{{ item }}</li>
+          </ul>
+        </section>
+
         <!-- 选中物体信息：上移到右栏第一位 -->
         <section class="side-section">
           <PanelHeader title="选中物体信息" />
@@ -470,6 +479,12 @@ const presetDescription = computed(() => {
   const preset = presets.value.find((entry) => entry.id === selectedPreset.value)
   if (!preset) return '未选择预设，当前是演示场景'
   return preset.description
+})
+
+// 课件卡：选中预设的教学目标与观察点（预设目录的 education 元数据）
+const selectedEducation = computed(() => {
+  const preset = presets.value.find((entry) => entry.id === selectedPreset.value)
+  return preset?.education ?? null
 })
 
 // 场景编辑器里保存过的场景（供「从编辑器加载」使用）
@@ -1739,5 +1754,26 @@ onMounted(() => {
     flex-wrap: wrap;
     gap: 10px;
   }
+}
+/* 课件卡：教学目标与观察点（预设 education 元数据） */
+.courseware-card {
+  background: var(--bg-panel-raised);
+}
+
+.courseware-objective {
+  margin: 0 0 8px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--text-1);
+}
+
+.courseware-observations {
+  margin: 0;
+  padding-left: 16px;
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-2);
 }
 </style>

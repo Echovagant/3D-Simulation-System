@@ -34,6 +34,14 @@ export const simulationPresets: PresetCatalogEntry[] = [
     name: '牛顿摆',
     description: '经典的牛顿摆演示动量守恒',
     thumbnail: createThumbnail('牛顿摆', 'props'),
+    education: {
+      objective: '弹性碰撞中的动量守恒：观察碰撞瞬间动量沿球列的传递',
+      observations: [
+        '弹性系数 0.99 下，碰撞后只有另一端的球被弹起',
+        '把 restitution 调低，观察能量损失后多球一起晃动',
+        '开启「数据记录」可对比碰撞前后的速度',
+      ],
+    },
     scene: {
       name: '牛顿摆',
       gravity: { x: 0, y: -9.81, z: 0 },
@@ -67,6 +75,14 @@ export const simulationPresets: PresetCatalogEntry[] = [
     name: '斜坡与球体',
     description: '不同质量的球体从斜坡滚落',
     thumbnail: createThumbnail('斜坡与球体', 'props'),
+    education: {
+      objective: '重力势能转动能，以及质量/摩擦/弹性对滚动行为的影响',
+      observations: [
+        '三个球体的质量由体积推导（大球更重），滚动路径不同',
+        '摩擦系数 0.1/0.3/0.5 分别对应三颗球的材质设定',
+        '斜坡的倾角由 rotation.z 决定，改角度可对比到达底部的时间',
+      ],
+    },
     scene: {
       name: '斜坡与球体',
       gravity: { x: 0, y: -9.81, z: 0 },
@@ -117,6 +133,14 @@ export const simulationPresets: PresetCatalogEntry[] = [
     name: '碰撞测试 · 多形状',
     description: '不同形状物体的碰撞测试',
     thumbnail: createThumbnail('碰撞测试', 'props'),
+    education: {
+      objective: '形状与弹性系数对落地反弹的影响',
+      observations: [
+        'restitution 0.8 的球弹得最高，0.3 的立方体几乎不弹',
+        '立方体与圆柱的落地姿态差异来自接触面不同',
+        '三个物体从同一高度 y=3 同时落下',
+      ],
+    },
     scene: {
       name: '碰撞测试',
       gravity: { x: 0, y: -9.81, z: 0 },
@@ -171,6 +195,14 @@ export const simulationPresets: PresetCatalogEntry[] = [
     name: '自由落体',
     description: '两个物体从同一高度自由下落',
     thumbnail: createThumbnail('自由落体', 'props'),
+    education: {
+      objective: '自由落体的匀加速性与质量无关性（g ≈ 9.81）',
+      observations: [
+        '立方体与球体同时落地——下落时间与质量无关',
+        '开启「数据记录」导出位移-时间数据验证匀加速',
+        '两球弹性不同，落地后反弹行为不同',
+      ],
+    },
     scene: {
       name: '自由落体',
       gravity: { x: 0, y: -9.81, z: 0 },
@@ -203,6 +235,14 @@ export const simulationPresets: PresetCatalogEntry[] = [
     name: '双立方体碰撞',
     description: '两个立方体相向而撞',
     thumbnail: createThumbnail('双立方体碰撞', 'props'),
+    education: {
+      objective: '一维对心碰撞的动量交换（需先制造相向运动）',
+      observations: [
+        '预设默认静止——手动拖动两个立方体相向碰撞',
+        'restitution 0.5 下碰撞后各自反弹一半速度',
+        '质量相同时完全弹性碰撞会交换速度',
+      ],
+    },
     scene: {
       name: '双立方体碰撞',
       gravity: { x: 0, y: -9.81, z: 0 },
@@ -235,6 +275,14 @@ export const simulationPresets: PresetCatalogEntry[] = [
     name: '钟摆',
     description: '单摆来回摆动',
     thumbnail: createThumbnail('钟摆', 'props'),
+    education: {
+      objective: '（诚实边界）当前实现是自由落体近似——摆线约束尚未实现',
+      observations: [
+        '摆球从 y=3 直接下落，没有摆动周期',
+        '摆线约束（铰链）实现后才能演示 T=2π√(L/g)',
+        '这条边界也写在预设旁的 ? 提示里',
+      ],
+    },
     scene: {
       name: '钟摆',
       gravity: { x: 0, y: -9.81, z: 0 },
