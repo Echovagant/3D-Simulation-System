@@ -60,6 +60,14 @@
       >
         <i class="fas fa-box"></i>
       </button>
+      <button
+        class="toolbar-btn"
+        @click="showAiSceneDialog = true"
+        :disabled="!isSceneInitialized"
+        title="AI 生成场景"
+      >
+        <i class="fas fa-wand-magic-sparkles"></i>
+      </button>
     </div>
 
     <!-- 物体操作按钮组 -->
@@ -99,6 +107,10 @@
     v-if="showImportDialog"
     @close="showImportDialog = false"
   />
+  <AiSceneDialog
+    v-if="showAiSceneDialog"
+    @close="showAiSceneDialog = false"
+  />
 </template>
 
 <script setup>
@@ -108,6 +120,7 @@ import { useModelStore } from '@/stores/modelStore';
 import { reportError } from '@/services/api/telemetry';
 import InfoTip from '@/components/common/InfoTip.vue';
 import ImportModelDialog from './ImportModelDialog.vue';
+import AiSceneDialog from './AiSceneDialog.vue';
 
 // 状态管理
 const store = useSceneEditorStore();
@@ -125,6 +138,7 @@ const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
 const statusMessage = ref('');
 const importingModel = ref(false);
 const showImportDialog = ref(false);
+const showAiSceneDialog = ref(false);
 
 // 计算属性
 const isSceneInitialized = computed(() => getIsSceneInitialized());

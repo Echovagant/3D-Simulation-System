@@ -5,6 +5,7 @@ import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
 import { WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
+import type { ScenePrimitiveSpec } from '@/types'
 import { simulationConfig } from '../config/simulation'
 import { RENDER_POWER_PREFERENCE } from '../config/rendering'
 import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
@@ -580,6 +581,11 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     geometry: THREE.BufferGeometry,
     size: number,
     name?: string,
+    transform?: {
+      position?: { x: number; y: number; z: number }
+      rotation?: { x: number; y: number; z: number }
+      scale?: { x: number; y: number; z: number }
+    },
   ): THREE.Mesh | null => {
     if (!isSceneInitialized || !physicsWorld || !rapier) {
       return null
@@ -597,7 +603,17 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
     mesh.name = name || `${type}-${Date.now()}`
     mesh.castShadow = true
-    mesh.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
+    if (transform?.position) {
+      mesh.position.set(transform.position.x, transform.position.y, transform.position.z)
+    } else {
+      mesh.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
+    }
+    if (transform?.rotation) {
+      mesh.rotation.set(transform.rotation.x, transform.rotation.y, transform.rotation.z)
+    }
+    if (transform?.scale) {
+      mesh.scale.set(transform.scale.x, transform.scale.y, transform.scale.z)
+    }
 
     // 刚体一创建出来就登记进账本：否则中途抛错会留下「孤儿刚体」——
     // 它会永远参与碰撞，却不在任何账本里，再也无法被移除。
@@ -714,6 +730,18 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   const addRamp = (): boolean => {
     const ramp = createGeometry('ramp', sharedGeometries.ramp, 1, 'Ramp')
     return ramp !== null
+  }
+
+  // 程序化摆放基础体（LLM 场景生成等需要精确变换的路径）：
+  // 与工具栏按钮的随机出生不同，位置/旋转/缩放完全按调用方给定
+  const addPrimitive = (spec: ScenePrimitiveSpec): boolean => {
+    const size = spec.type === 'ramp' ? 1 : 0.5
+    const mesh = createGeometry(spec.type, sharedGeometries[spec.type], size, spec.name, {
+      position: spec.position,
+      rotation: spec.rotation,
+      scale: spec.scale,
+    })
+    return mesh !== null
   }
 
   // 导入模型（与模型库集成）
@@ -926,6 +954,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     addCube,
     addSphere,
     addRamp,
+    addPrimitive,
     importModel,
     updatePhysics,
     getIsSceneInitialized: () => isSceneInitialized,
