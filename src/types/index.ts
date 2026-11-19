@@ -138,10 +138,12 @@ export interface PresetCatalogEntry {
   description: string
   thumbnail: string
   scene: PresetScene
-  /** 课件层：教学目标与课堂观察点（实验室右栏「课件」卡展示；缺省则不显示课件卡） */
-  education?: {
-    objective: string
+  /** 实验说明卡：实验目的、观察点与作业题（实验室右栏展示；缺省则不显示该卡） */
+  experiment?: {
+    purpose: string
     observations: string[]
+    /** 作业题：实现边界也写成可动手的题目（如钟摆的摆线约束） */
+    assignments?: string[]
   }
 }
 

@@ -34,6 +34,21 @@ const simulationRoutes: RouteRecordRaw[] = [
       sceneId: typeof route.query.scene === 'string' ? route.query.scene : undefined,
     }),
   },
+  {
+    // 只读分享回放（M5）：链接即演示。场景从后端拉（跨设备可达），
+    // 物理逐帧确定性——重放结果与首跑逐位一致。
+    path: '/simulation-lab/share/:sceneId',
+    name: 'SimulationLabShare',
+    component: () => import('@/views/SimulationLab.vue'),
+    meta: {
+      title: '3D仿真系统 - 分享回放',
+      requiresAuth: false,
+      icon: '🔗',
+    },
+    props: (route) => ({
+      sceneId: route.params.sceneId as string,
+    }),
+  },
 ]
 
 export default simulationRoutes
