@@ -23,8 +23,8 @@
 
 <table>
   <tr>
-    <td align="center"><b>32.67 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>458</b><br><sub>测试用例 · 50 个文件</sub></td>
+    <td align="center"><b>33.05 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>482</b><br><sub>测试用例 · 53 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -101,6 +101,10 @@
 <td width="33%" valign="top" align="center">
 <b>📋 仿真过程规格</b><br><br>
 <sub>世界/时间/状态/一致性/意图五层共 34 条约束，每条标出实现位置与验证它的测试</sub>
+</td>
+<td width="33%" valign="top" align="center">
+<b>🧬 单图生成 3D</b><br><br>
+<sub>模型库上传一张图片，本机 TripoSR 推理出带纹理的 GLB 自动入库；图片不出本机（可选，需配好推理环境）</sub>
 </td>
 </tr>
 </table>
@@ -194,7 +198,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（50 个测试文件 / 458 个用例） |
+| `npm test` | Vitest 全量用例（53 个测试文件 / 482 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -218,6 +222,8 @@ npm run preview    # 预览生产产物
 | LLM 托管 | Key 交给服务端加密保管；后端做**配额、调用审计与故障转移**（一家不通会自动换下一家，但**各家的 key 互不通用**） |
 | 批量仿真 | 同一场景按参数网格批量跑；用**与前端同一个物理引擎**，结果与浏览器逐位对得上 |
 | 服务端渲染 | 提交场景，服务端产出 MP4；同一场景重跑两次的帧数完全一致 |
+| 单图生成 3D | 模型库上传图片，本机 TripoSR 推理出 GLB 自动入库；图片不出本机 |
+| Gymnasium 会话 API | `POST /api/gym/sessions` 起 RL 会话，step/reset/observe 与 Farama 规范对齐；`clients/gym-client` 提供 `ArenaEnv`（gymnasium.Env） |
 | 错误上报 | 前端的错误现场收进后端，不只是控制台里滚过去就没了 |
 
 **后端缺席时前端功能完全不受影响**：场景仍然存在浏览器本地，Key 仍然只留在本页内存里，
@@ -258,15 +264,36 @@ Redis 连不上时 `POST /api/simulations` 直接返回 503 `simulation_queue_un
 
 渲染页在**生产产物**里（`dist/render.html`），开发服务器不提供它。
 
+**单图生成 3D（可选）**跑在**本机 TripoSR 环境**里：图片不出本机。
+需要自备一个 TripoSR 环境（推理仓库 + venv + 本地权重），用 `BACKEND_TRIPOSR_HOME`
+指向环境根目录；缺任何一样，`POST /api/triposr` 都会回 503 `triposr_env_missing`
+并说明缺什么、先做什么。
+
+**Gymnasium 客户端（可选）**是独立的 Python 薄包，把后端的会话 API 包成 `gymnasium.Env`：
+
+```bash
+cd clients/gym-client
+uv sync
+uv run pytest    # 7 个用例（MockTransport，不需要真后端）
+```
+
+```python
+from threesim_gym import ArenaEnv
+
+env = ArenaEnv()          # 后端默认 http://127.0.0.1:8021
+obs, info = env.reset()
+obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
+```
+
 后端自己的测试与质量检查：
 
 ```bash
 cd backend
-uv run pytest        # 137 个用例
+uv run pytest        # 172 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
-后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（20 个端点）是**生成物**：
+后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（24 个端点）是**生成物**：
 它由后端代码生成，改了接口却没重新生成，CI 会直接红。
 
 </details>
@@ -349,7 +376,7 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 6.11 MB |
+| 产物体积 | 12.33 MB |
 | 运行时依赖 | 6 个 |
 | 可加载模型 | 24 个（9 个程序化生成 + 15 个 CC0 开源资产） |
 | 类型检查 | 0 错误 |
@@ -358,7 +385,7 @@ flowchart LR
 渲染器一律显式请求高性能 GPU（`powerPreference: 'high-performance'`）——**双显卡笔记本**上
 浏览器默认可能把 WebGL 上下文交给核显，帧率直接掉一半；显式请求能显著提高拿到独显的概率。
 
-后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（137 个用例）。
+后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（172 个用例）。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 

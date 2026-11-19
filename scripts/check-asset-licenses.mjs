@@ -97,8 +97,10 @@ if (!notice.trim()) {
  * `backend_data` 是后端的**运行时数据目录**（本地数据库、服务端渲染产出的 MP4），
  * 它被 gitignore 排除、永远不进仓库——里面出现什么文件都不算「仓库里的资产」，
  * 所以扫描要跳过它。否则本地跑过一次渲染，产物就会被当成「来源不明的资产」报错。
+ * `.venv` / `venv` 同理：Python 虚拟环境是本地依赖缓存（如 gym-client 的
+ * gymnasium 自带贴图），被 gitignore 排除，不代表仓库的资产来源。
  */
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.cache', 'backend_data'])
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.cache', 'backend_data', '.venv', 'venv'])
 
 const assets = walk(repoRoot, SKIP_DIRS).filter((p) => {
   const rel = relative(repoRoot, p).split('\\').join('/')

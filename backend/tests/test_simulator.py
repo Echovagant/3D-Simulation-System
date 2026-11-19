@@ -114,10 +114,18 @@ def test_static_ground_supports_falling_ball():
     穿透能到 20+ 米、全场景永远不 settle。
     """
     scene = _scene(
-        _obj(uuid="ground", y=-0.5, scale={"x": 10, "y": 1, "z": 10},
-             physics={"type": "static", "shape": "box", "mass": 0}),
-        _obj(uuid="ball", obj_type="sphere", y=2.0,
-             physics={"type": "dynamic", "shape": "sphere", "mass": 1}),
+        _obj(
+            uuid="ground",
+            y=-0.5,
+            scale={"x": 10, "y": 1, "z": 10},
+            physics={"type": "static", "shape": "box", "mass": 0},
+        ),
+        _obj(
+            uuid="ball",
+            obj_type="sphere",
+            y=2.0,
+            physics={"type": "dynamic", "shape": "sphere", "mass": 1},
+        ),
     )
     run = simulator.run_once(scene, simulator.SimulationParams.from_mapping({"steps": 120}))
 
