@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.21.0" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.6" src="https://img.shields.io/badge/Vite-6.4.6-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="46 test files / 436 cases" src="https://img.shields.io/badge/test-46%20files%20%2F%20436%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="50 test files / 458 cases" src="https://img.shields.io/badge/test-50%20files%20%2F%20458%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="12 build gates" src="https://img.shields.io/badge/build%20gates-12%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-FF6101?logo=apache&logoColor=FF6101"></a>
 </p>
@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>32.67 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>436</b><br><sub>测试用例 · 46 个文件</sub></td>
+    <td align="center"><b>458</b><br><sub>测试用例 · 50 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -90,7 +90,7 @@
 </td>
 <td width="33%" valign="top" align="center">
 <b>📦 模型资源库</b><br><br>
-<sub>9 个内置模型全部可加载，且全部由本仓库生成</sub>
+<sub>24 个内置模型全部可加载：9 个程序化生成 + 15 个 CC0 开源资产</sub>
 </td>
 </tr>
 <tr>
@@ -119,7 +119,7 @@
 <tr>
   <td width="33%" align="center"><img src="docs/screenshots/scene-editor.png" alt="场景编辑器" width="100%"><br><sub>场景编辑器 · 摆放物体，属性面板改完立刻写回刚体</sub></td>
   <td width="33%" align="center"><img src="docs/screenshots/simulation-lab.png" alt="仿真实验室" width="100%"><br><sub>仿真实验室 · 固定步长物理 + 批量仿真 + 服务端渲染</sub></td>
-  <td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库 · 9 个模型全部可加载</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库 · 24 个模型全部可加载</sub></td>
 </tr>
 <tr>
   <td width="50%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场 · 智能体自主移动，决策日志随时回看</sub></td>
@@ -130,11 +130,11 @@
 
 ## 模型
 
-模型库里的 9 个条目全部可加载，卡片上显示的就是这些文件本身的渲染。
+模型库里的 24 个条目全部可加载，卡片上显示的就是这些文件本身的渲染。
 **它们全部由本仓库的几何配方生成**（`npm run gen:models`），没有任何第三方素材。
 
 <details>
-<summary><b>展开 9 个模型</b></summary>
+<summary><b>展开 24 个模型</b></summary>
 
 <div align="center">
 <table>
@@ -194,7 +194,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（46 个测试文件 / 436 个用例） |
+| `npm test` | Vitest 全量用例（50 个测试文件 / 458 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -351,7 +351,7 @@ flowchart LR
 | --- | --- |
 | 产物体积 | 6.11 MB |
 | 运行时依赖 | 6 个 |
-| 可加载模型 | 9 个（全部程序化生成） |
+| 可加载模型 | 24 个（9 个程序化生成 + 15 个 CC0 开源资产） |
 | 类型检查 | 0 错误 |
 | 页面体检 | 6 个页面 0 console error / 0 未捕获异常 / 0 网络失败 |
 
