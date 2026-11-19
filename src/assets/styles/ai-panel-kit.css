@@ -60,6 +60,17 @@
 }
 .ai-bg-chip {
   background: var(--ink-700);
+  /* <button> 的 UA 默认色是黑（buttontext），不显式设色就会黑字压深底；
+     AI 域内解析到冻结快照 #ececf0，域外解析到全局 #f2f2ee，两处都可读 */
+  color: var(--text-1);
+}
+
+/* 禁用态：Chrome UA 的 GrayText（rgba(16,16,16,0.3)）在深底上不可见，
+   用域内次级文字色加透明度做出「可读的灰显」 */
+.ai-bg-chip:disabled {
+  color: var(--text-2);
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .ai-bg-chip-light {
   background: var(--bg-hover);
