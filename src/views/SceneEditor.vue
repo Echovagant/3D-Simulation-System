@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
 import { ref, onUnmounted, provide, watch } from 'vue'
+import type { ScenePrimitiveSpec } from '@/types'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import ThreeScene from '@/components/three/core/ThreeScene.vue'
@@ -104,6 +105,7 @@ const sceneMethods = ref<{
   addCube: () => boolean
   addSphere: () => boolean
   addRamp: () => boolean
+  addPrimitive: (spec: ScenePrimitiveSpec) => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   // 物理推进函数接收 rAF 的时间戳：固定步长累加器靠它算真实时间
@@ -112,6 +114,7 @@ const sceneMethods = ref<{
   addCube: () => false,
   addSphere: () => false,
   addRamp: () => false,
+  addPrimitive: () => false,
   importModel: async () => false,
   getIsSceneInitialized: () => false,
   updatePhysics: () => {},
@@ -121,6 +124,10 @@ const sceneMethods = ref<{
 provide('addCube', () => sceneMethods.value.addCube())
 provide('addSphere', () => sceneMethods.value.addSphere())
 provide('addRamp', () => sceneMethods.value.addRamp())
+provide(
+  'addPrimitive',
+  (spec: ScenePrimitiveSpec) => sceneMethods.value.addPrimitive(spec),
+)
 provide('importModel', (modelId: string) => sceneMethods.value.importModel(modelId))
 provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized())
 
@@ -129,6 +136,7 @@ const exposeMethods = (methods: {
   addCube: () => boolean
   addSphere: () => boolean
   addRamp: () => boolean
+  addPrimitive: (spec: ScenePrimitiveSpec) => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   updatePhysics: (timestamp?: number) => void

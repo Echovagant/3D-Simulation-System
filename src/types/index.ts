@@ -25,6 +25,15 @@ interface PhysicsData {
   isFalling?: boolean
 }
 
+/** 程序化摆放的基础体规格（LLM 场景生成等路径共用） */
+export interface ScenePrimitiveSpec {
+  name: string
+  type: 'cube' | 'sphere' | 'ramp'
+  position: { x: number; y: number; z: number }
+  rotation?: { x: number; y: number; z: number }
+  scale?: { x: number; y: number; z: number }
+}
+
 // 场景对象类型
 export interface SceneObject {
   uuid: string
