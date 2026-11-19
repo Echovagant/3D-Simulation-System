@@ -5,6 +5,7 @@ import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
 import { WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
+import { createRandom, DEFAULT_SEED } from '../utils/prng'
 import type { ScenePrimitiveSpec } from '@/types'
 import { simulationConfig } from '../config/simulation'
 import { RENDER_POWER_PREFERENCE } from '../config/rendering'
@@ -17,6 +18,17 @@ import type {
   RigidBodyDesc,
   IntegrationParameters,
 } from '@dimforge/rapier3d'
+
+/**
+ * 随机出生点：种子化 PRNG。
+ * 同一颗种子 + 同一序号 = 同一出生位置——「随机」只是别叠在一起，
+ * 不是实验条件里的不可控项。
+ */
+let spawnSeq = 0
+const seededSpawn = (): { x: number; y: number; z: number } => {
+  const random = createRandom(DEFAULT_SEED + spawnSeq++)
+  return { x: (random() - 0.5) * 5, y: 2, z: (random() - 0.5) * 5 }
+}
 
 /**
  * 场景编辑器的组装层：three 场景、物理世界、物体账本与事件桥都在这里。
@@ -606,7 +618,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     if (transform?.position) {
       mesh.position.set(transform.position.x, transform.position.y, transform.position.z)
     } else {
-      mesh.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
+      // 随机出生点走种子化 PRNG：同一序号同一位置，不参与「实验条件不可控」
+      const spawn = seededSpawn()
+      mesh.position.set(spawn.x, spawn.y, spawn.z)
     }
     if (transform?.rotation) {
       mesh.rotation.set(transform.rotation.x, transform.rotation.y, transform.rotation.z)
@@ -785,8 +799,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         model.updateMatrixWorld(true)
       }
 
-      // 设置模型位置
-      model.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
+      // 设置模型位置（随机出生点同样种子化，与基本体的口径一致）
+      const spawn = seededSpawn()
+      model.position.set(spawn.x, spawn.y, spawn.z)
       model.castShadow = true
 
       // 创建物理刚体（简化处理，使用模型包围盒）——注意在尺度归一之后取包围盒
