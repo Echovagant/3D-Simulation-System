@@ -186,10 +186,10 @@
 
 | 维度 | 取值 | 区别 |
 | --- | --- | --- |
-| 端点 | `api.minimax.io` / `api.minimaxi.com` / `open.bigmodel.cn` / `dashscope.aliyuncs.com` / `coding.dashscope.aliyuncs.com` / `ark.cn-beijing.volces.com` / `api.deepseek.com` | 不同域名可能是不同账号体系，key 不通用 |
+| 端点 | `api.minimax.io` / `api.minimax.cn` / `open.bigmodel.cn` / `dashscope.aliyuncs.com` / `coding.dashscope.aliyuncs.com` / `ark.cn-beijing.volces.com` / `api.deepseek.com` / `api.moonshot.cn` | 不同域名可能是不同账号体系，key 不通用 |
 | 凭证 | `sk-api-` / `sk-cp-` / `sk-sp-` / 无固定前缀 | 按量计费与订阅消耗不同的计费资源 |
 
-当前 **11 条接入线、5 个厂商**，其中 5 条是订阅制。
+当前 **12 条接入线、6 个厂商**，其中 5 条是订阅制。
 
 三个字段让界面能认出用户贴的是哪一种：
 

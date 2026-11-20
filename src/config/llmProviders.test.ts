@@ -10,6 +10,7 @@ describe('LLM 提供商清单', () => {
       'DeepSeek',
       'Qwen',
       '火山方舟',
+      'Kimi',
       'OpenAI',
       'Claude',
       'Gemini',
@@ -63,6 +64,9 @@ describe('LLM 提供商清单', () => {
     // 智谱与方舟的文档里没有写这个参数——乱发可能被判非法参数
     expect(withEffort).not.toContain('zhipu')
     expect(withEffort).not.toContain('ark')
+    // 百炼的思考是布尔开关，不是档位——kit 实测纪律：认不出来就不要发
+    expect(withEffort).not.toContain('qwen')
+    expect(withEffort).not.toContain('qwen-coding')
   })
 
   it('清单里不出现已退役 / 已下线的模型 id', () => {

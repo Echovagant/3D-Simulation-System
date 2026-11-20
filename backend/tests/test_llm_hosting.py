@@ -283,7 +283,7 @@ def test_complete_openai_success(client: TestClient, fake_provider: FakeProvider
 
 
 def test_minimax_cn_uses_its_own_endpoint(client: TestClient, fake_provider: FakeProvider) -> None:
-    """api.minimaxi.com 是另一套账号体系 —— 拿 api.minimax.io 的 key 会在这里被判 401。"""
+    """api.minimax.cn 是国内版端点（2026-11-20 探活在线）——与 api.minimax.io 分属不同接入线。"""
     fake_provider.install(lambda request: _ok_openai())
     _store_key(client, "minimax-cn", api_key="sk-cn-test")
 
@@ -296,7 +296,7 @@ def test_minimax_cn_uses_its_own_endpoint(client: TestClient, fake_provider: Fak
     assert response.json()["providerId"] == "minimax-cn"
 
     request = fake_provider.requests[0]
-    assert request.url.host == "api.minimaxi.com"
+    assert request.url.host == "api.minimax.cn"
     assert request.url.path == "/v1/chat/completions"
 
 
@@ -323,8 +323,8 @@ def test_minimax_has_four_independent_access_lines() -> None:
     expected = {
         "minimax": ("api.minimax.io", "sk-api-"),
         "minimax-subscription": ("api.minimax.io", "sk-cp-"),
-        "minimax-cn": ("api.minimaxi.com", "sk-api-"),
-        "minimax-cn-subscription": ("api.minimaxi.com", "sk-cp-"),
+        "minimax-cn": ("api.minimax.cn", "sk-api-"),
+        "minimax-cn-subscription": ("api.minimax.cn", "sk-cp-"),
     }
     for provider_id, (host, prefix) in expected.items():
         provider = by_id[provider_id]
@@ -347,11 +347,11 @@ def test_every_access_line_has_its_own_entry() -> None:
     """
     by_id = {provider.id: provider for provider in llm_proxy.PROVIDERS}
     expected = {
-        # MiniMax：两个端点 × 两种凭证
+        # MiniMax：两个端点 × 两种凭证（国内版域名 2026-11-20 探活后切换到 api.minimax.cn）
         "minimax": ("api.minimax.io", "sk-api-"),
         "minimax-subscription": ("api.minimax.io", "sk-cp-"),
-        "minimax-cn": ("api.minimaxi.com", "sk-api-"),
-        "minimax-cn-subscription": ("api.minimaxi.com", "sk-cp-"),
+        "minimax-cn": ("api.minimax.cn", "sk-api-"),
+        "minimax-cn-subscription": ("api.minimax.cn", "sk-cp-"),
         # DeepSeek：只有按量计费一种凭证
         "deepseek": ("api.deepseek.com", None),
         # 智谱：两类 key 格式一样，只能靠创建入口区分
@@ -425,6 +425,20 @@ def test_qwen_coding_has_no_model_list_endpoint() -> None:
     by_id = {provider.id: provider for provider in llm_proxy.PROVIDERS}
     assert by_id["qwen-coding"].models_supported is False
     assert by_id["qwen"].models_supported is True
+
+
+def test_qwen_does_not_send_reasoning_effort() -> None:
+    """百炼的思考是布尔开关（enable_thinking），不是 reasoning_effort 档位。
+
+    kit 的纪律（llm-provider-kit）：只有官方文档明确写了 reasoning_effort 的
+    服务商才带这个字段——OpenAI 兼容端点遇到不认识的参数可能直接 400。
+    """
+    by_id = {provider.id: provider for provider in llm_proxy.PROVIDERS}
+    assert by_id["qwen"].reasoning_effort is None
+    assert by_id["qwen-coding"].reasoning_effort is None
+    # MiniMax 与 DeepSeek 是 kit 逐线核实过支持 reasoning_effort 的两家
+    assert by_id["minimax-cn"].reasoning_effort == "low"
+    assert by_id["deepseek"].reasoning_effort == "high"
 
 
 def test_key_prefix_matched_longest_first() -> None:

@@ -63,6 +63,7 @@ class Settings(BaseSettings):
         "qwen-coding",
         "ark",
         "ark-coding",
+        "moonshot",
     ]
 
     # 调厂商的超时（毫秒）。
@@ -142,6 +143,26 @@ class Settings(BaseSettings):
 
     # 单次推理最长跑多久（秒）。CPU 推理是分钟级，超时算失败，不让它一直挂着。
     triposr_timeout_seconds: int = 1800
+
+    # ---- 云端「生成 3D」（混元生 3D / 百炼 Tripo）----
+
+    # 混元生 3D 的 Region（官方文档必填；示例产物 COS 在广州）。
+    model3d_hunyuan_region: str = "ap-guangzhou"
+
+    # 轮询间隔（秒）。官方建议百炼 15~30s、混元任务秒级到分钟级，10s 折中。
+    model3d_poll_interval_seconds: int = 10
+
+    # 单次云端生成最长等多久（秒）。超时算失败，不让任务挂着假装还在跑。
+    model3d_cloud_timeout_seconds: int = 900
+
+    # 单张输入图最多接受多少字节（混元 ImageBase64 官方上限 6MB，编码后另计）。
+    model3d_max_image_bytes: int = 6 * 1024 * 1024
+
+    # 每个 owner 每天最多提交多少次云端生成——key 是用户自己的，烧的是用户的钱。
+    model3d_max_jobs_per_day: int = 50
+
+    # 输入图与产物的落盘目录。留空 = <backend>/backend_data/model3d
+    model3d_cloud_output_dir: str = ""
 
 
 @lru_cache
