@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>33.05 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>482</b><br><sub>测试用例 · 53 个文件</sub></td>
+    <td align="center"><b>490</b><br><sub>测试用例 · 54 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -198,7 +198,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（53 个测试文件 / 482 个用例） |
+| `npm test` | Vitest 全量用例（54 个测试文件 / 490 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -293,7 +293,7 @@ uv run pytest        # 172 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
-后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（24 个端点）是**生成物**：
+后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（37 个端点）是**生成物**：
 它由后端代码生成，改了接口却没重新生成，CI 会直接红。
 
 </details>
@@ -307,14 +307,15 @@ npm run verify:backend   # ruff + 格式 + mypy + pytest
 
 | 维度 | 例子 | 区别 |
 | --- | --- | --- |
-| 端点 | `api.minimax.io` / `api.minimaxi.com` | 不同域名可能是不同账号体系，key 不通用 |
+| 端点 | `api.minimax.io` / `api.minimax.cn` | 不同域名可能是不同账号体系，key 不通用 |
 | 凭证 | `sk-api-` / `sk-cp-` / `sk-sp-` | 按量计费与订阅消耗不同的计费资源 |
 
-实测：同一把 `sk-cp-` key 在 `api.minimaxi.com` 上能列出 9 个模型，
-在 `api.minimax.io` 上直接 401。
+实测：2026-11-20 无 key 探活，`api.minimax.cn` 与旧域名 `api.minimaxi.com` 都返回官方 401
+authorized_error（同体）；kit（自 cartouche 抽出）2026-10-21 用真 key 在 `api.minimax.cn` 验证过。
+国内版域名切换以 kit 为准，账号体系以平台控制台为准。
 
-当前支持 **15 条接入线，覆盖 9 个厂商**（MiniMax、DeepSeek、智谱 GLM、通义千问、火山方舟、
-OpenAI、Anthropic、Google Gemini、xAI），其中 2 条是订阅制。
+当前支持 **16 条接入线，覆盖 10 个厂商**（MiniMax、DeepSeek、智谱 GLM、通义千问、火山方舟、
+月之暗面 Kimi、OpenAI、Anthropic、Google Gemini、xAI），其中 5 条是订阅制。
 
 所以清单里**每条接入线各占一个条目**（key 是按条目分槽存的，一个槽位装不下两种互斥的组合），
 界面会提示当前要的是哪一种凭证，贴错了当场就能看出来。

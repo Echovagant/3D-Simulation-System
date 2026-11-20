@@ -31,9 +31,12 @@
       这是一个**静态外壳**：场景由录制器在打开页面前注入 `window.__RENDER_SCENE__`，
       物理由录制器通过 `window.__RENDER__.step()` 逐帧推进，页面自己不跑动画循环。
 
-      脚本路径是固定的 `/assets/render.js`——构建时 `vite.config.ts` 把渲染入口
-      的产物名固定成这个名字（其他入口仍带哈希）。带哈希的话这个外壳就没法指向它。
+      脚本路径是**相对路径** `./assets/render.js`：开发期与根路径部署下解析为
+      `/assets/render.js`；GitHub Pages 子路径部署（/3D-Simulation-System/）下
+      解析为同前缀的 `/3D-Simulation-System/assets/render.js`——写死绝对路径
+      `/assets/...` 会在子路径部署下 404。产物名固定成这个名字由 vite.config.ts
+      的 entryFileNames 保证（其他入口仍带哈希），带哈希的话这个外壳就没法指向它。
     -->
-    <script type="module" src="/assets/render.js"></script>
+    <script type="module" src="./assets/render.js"></script>
   </body>
 </html>
