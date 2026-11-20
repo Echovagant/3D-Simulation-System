@@ -411,7 +411,7 @@ def _ensure_real_glb(candidate: Path) -> Path | None:
 
     # trimesh 是后端轻量依赖（纯 Python），懒加载避免拖慢模块导入
     import trimesh
-    from PIL import Image  # type: ignore[import-untyped]
+    from PIL import Image
 
     mesh = trimesh.load(obj_src, process=False)
     if not isinstance(mesh, trimesh.Trimesh):
