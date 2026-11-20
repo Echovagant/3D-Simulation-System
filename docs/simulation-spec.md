@@ -293,15 +293,16 @@ AI 在这个系统里是**意图层**，不是物理层。
 - **端点**：不同域名可能是不同账号体系，key 不通用；
 - **凭证**：`sk-api-` 这类按量计费 key 与 `sk-cp-` / `sk-sp-` 这类订阅 key，消耗的是不同的计费资源。
 
-当前清单里有 **11 条接入线，覆盖 5 个厂商**，其中 **5 条是订阅制**：
+当前清单里有 **12 条接入线，覆盖 6 个厂商**，其中 **5 条是订阅制**：
 
 | 厂商 | 按量计费 | 订阅制 | 凭证前缀 |
 | --- | --- | --- | --- |
-| MiniMax | `api.minimax.io` / `api.minimaxi.com`（两套账号体系） | 同左两个端点各有订阅线 | `sk-api-` / `sk-cp-` |
+| MiniMax | `api.minimax.io` / `api.minimax.cn`（两个端点，2026-11-20 探活均在线） | 同左两个端点各有订阅线 | `sk-api-` / `sk-cp-` |
 | DeepSeek | `api.deepseek.com` | 无（只有一种凭证） | — |
 | 智谱 GLM | `open.bigmodel.cn/api/paas/v4` | `…/api/coding/paas/v4` | 两类**格式一样**，只能靠创建入口区分 |
 | 通义千问 | `dashscope.aliyuncs.com/compatible-mode/v1` | `coding.dashscope.aliyuncs.com/v1` | `sk-` / `sk-sp-` |
 | 火山方舟 | `ark.cn-beijing.volces.com/api/v3` | `…/api/coding/v3` | 两类**格式一样**，只能靠创建入口区分 |
+| 月之暗面 Kimi | `api.moonshot.cn/v1` | 无（只有一种凭证） | — |
 
 ⚠️ **每条接入线要单独占一个条目**，因为 key 是按 providerId 分槽存放的——一个槽位装不下两种互斥的凭证与端点组合。而且它们**不互相顶替**：故障转移时配了哪条线的 key 就用哪条线，换一家只会得到「这一家没配 key」。
 
@@ -382,20 +383,20 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `AI_TIMEOUT_MS` | `15000` | 毫秒 | `src/config/llm.ts` |
 | `AI_CONTROLLER_MAX_TOKENS` | `512` | token | `src/config/llm.ts` |
 | `AI_EXPLAIN_MAX_TOKENS` | `400` | token | `src/config/llm.ts` |
-| `AI_MINIMAX_ACCESS_LINES` | `minimax, api.minimax.io, standard, minimax-subscription, api.minimax.io, subscription, minimax-cn, api.minimaxi.com, standard, minimax-cn-subscription, api.minimaxi.com, subscription` | — | `src/config/llmProviders.ts` |
+| `AI_MINIMAX_ACCESS_LINES` | `minimax, api.minimax.io, standard, minimax-subscription, api.minimax.io, subscription, minimax-cn, api.minimax.cn, standard, minimax-cn-subscription, api.minimax.cn, subscription` | — | `src/config/llmProviders.ts` |
 | `AI_MINIMAX_ACCESS_LINE_COUNT` | `4` | 条 | `src/config/llmProviders.ts` |
-| `AI_ACCESS_LINE_COUNT` | `11` | 条 | `src/config/llmProviders.ts` |
-| `AI_ACCESS_LINE_FAMILIES` | `minimax, deepseek, zhipu, qwen, ark` | — | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_COUNT` | `12` | 条 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_FAMILIES` | `minimax, deepseek, zhipu, qwen, ark, moonshot` | — | `src/config/llmProviders.ts` |
 | `AI_ACCESS_LINE_SUBSCRIPTION_COUNT` | `5` | 条 | `src/config/llmProviders.ts` |
-| `AI_ACCESS_LINE_STANDARD_COUNT` | `6` | 条 | `src/config/llmProviders.ts` |
-| `AI_ACCESS_LINE_VENDOR_COUNT` | `5` | 个 | `src/config/llmProviders.ts` |
-| `AI_ACCESS_LINE_IDS` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding` | — | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_STANDARD_COUNT` | `7` | 条 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_VENDOR_COUNT` | `6` | 个 | `src/config/llmProviders.ts` |
+| `AI_ACCESS_LINE_IDS` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding, moonshot` | — | `src/config/llmProviders.ts` |
 | `AI_ACCESS_LINE_NO_MODELS` | `qwen-coding` | — | `src/config/llmProviders.ts` |
 | `AI_DIRECT_LINE_COUNT` | `4` | 条 | `src/config/llmProviders.ts` |
 | `AI_DIRECT_LINE_IDS` | `openai, anthropic, gemini, xai` | — | `src/config/llmProviders.ts` |
-| `AI_PROVIDER_COUNT` | `15` | 条 | `src/config/llmProviders.ts` |
-| `AI_PROVIDER_IDS` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding, openai, anthropic, gemini, xai` | — | `src/config/llmProviders.ts` |
-| `AI_FALLBACK_ORDER` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding` | — | `backend/app/config.py` |
+| `AI_PROVIDER_COUNT` | `16` | 条 | `src/config/llmProviders.ts` |
+| `AI_PROVIDER_IDS` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding, moonshot, openai, anthropic, gemini, xai` | — | `src/config/llmProviders.ts` |
+| `AI_FALLBACK_ORDER` | `minimax, minimax-subscription, minimax-cn, minimax-cn-subscription, deepseek, zhipu, zhipu-coding, qwen, qwen-coding, ark, ark-coding, moonshot` | — | `backend/app/config.py` |
 | `AI_MAX_SPEED` | `8` | m/s | `src/composables/useAI.ts` |
 | `AI_AVOID_DISTANCE` | `3.5` | 米 | `src/composables/useAI.ts` |
 | `AI_DECISION_INTERVAL_MS` | `100` | 毫秒 | `src/composables/useAI.ts` |
@@ -456,8 +457,8 @@ AI 在这个系统里是**意图层**，不是物理层。
 | --- | --- | --- | --- |
 | `AI_LINE_MINIMAX` | `minimax · https://api.minimax.io/v1 · standard · sk-api- · models` | — | `src/config/llmProviders.ts` |
 | `AI_LINE_MINIMAX_SUBSCRIPTION` | `minimax-subscription · https://api.minimax.io/v1 · subscription · sk-cp- · models` | — | `src/config/llmProviders.ts` |
-| `AI_LINE_MINIMAX_CN` | `minimax-cn · https://api.minimaxi.com/v1 · standard · sk-api- · models` | — | `src/config/llmProviders.ts` |
-| `AI_LINE_MINIMAX_CN_SUBSCRIPTION` | `minimax-cn-subscription · https://api.minimaxi.com/v1 · subscription · sk-cp- · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_MINIMAX_CN` | `minimax-cn · https://api.minimax.cn/v1 · standard · sk-api- · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_MINIMAX_CN_SUBSCRIPTION` | `minimax-cn-subscription · https://api.minimax.cn/v1 · subscription · sk-cp- · models` | — | `src/config/llmProviders.ts` |
 | `AI_LINE_DEEPSEEK` | `deepseek · https://api.deepseek.com · standard · - · models` | — | `src/config/llmProviders.ts` |
 | `AI_LINE_ZHIPU` | `zhipu · https://open.bigmodel.cn/api/paas/v4 · standard · - · models` | — | `src/config/llmProviders.ts` |
 | `AI_LINE_ZHIPU_CODING` | `zhipu-coding · https://open.bigmodel.cn/api/coding/paas/v4 · subscription · - · models` | — | `src/config/llmProviders.ts` |
@@ -465,6 +466,7 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `AI_LINE_QWEN_CODING` | `qwen-coding · https://coding.dashscope.aliyuncs.com/v1 · subscription · sk-sp- · no-models` | — | `src/config/llmProviders.ts` |
 | `AI_LINE_ARK` | `ark · https://ark.cn-beijing.volces.com/api/v3 · standard · - · models` | — | `src/config/llmProviders.ts` |
 | `AI_LINE_ARK_CODING` | `ark-coding · https://ark.cn-beijing.volces.com/api/coding/v3 · subscription · - · models` | — | `src/config/llmProviders.ts` |
+| `AI_LINE_MOONSHOT` | `moonshot · https://api.moonshot.cn/v1 · standard · - · models` | — | `src/config/llmProviders.ts` |
 
 ### 6.2 实测基线记录
 

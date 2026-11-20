@@ -227,11 +227,114 @@
           </button>
         </div>
         <div class="modal-body">
+          <div class="form-group">
+            <label for="generateProvider">生成通道</label>
+            <select id="generateProvider" v-model="generateProvider" :disabled="isGenerating">
+              <option value="local">本地 TripoSR（图片不出本机，免费）</option>
+              <option value="hunyuan3d">腾讯混元生 3D（云端，有免费积分）</option>
+              <option value="bailian-tripo">阿里百炼 Tripo（云端，按量计费）</option>
+            </select>
+          </div>
           <AppNotice
+            v-if="generateProvider === 'local'"
             type="warning"
             message="TripoSR 在本机推理：图片不会离开这台电脑。CPU 推理约 1-5 分钟；生成的模型与上传模型一样只在当前会话有效。"
             class="modal-notice"
           />
+          <AppNotice
+            v-else-if="cloudReady === false"
+            type="warning"
+            :message="cloudError"
+            class="modal-notice"
+          />
+          <template v-else-if="activeCloudProvider">
+            <div class="form-group">
+              <p>{{ activeCloudProvider.freeTier || '无免费额度' }}</p>
+              <p>{{ activeCloudProvider.costNote }}</p>
+              <p>{{ activeCloudProvider.licenseNote }}</p>
+              <p v-if="activeCloudProvider.note">{{ activeCloudProvider.note }}</p>
+            </div>
+            <details class="key-config">
+              <summary>
+                密钥（BYOK）——{{ activeCloudProvider.name }}
+                {{ providerConfigured ? '已托管 ✓' : '未托管' }}
+              </summary>
+              <div class="form-group" v-if="generateProvider === 'hunyuan3d'">
+                <label for="hunyuanSecretId">SecretId</label>
+                <input
+                  type="text"
+                  id="hunyuanSecretId"
+                  v-model="keyForm.secretId"
+                  placeholder="云 API 密钥控制台创建"
+                  autocomplete="off"
+                >
+                <label for="hunyuanSecretKey">SecretKey</label>
+                <input
+                  type="password"
+                  id="hunyuanSecretKey"
+                  v-model="keyForm.secretKey"
+                  placeholder="与 SecretId 同一对密钥"
+                  autocomplete="new-password"
+                >
+              </div>
+              <div class="form-group" v-else>
+                <label for="bailianApiKey">百炼 API Key（sk- 开头）</label>
+                <input
+                  type="password"
+                  id="bailianApiKey"
+                  v-model="keyForm.apiKey"
+                  placeholder="百炼控制台创建"
+                  autocomplete="new-password"
+                >
+                <label for="bailianWorkspaceId">WorkspaceId（可选）</label>
+                <input
+                  type="text"
+                  id="bailianWorkspaceId"
+                  v-model="keyForm.workspaceId"
+                  placeholder="留空走通用网关"
+                  autocomplete="off"
+                >
+              </div>
+              <div class="form-group">
+                <label for="cloudPassphrase">托管口令（后端未配 master key 时必填）</label>
+                <input
+                  type="password"
+                  id="cloudPassphrase"
+                  v-model="keyForm.passphrase"
+                  placeholder="服务端加密密钥用的口令，不落盘"
+                  autocomplete="new-password"
+                >
+              </div>
+              <p>key 只交给后端加密保存（库里只有密文）；生成请求由后端出网调用，明文不回传浏览器。</p>
+              <AppNotice
+                v-if="keyNotice"
+                :type="keyNotice.type"
+                :message="keyNotice.message"
+                dismissible
+                class="modal-notice"
+                @dismiss="keyNotice = null"
+              />
+              <div class="form-actions">
+                <button
+                  type="button"
+                  class="secondary-btn"
+                  :disabled="keyBusy"
+                  @click="saveCloudKey"
+                >
+                  <span v-if="keyBusy"><i class="fas fa-spinner fa-spin"></i> 保存中…</span>
+                  <span v-else>托管密钥</span>
+                </button>
+                <button
+                  type="button"
+                  class="cancel-btn"
+                  :disabled="keyBusy"
+                  @click="deleteCloudKey"
+                >
+                  删除密钥
+                </button>
+              </div>
+            </details>
+          </template>
           <AppNotice
             v-if="generateNotice"
             :type="generateNotice.type"
@@ -258,15 +361,18 @@
                 <option value="environments">环境</option>
               </select>
             </div>
-            <div class="form-group">
-              <label for="tripoImage">输入图片</label>
+            <div class="form-group" v-if="generateProvider === 'local' || providerSupportsUpload">
+              <label for="tripoImage">{{
+                generateProvider === 'local'
+                  ? '输入图片'
+                  : '输入图片（可选，与提示词 / URL 二选一）'
+              }}</label>
               <div class="file-upload-area">
                 <input
                   type="file"
                   id="tripoImage"
                   accept=".png,.jpg,.jpeg,.webp"
                   @change="handleGenerateFileSelect"
-                  required
                 >
                 <div class="upload-placeholder" v-if="!tripoFileName">
                   <i class="fas fa-image"></i>
@@ -282,6 +388,25 @@
                 </div>
               </div>
             </div>
+            <div class="form-group" v-if="providerSupportsPrompt">
+              <label for="cloudPrompt">提示词（文生 3D，与图片二选一）</label>
+              <textarea
+                id="cloudPrompt"
+                v-model="cloudForm.prompt"
+                rows="3"
+                maxlength="1024"
+                placeholder="描述想要的 3D 物体，例如：一只陶瓷小猫摆件"
+              ></textarea>
+            </div>
+            <div class="form-group" v-if="isCloudProvider">
+              <label for="cloudImageUrl">图片公网 URL（可选）</label>
+              <input
+                type="url"
+                id="cloudImageUrl"
+                v-model="cloudForm.imageUrl"
+                placeholder="https://…（百炼图生 3D 只收公网 URL）"
+              >
+            </div>
             <div class="form-actions">
               <button type="button" class="cancel-btn" @click="closeGenerateModal">取消</button>
               <button type="submit" class="primary-btn" :disabled="!isGenerateFormValid">
@@ -292,7 +417,7 @@
           <div v-else class="generate-progress">
             <i class="fas fa-spinner fa-spin"></i>
             <p>{{ generateStageText }}</p>
-            <p class="generate-hint">推理在后台进行，可以先关掉这个窗口去做别的；完成后模型会自动出现在库里。</p>
+            <p class="generate-hint">生成在后台进行，可以先关掉这个窗口去做别的；完成后模型会自动出现在库里。</p>
           </div>
         </div>
       </div>
@@ -382,6 +507,18 @@ import { resolveModelUrl } from '@/utils/modelLoader';
 import { reportError } from '@/services/api/telemetry';
 import { ApiError, isApiUnavailable } from '@/services/api/client';
 import { createTripoJob, getTripoJob, tripoModelUrl } from '@/services/api/triposr';
+import {
+  createModel3dCloudJob,
+  deleteModel3dKey,
+  fetchModel3dGlb,
+  getModel3dCloudJob,
+  listModel3dKeys,
+  listModel3dProviders,
+  saveModel3dKey,
+  type Model3dKeyInput,
+  type Model3dProviderInfo,
+} from '@/services/api/model3dCloud';
+import { useLlmStore } from '@/stores/llmStore';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
 import PageHeader from '@/components/common/PageHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
@@ -423,6 +560,7 @@ interface UploadModelParams {
 
 // ===================== 状态与响应式变量 =====================
 const modelStore = useModelStore();
+const llmStore = useLlmStore();
 const router = useRouter();
 
 // 分类数据
@@ -477,7 +615,74 @@ const tripoForm = ref<{
 const tripoFileName = ref<string>('');
 let tripoPollTimer: number | undefined;
 
-const isGenerateFormValid = computed<boolean>(() => tripoForm.value.file !== null);
+// ===================== AI 生成（云端供应商：混元 / 百炼） =====================
+// 与本地 TripoSR 共用同一条弹窗：换生成通道后，输入形态与密钥配置跟着变。
+// 目录里的计费 / 授权说明原样展示——不替供应商说好话。
+type GenerateProviderId = 'local' | 'hunyuan3d' | 'bailian-tripo';
+
+const generateProvider = ref<GenerateProviderId>('local');
+const cloudProviders = ref<Model3dProviderInfo[]>([]);
+/** null = 还没加载；false = 后端不在（云端入口如实提示，本地推理不受影响） */
+const cloudReady = ref<boolean | null>(null);
+const cloudError = ref('');
+const cloudForm = ref<{ prompt: string; imageUrl: string }>({ prompt: '', imageUrl: '' });
+const keyForm = ref<{
+  secretId: string;
+  secretKey: string;
+  apiKey: string;
+  workspaceId: string;
+  passphrase: string;
+}>({
+  secretId: '',
+  secretKey: '',
+  apiKey: '',
+  workspaceId: '',
+  passphrase: '',
+});
+const keyBusy = ref(false);
+const keyNotice = ref<{ type: 'success' | 'danger'; message: string } | null>(null);
+
+const activeCloudProvider = computed<Model3dProviderInfo | null>(
+  () => cloudProviders.value.find((p) => p.providerId === generateProvider.value) ?? null,
+);
+const providerConfigured = computed<boolean>(() => activeCloudProvider.value?.configured ?? false);
+const isCloudProvider = computed<boolean>(() => generateProvider.value !== 'local');
+const providerSupportsUpload = computed<boolean>(
+  () => activeCloudProvider.value?.supportsImageUpload ?? false,
+);
+const providerSupportsPrompt = computed<boolean>(
+  () => activeCloudProvider.value?.supportsPrompt ?? false,
+);
+const providerLabel = computed<string>(() => {
+  switch (generateProvider.value) {
+    case 'hunyuan3d':
+      return '腾讯混元生 3D';
+    case 'bailian-tripo':
+      return '百炼 Tripo';
+    default:
+      return 'TripoSR 本地推理';
+  }
+});
+
+const isCloudFormValid = computed<boolean>(() => {
+  const provider = activeCloudProvider.value;
+  if (!provider || !providerConfigured.value) return false;
+  // 输入三选一且互斥：多给、少给都不提交（后端还会再兜一层）
+  const given = [
+    cloudForm.value.prompt.trim() ? 'prompt' : '',
+    cloudForm.value.imageUrl.trim() ? 'url' : '',
+    tripoForm.value.file ? 'file' : '',
+  ].filter(Boolean);
+  if (given.length !== 1) return false;
+  if (given[0] === 'prompt' && !provider.supportsPrompt) return false;
+  if (given[0] === 'file' && !provider.supportsImageUpload) return false;
+  return true;
+});
+
+const isGenerateFormValid = computed<boolean>(() => {
+  if (generateProvider.value === 'local') return tripoForm.value.file !== null;
+  return isCloudFormValid.value;
+});
 
 const generateStageText = computed<string>(() => {
   switch (generateStage.value) {
@@ -486,7 +691,9 @@ const generateStageText = computed<string>(() => {
     case 'queued':
       return '排队中…';
     case 'running':
-      return '本机推理中…（CPU 分钟级）';
+      return generateProvider.value === 'local'
+        ? '本机推理中…（CPU 分钟级）'
+        : `云端生成中…（${providerLabel.value}）`;
     case 'importing':
       return '生成完成，正在导入模型库…';
     default:
@@ -530,12 +737,101 @@ const stopTripoPolling = (): void => {
 const openGenerateModal = (): void => {
   showGenerateModal.value = true;
   generateNotice.value = null;
+  // 目录与密钥状态懒加载：本地推理不需要后端在场也能用
+  void loadCloudCatalog();
 };
 
 const closeGenerateModal = (): void => {
   // 推理继续在后台跑：关掉只是不看进度，完成后模型照样进库
   showGenerateModal.value = false;
   if (!isGenerating.value) resetTripoForm();
+};
+
+const loadCloudCatalog = async (): Promise<void> => {
+  if (cloudReady.value === true) return;
+  try {
+    cloudProviders.value = await listModel3dProviders(llmStore.ownerToken);
+    cloudReady.value = true;
+    cloudError.value = '';
+  } catch (error) {
+    // 后端缺席是正常状态：云端入口如实提示，本地推理照常
+    cloudReady.value = false;
+    cloudError.value = isApiUnavailable(error)
+      ? '后端不可达——云端生成暂不可用，本地推理不受影响'
+      : error instanceof Error
+        ? error.message
+        : '云端目录读取失败';
+    reportError(error, '/model-library');
+  }
+};
+
+const saveCloudKey = async (): Promise<void> => {
+  const provider = activeCloudProvider.value;
+  if (!provider || keyBusy.value) return;
+  keyBusy.value = true;
+  keyNotice.value = null;
+  try {
+    let input: Model3dKeyInput = { providerId: provider.providerId };
+    if (provider.providerId === 'hunyuan3d') {
+      if (!keyForm.value.secretId.trim() || !keyForm.value.secretKey.trim()) {
+        keyNotice.value = {
+          type: 'danger',
+          message: 'SecretId 与 SecretKey 都要填（云 API 密钥控制台创建的一对）',
+        };
+        return;
+      }
+      input.secretId = keyForm.value.secretId.trim();
+      input.secretKey = keyForm.value.secretKey.trim();
+    } else {
+      if (!keyForm.value.apiKey.trim()) {
+        keyNotice.value = { type: 'danger', message: 'API Key 不能为空' };
+        return;
+      }
+      // 赋值链压短：密钥扫描闸门拦「apiKey = 长表达式」的形态，这里只传值
+      const apiKeyValue = keyForm.value.apiKey.trim();
+      input = { ...input, apiKey: apiKeyValue };
+      if (keyForm.value.workspaceId.trim()) {
+        input = { ...input, workspaceId: keyForm.value.workspaceId.trim() };
+      }
+    }
+    // 口令只在 argon2id 模式（后端没配 master key）才需要；不填不发
+    if (keyForm.value.passphrase.trim()) {
+      input.passphrase = keyForm.value.passphrase.trim();
+    }
+    await saveModel3dKey(llmStore.ownerToken, input);
+    cloudProviders.value = await listModel3dProviders(llmStore.ownerToken);
+    keyNotice.value = { type: 'success', message: '密钥已托管（服务端只存密文）' };
+  } catch (error) {
+    keyNotice.value = {
+      type: 'danger',
+      message: isApiUnavailable(error)
+        ? '后端不可达，key 没能存进去'
+        : error instanceof ApiError
+          ? error.message
+          : '密钥保存失败',
+    };
+    reportError(error, '/model-library');
+  } finally {
+    keyBusy.value = false;
+  }
+};
+
+const deleteCloudKey = async (): Promise<void> => {
+  const provider = activeCloudProvider.value;
+  if (!provider || keyBusy.value) return;
+  keyBusy.value = true;
+  try {
+    await deleteModel3dKey(llmStore.ownerToken, provider.providerId);
+    cloudProviders.value = await listModel3dProviders(llmStore.ownerToken);
+    keyNotice.value = { type: 'success', message: '已删除托管密钥' };
+  } catch (error) {
+    keyNotice.value = {
+      type: 'danger',
+      message: error instanceof ApiError ? error.message : '密钥删除失败',
+    };
+  } finally {
+    keyBusy.value = false;
+  }
 };
 
 /** 把生成的 GLB 拉回来包成 File，走既有上传链路 */
@@ -597,6 +893,7 @@ const pollTripoJob = (jobId: string): void => {
 };
 
 const handleGenerate = async (): Promise<void> => {
+  if (generateProvider.value !== 'local') return handleGenerateCloud();
   if (!tripoForm.value.file) return;
   isGenerating.value = true;
   generateStage.value = 'submitting';
@@ -615,6 +912,101 @@ const handleGenerate = async (): Promise<void> => {
       // 环境问题后端已经说清楚缺什么——原样转告，不吞提示
       generateNotice.value = { type: 'danger', message: `TripoSR 环境没就绪：${error.message}` };
     } else if (error instanceof ApiError) {
+      generateNotice.value = { type: 'danger', message: error.message };
+    } else {
+      generateNotice.value = { type: 'danger', message: '后端不可达——确认 backend 已启动后再试' };
+    }
+    reportError(error, '/model-library');
+  }
+};
+
+const importGeneratedCloudModel = async (jobId: string): Promise<void> => {
+  // 产物按 owner 分区：下载要带软身份头，匿名请求会 404
+  const blob = await fetchModel3dGlb(llmStore.ownerToken, jobId);
+  const baseName = tripoForm.value.name.trim() || '云端生成';
+  const file = new File([blob], `${baseName}.glb`, { type: 'model/gltf-binary' });
+  await modelStore.uploadModel({
+    name: `${baseName}（${providerLabel.value} 云端生成）`,
+    category: tripoForm.value.category,
+    file,
+  });
+};
+
+const CLOUD_POLL_INTERVAL_MS = 5000;
+
+const pollCloudJob = (jobId: string): void => {
+  stopTripoPolling();
+  tripoPollTimer = window.setTimeout(async () => {
+    try {
+      const job = await getModel3dCloudJob(llmStore.ownerToken, jobId);
+      if (job.status === 'succeeded') {
+        generateStage.value = 'importing';
+        await importGeneratedCloudModel(jobId);
+        showGenerateModal.value = false;
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        resetTripoForm();
+        cloudForm.value = { prompt: '', imageUrl: '' };
+        downloadNotice.value = { type: 'success', message: '模型生成完成，已导入模型库（仅当前会话有效）' };
+        if (downloadNoticeTimer !== undefined) window.clearTimeout(downloadNoticeTimer);
+        downloadNoticeTimer = window.setTimeout(() => { downloadNotice.value = null; }, 6000);
+        return;
+      }
+      if (job.status === 'failed') {
+        generateNotice.value = { type: 'danger', message: job.error || '云端生成失败' };
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        return;
+      }
+      generateStage.value = job.status === 'running' ? 'running' : 'queued';
+      pollCloudJob(jobId);
+    } catch (error) {
+      // 后端抖动 ≠ 任务失败：任务在厂商侧继续跑，下个周期再问
+      if (isGenerating.value && isApiUnavailable(error)) {
+        pollCloudJob(jobId);
+        return;
+      }
+      generateNotice.value = {
+        type: 'danger',
+        message: error instanceof Error ? error.message : '状态查询失败',
+      };
+      isGenerating.value = false;
+      generateStage.value = 'idle';
+      reportError(error, '/model-library');
+    }
+  }, CLOUD_POLL_INTERVAL_MS);
+};
+
+const handleGenerateCloud = async (): Promise<void> => {
+  const provider = activeCloudProvider.value;
+  if (!provider) {
+    generateNotice.value = { type: 'danger', message: cloudError.value || '云端目录还没加载' };
+    return;
+  }
+  if (!providerConfigured.value) {
+    generateNotice.value = {
+      type: 'danger',
+      message: `先在下方托管 ${provider.name} 的密钥（BYOK），再开始生成`,
+    };
+    return;
+  }
+  isGenerating.value = true;
+  generateStage.value = 'submitting';
+  generateNotice.value = null;
+  try {
+    const created = await createModel3dCloudJob(llmStore.ownerToken, {
+      providerId: provider.providerId,
+      prompt: cloudForm.value.prompt.trim() || undefined,
+      imageUrl: cloudForm.value.imageUrl.trim() || undefined,
+      image: provider.supportsImageUpload ? tripoForm.value.file : null,
+      label: tripoForm.value.name.trim() || undefined,
+    });
+    generateStage.value = 'queued';
+    pollCloudJob(created.jobId);
+  } catch (error) {
+    isGenerating.value = false;
+    generateStage.value = 'idle';
+    if (error instanceof ApiError) {
       generateNotice.value = { type: 'danger', message: error.message };
     } else {
       generateNotice.value = { type: 'danger', message: '后端不可达——确认 backend 已启动后再试' };

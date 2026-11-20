@@ -91,9 +91,11 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     LlmProvider(
         id="minimax-cn",
         key_family="minimax",
-        name="MiniMax（api.minimaxi.com）",
+        name="MiniMax（国内版）",
         protocol="openai",
-        base_url="https://api.minimaxi.com/v1",
+        # 2026-11-20 探活：api.minimax.cn 返回官方 401 authorized_error（同 kit 2026-10-21 实测）；
+        # 旧域名 api.minimaxi.com 也在线且错误体相同——域名切换以 kit 为准。
+        base_url="https://api.minimax.cn/v1",
         model="MiniMax-M3.1-Flash",
         reasoning_effort="low",
         key_prefix="sk-api-",
@@ -101,9 +103,9 @@ PROVIDERS: tuple[LlmProvider, ...] = (
     LlmProvider(
         id="minimax-cn-subscription",
         key_family="minimax",
-        name="MiniMax（api.minimaxi.com · 订阅）",
+        name="MiniMax（国内版 · 订阅）",
         protocol="openai",
-        base_url="https://api.minimaxi.com/v1",
+        base_url="https://api.minimax.cn/v1",
         model="MiniMax-M3.1-Flash",
         reasoning_effort="low",
         key_prefix="sk-cp-",
@@ -140,7 +142,8 @@ PROVIDERS: tuple[LlmProvider, ...] = (
         protocol="openai",
         base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         model="qwen3.8-max",
-        reasoning_effort="low",
+        # ⚠️ 不发 reasoning_effort：百炼的思考是布尔开关（enable_thinking），
+        # OpenAI 兼容端点遇到不认识的参数可能直接 400（kit 实测纪律：认不出来就不要发）。
         key_prefix="sk-",
     ),
     LlmProvider(
@@ -150,7 +153,6 @@ PROVIDERS: tuple[LlmProvider, ...] = (
         protocol="openai",
         base_url="https://coding.dashscope.aliyuncs.com/v1",
         model="qwen3.8-max",
-        reasoning_effort="low",
         key_prefix="sk-sp-",
         models_supported=False,
     ),
@@ -169,6 +171,16 @@ PROVIDERS: tuple[LlmProvider, ...] = (
         protocol="openai",
         base_url="https://ark.cn-beijing.volces.com/api/coding/v3",
         model="Doubao-Seed-Code",
+    ),
+    LlmProvider(
+        # kit（llm-provider-kit，2026-11-15 核对）：现役为 Kimi K3 / K3.1 Pro，
+        # 2026-11-20 探活 api.moonshot.cn 返回官方 401——端点在线。
+        id="moonshot",
+        key_family="moonshot",
+        name="月之暗面 Kimi",
+        protocol="openai",
+        base_url="https://api.moonshot.cn/v1",
+        model="kimi-k3.1-pro",
     ),
     LlmProvider(
         id="openai",
