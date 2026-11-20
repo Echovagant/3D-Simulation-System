@@ -5,6 +5,9 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // 部署基准路径：GitHub Pages（单仓单源）的项目站点挂在 /3D-Simulation-System/ 子路径，
+  // 由 Pages workflow 设 VITE_PUBLIC_BASE；本地与常规部署留空走根路径。
+  base: process.env.VITE_PUBLIC_BASE || '/',
   plugins: [
     // 不再用 vite-plugin-wasm：vite 8 的 rolldown 内核原生支持 wasm ESM 集成，
     // 旧插件的转换叠在原生路径上会把 rapier 的 imports 接线打断

@@ -4,7 +4,7 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：29
+后端版本：0.1.0　端点总数：37
 
 ## 端点
 
@@ -21,6 +21,14 @@
 | `POST` | `/api/llm/keys` | `upsert_key_api_llm_keys_post` | 托管一把厂商密钥 |
 | `DELETE` | `/api/llm/keys/{providerId}` | `delete_key_api_llm_keys__providerId__delete` | 删掉一把托管密钥 |
 | `GET` | `/api/llm/quota` | `quota_api_llm_quota_get` | 查今天的托管额度 |
+| `GET` | `/api/model3d/cloud/jobs` | `list_cloud_jobs_api_model3d_cloud_jobs_get` | 列出自己最近的云端生成任务 |
+| `POST` | `/api/model3d/cloud/jobs` | `create_cloud_job_api_model3d_cloud_jobs_post` | 提交一次云端生成 3D（混元 / 百炼） |
+| `GET` | `/api/model3d/cloud/jobs/{jobId}` | `get_cloud_job_api_model3d_cloud_jobs__jobId__get` | 读取一个云端生成任务的状态 |
+| `GET` | `/api/model3d/cloud/jobs/{jobId}/model.glb` | `get_cloud_model_api_model3d_cloud_jobs__jobId__model_glb_get` | 下载生成的模型 |
+| `GET` | `/api/model3d/keys` | `list_keys_api_model3d_keys_get` | 查各供应商密钥配没配 |
+| `POST` | `/api/model3d/keys` | `upsert_key_api_model3d_keys_post` | 托管一把云端 3D 密钥 |
+| `DELETE` | `/api/model3d/keys/{providerId}` | `delete_key_api_model3d_keys__providerId__delete` | 删掉一把托管密钥 |
+| `GET` | `/api/model3d/providers` | `list_providers_api_model3d_providers_get` | 云端 3D 供应商目录（计费 / 授权 / 限制如实标注） |
 | `GET` | `/api/render` | `list_renders_api_render_get` | 列出最近的服务端渲染 |
 | `POST` | `/api/render` | `create_render_api_render_post` | 提交一次服务端渲染 |
 | `GET` | `/api/render/{jobId}` | `get_render_api_render__jobId__get` | 读取一个渲染任务的状态 |
