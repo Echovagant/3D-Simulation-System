@@ -23,13 +23,17 @@ reset / step / observe。这一层把**同一套物理**（``simulator.build_wor
 from __future__ import annotations
 
 import asyncio
+import math
+import time
 import uuid
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from sqlalchemy.orm import Session
+
 from app.errors import ApiError
-from app.services import simulator
+from app.services import gym_audit, simulator
 from app.services.simulator import SimulationParams, SimulationWorld
 
 # 会话上限：内存里挂着 WASM 世界，不设上限会把内存吃穿
@@ -197,9 +201,21 @@ def _get(session_id: str, owner_token: str) -> GymSession:
     return session
 
 
-async def step(session_id: str, force_x: float, force_z: float, owner_token: str) -> dict[str, Any]:
+def force_limit_for(mass: float) -> float:
+    """力上限 = 加速度上限 × 运行时质量。公式只有这一份。"""
+    return simulator.MAX_ACCELERATION * mass
+
+
+async def step(
+    db: Session,
+    session_id: str,
+    force_x: float,
+    force_z: float,
+    owner_token: str,
+) -> dict[str, Any]:
     """施加一次水平冲量（力 × dt）并推进一步。"""
     async with _lock:
+        started = time.perf_counter()
         session = _get(session_id, owner_token)
         if session.terminated or session.truncated:
             # Farama 规范：done 之后继续 step 是未定义行为——这里如实拒绝
@@ -212,6 +228,40 @@ async def step(session_id: str, force_x: float, force_z: float, owner_token: str
         if agent is None or agent.body is None:
             raise ApiError(status_code=500, code="gym_agent_missing", message="智能体绑定丢了")
 
+        mass = agent.body.mass
+        if mass <= 0:
+            raise ApiError(
+                status_code=422,
+                code="gym_agent_invalid_mass",
+                message=f"智能体质量非正，算不出力上限：{mass}",
+            )
+
+        limit = force_limit_for(mass)
+        actual = math.hypot(force_x, force_z)
+        # 用 not <= 而非 >：NaN 与任何数比较都是 False，这样 NaN/Inf 一并拦下
+        if not actual <= limit:
+            gym_audit.record_step(
+                db,
+                owner_token=owner_token,
+                session_id=session_id,
+                round_index=session.round_index,
+                step_index=session.step_count,
+                force_x=force_x,
+                force_z=force_z,
+                force_limit=limit,
+                applied=False,
+                error_code="gym_force_out_of_range",
+                latency_ms=int((time.perf_counter() - started) * 1000),
+            )
+            raise ApiError(
+                status_code=422,
+                code="gym_force_out_of_range",
+                message=(
+                    f"力上限 = 30 × 质量 {mass:.2f}kg = {limit:.2f}N，收到 {actual:.2f}N，请减小"
+                ),
+            )
+
+        # ↓ 以下为既有物理推进逻辑，T6 会在其前面插入审计写行
         prev_distance = _distance(session)
         # 力 × dt = 冲量：与前端「冲量推物体」同一口径
         agent.body.apply_impulse((force_x * session.params.dt, 0.0, force_z * session.params.dt))

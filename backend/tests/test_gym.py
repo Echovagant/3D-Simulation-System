@@ -4,6 +4,9 @@
 terminated / truncated / 409 的状态机。物理正确性归 simulator 的测试管。
 """
 
+import json
+import math
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -68,7 +71,7 @@ def test_step_moves_agent_and_counts(gym: TestClient):
     session_id = _create(gym)["sessionId"]
 
     body = gym.post(
-        f"/api/gym/sessions/{session_id}/step", json={"forceX": 20.0, "forceZ": 0.0}
+        f"/api/gym/sessions/{session_id}/step", json={"forceX": 10.0, "forceZ": 0.0}
     ).json()
     obs = body["observation"]
     assert obs["step"] == 1
@@ -146,7 +149,7 @@ def test_truncated_at_max_steps_then_reset(gym: TestClient):
 def test_reset_restores_initial_positions(gym: TestClient):
     session_id = _create(gym)["sessionId"]
     initial = gym.post(f"/api/gym/sessions/{session_id}/reset").json()["observation"]
-    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 15.0, "forceZ": 0.0})
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 10.0, "forceZ": 0.0})
     gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 0.0, "forceZ": 0.0})
     moved = gym.post(f"/api/gym/sessions/{session_id}/reset").json()["observation"]
 
@@ -241,3 +244,109 @@ def test_list_sessions_only_mine(gym: TestClient):
     listed = gym.get("/api/gym/sessions").json()
     assert any(item["sessionId"] == mine for item in listed)
     assert all(item["sessionId"] != other for item in listed)
+
+
+def test_force_at_limit_is_accepted(gym: TestClient):
+    """上限按运行时质量算，从 create 回显的 forceLimit 取，不硬编码。"""
+    created = _create(gym)
+    limit = created["forceLimit"]
+    assert limit > 0
+    response = gym.post(
+        f"/api/gym/sessions/{created['sessionId']}/step", json={"forceX": limit, "forceZ": 0.0}
+    )
+    assert response.status_code == 200, response.text
+
+
+def test_force_over_limit_is_blocked_with_remediation(gym: TestClient):
+    created = _create(gym)
+    response = gym.post(
+        f"/api/gym/sessions/{created['sessionId']}/step",
+        json={"forceX": created["forceLimit"] + 1.0, "forceZ": 0.0},
+    )
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "gym_force_out_of_range"
+    assert "请减小" in error["message"]
+
+
+def test_force_limit_is_vector_norm(gym: TestClient):
+    """两分量各 0.8×上限 → 模长 1.13×上限，必须拦（钉住按模长而非按分量）。"""
+    created = _create(gym)
+    component = created["forceLimit"] * 0.8
+    response = gym.post(
+        f"/api/gym/sessions/{created['sessionId']}/step",
+        json={"forceX": component, "forceZ": component},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "gym_force_out_of_range"
+
+
+def test_force_limit_scales_with_body_geometry(gym: TestClient):
+    """后端不接声明质量（parity bug 已立项另修），运行时质量 = 几何体积。
+
+    sphere scale 2 → 半径 1 → 体积 ×8 → 上限 ×8。
+    """
+    small = _create(gym)
+    big_scene = {
+        **SCENE,
+        "id": "g-big",
+        "objects": [{**SCENE["objects"][0], "scale": {"x": 2, "y": 2, "z": 2}}],
+    }
+    big = _create(gym, scene=big_scene)
+    assert big["forceLimit"] == pytest.approx(small["forceLimit"] * 8, rel=1e-6)
+
+    force = small["forceLimit"] * 4
+    assert (
+        gym.post(
+            f"/api/gym/sessions/{big['sessionId']}/step", json={"forceX": force, "forceZ": 0.0}
+        ).status_code
+        == 200
+    )
+    assert (
+        gym.post(
+            f"/api/gym/sessions/{small['sessionId']}/step", json={"forceX": force, "forceZ": 0.0}
+        ).status_code
+        == 422
+    )
+
+
+def test_force_limit_equals_max_accel_times_runtime_mass(gym: TestClient):
+    """钉住公式与当前真实质量源。
+
+    sphere scale 1 → 半径 0.5 → 体积 4/3·π·0.5³。
+    ⚠️ parity bug 修好后此测试会红——那是预期的绊线，届时按声明质量改期望值。
+    """
+    expected = 30.0 * (4.0 / 3.0) * math.pi * 0.5**3
+    # rel=1e-6 而非 1e-9：rapier 的 mass 是 f32（实测相对误差 2.78e-8），
+    # 与本文件的几何缩放测试同口径；仍精确钉住「30 × 运行时体积」
+    assert _create(gym)["forceLimit"] == pytest.approx(expected, rel=1e-6)
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_force_is_rejected(gym: TestClient, bad: float):
+    """schema 层 allow_inf_nan=False 拦下，不到审计层。
+
+    SQLite 把 NaN 存成 NULL 会撞 force_x 的 NOT NULL，
+    所以在边界就拒，而不是让它变成 503 gym_audit_unavailable。
+    httpx 0.28 的 json= 用 allow_nan=False，必须走 content= 才测得到服务端。
+    """
+    session_id = _create(gym)["sessionId"]
+    response = gym.post(
+        f"/api/gym/sessions/{session_id}/step",
+        content=json.dumps({"forceX": bad, "forceZ": 0.0}),
+        headers={"Content-Type": "application/json"},
+    )
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_blocked_step_does_not_advance(gym: TestClient):
+    session_id = _create(gym)["sessionId"]
+    before = gym.post(
+        f"/api/gym/sessions/{session_id}/step", json={"forceX": 1.0, "forceZ": 0.0}
+    ).json()["observation"]
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 999.0, "forceZ": 0.0})
+    after = gym.post(
+        f"/api/gym/sessions/{session_id}/step", json={"forceX": 0.0, "forceZ": 0.0}
+    ).json()["observation"]
+    assert after["step"] == before["step"] + 1

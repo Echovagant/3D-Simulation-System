@@ -441,6 +441,8 @@ class GymSessionCreated(ApiModel):
     reward: float
     terminated: bool
     truncated: bool
+    # 力上限（N）= 加速度上限 × 运行时质量，客户端动作空间的唯一真相源
+    force_limit: float
 
 
 class GymSessionSummary(ApiModel):
@@ -467,10 +469,11 @@ class GymStepRequest(ApiModel):
     """一步的动作：施加在智能体上的水平力（牛）。
 
     服务端按 ``冲量 = 力 × dt`` 换算，与前端同一口径。
+    非有限值在边界就拒：SQLite 会把 NaN 存成 NULL，撞审计表 NOT NULL。
     """
 
-    force_x: float
-    force_z: float
+    force_x: float = Field(allow_inf_nan=False)
+    force_z: float = Field(allow_inf_nan=False)
 
 
 class GymStepResponse(ApiModel):

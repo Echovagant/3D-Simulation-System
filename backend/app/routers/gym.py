@@ -19,7 +19,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Path, status
+from sqlalchemy.orm import Session
 
+from app.db import get_session
+from app.errors import ApiError
 from app.routers.llm import require_owner_token
 from app.schemas import (
     GymResetResponse,
@@ -53,12 +56,17 @@ def create_gym_session(
         target_z=payload.target.z,
         max_steps=payload.max_steps,
     )
+    agent = session.agent
+    if agent is None or agent.body is None:
+        raise ApiError(status_code=500, code="gym_agent_missing", message="智能体绑定丢了")
     return GymSessionCreated(
         session_id=session.session_id,
         observation=gym_service.observe(session),
         reward=0.0,
         terminated=False,
         truncated=False,
+        # 上限按运行时质量算（rapier 0.36.1 的 mass 是 property），与 step 同一公式源
+        force_limit=gym_service.force_limit_for(agent.body.mass),
     )
 
 
@@ -96,8 +104,9 @@ async def step_gym_session(
     payload: GymStepRequest,
     session_id: str = Path(alias="sessionId"),
     owner_token: str = Depends(require_owner_token),
+    db: Session = Depends(get_session),
 ) -> GymStepResponse:
-    result = await gym_service.step(session_id, payload.force_x, payload.force_z, owner_token)
+    result = await gym_service.step(db, session_id, payload.force_x, payload.force_z, owner_token)
     return GymStepResponse(**result)
 
 

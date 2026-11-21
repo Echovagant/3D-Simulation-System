@@ -4,6 +4,7 @@
 （``error_body``），前端只认 ``error.code`` 一种判别方式。
 """
 
+import math
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -11,6 +12,23 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+def _normalize_non_finite(value: Any) -> Any:
+    """递归把非有限浮点（NaN / ±Inf）替换成 None。
+
+    镜像 FastAPI 自身响应序列化的 `_normalize_non_finite_floats`：
+    pydantic 的 ``exc.errors()`` 会把原始 nan/inf 带进 ``input`` 字段，
+    而 ``JSONResponse.render`` 用 ``json.dumps(allow_nan=False)``——
+    不过滤就会在校验错误的渲染阶段炸成 500。
+    """
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, list):
+        return [_normalize_non_finite(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _normalize_non_finite(item) for key, item in value.items()}
+    return value
 
 
 def error_body(code: str, message: str, detail: Any | None = None) -> dict[str, Any]:
@@ -63,8 +81,9 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(RequestValidationError)
     async def _validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
         # errors() 里带着原始异常对象，直接塞进 JSONResponse 会序列化失败——
-        # 必须先过一遍 jsonable_encoder。
-        detail = jsonable_encoder(exc.errors())
+        # 必须先过一遍 jsonable_encoder；再滤掉非有限浮点（pydantic 把原始
+        # nan/inf 带进 errors() 的 input，不过滤会在渲染阶段炸成 500）。
+        detail = _normalize_non_finite(jsonable_encoder(exc.errors()))
         return JSONResponse(
             status_code=422,
             content=error_body("validation_error", "请求体校验失败", detail),
