@@ -350,3 +350,65 @@ def test_blocked_step_does_not_advance(gym: TestClient):
         f"/api/gym/sessions/{session_id}/step", json={"forceX": 0.0, "forceZ": 0.0}
     ).json()["observation"]
     assert after["step"] == before["step"] + 1
+
+
+def test_applied_step_writes_audit(gym: TestClient, db_session):
+    from sqlalchemy.orm import Session
+
+    from app.db import engine
+    from app.models import GymStepLog
+
+    session_id = _create(gym)["sessionId"]
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 5.0, "forceZ": 0.0})
+
+    with Session(engine) as db:
+        rows = db.query(GymStepLog).filter(GymStepLog.session_id == session_id).all()
+        assert len(rows) == 1
+        assert rows[0].applied is True
+        assert rows[0].distance is not None
+        assert rows[0].owner_token == OWNER
+
+
+def test_blocked_step_writes_audit(gym: TestClient, db_session):
+    from sqlalchemy.orm import Session
+
+    from app.db import engine
+    from app.models import GymStepLog
+
+    session_id = _create(gym)["sessionId"]
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 999.0, "forceZ": 0.0})
+
+    with Session(engine) as db:
+        rows = db.query(GymStepLog).filter(GymStepLog.session_id == session_id).all()
+        assert len(rows) == 1
+        assert rows[0].applied is False
+        assert rows[0].error_code == "gym_force_out_of_range"
+        assert rows[0].force_x == 999.0
+
+
+def test_audit_failure_stops_physics(gym: TestClient, monkeypatch):
+    """审计写不进去 → 503，且步数与位置都不许变。"""
+    from app.services import gym_audit
+
+    session_id = _create(gym)["sessionId"]
+    first = gym.post(
+        f"/api/gym/sessions/{session_id}/step", json={"forceX": 1.0, "forceZ": 0.0}
+    ).json()["observation"]
+
+    def boom(*args: object, **kwargs: object) -> None:
+        from app.errors import ApiError
+
+        raise ApiError(status_code=503, code="gym_audit_unavailable", message="审计不可用")
+
+    monkeypatch.setattr(gym_audit, "record_step", boom)
+    response = gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 5.0, "forceZ": 0.0})
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "gym_audit_unavailable"
+
+    monkeypatch.undo()
+    after = gym.post(
+        f"/api/gym/sessions/{session_id}/step", json={"forceX": 0.0, "forceZ": 0.0}
+    ).json()["observation"]
+    # 503 那一步没推进：步数只 +1（来自这次合法步），不是 +2。
+    # 不断言位置相等——物体带着前一步的速度会继续漂移，位置不是不变量。
+    assert after["step"] == first["step"] + 1

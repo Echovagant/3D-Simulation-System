@@ -261,11 +261,39 @@ async def step(
                 ),
             )
 
-        # ↓ 以下为既有物理推进逻辑，T6 会在其前面插入审计写行
+        # 审计先落库并 commit，再动物理：
+        # 「物理推进了但没有审计行」不允许发生（写库失败会抛 503）
+        log = gym_audit.record_step(
+            db,
+            owner_token=owner_token,
+            session_id=session_id,
+            round_index=session.round_index,
+            step_index=session.step_count,
+            force_x=force_x,
+            force_z=force_z,
+            force_limit=limit,
+            applied=True,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
+
         prev_distance = _distance(session)
         # 力 × dt = 冲量：与前端「冲量推物体」同一口径
-        agent.body.apply_impulse((force_x * session.params.dt, 0.0, force_z * session.params.dt))
-        session.sim.world.step()
+        try:
+            agent.body.apply_impulse(
+                (force_x * session.params.dt, 0.0, force_z * session.params.dt)
+            )
+            session.sim.world.step()
+        except Exception as exc:
+            gym_audit.finish_step(
+                db,
+                log.id,
+                applied=False,
+                error_code="gym_step_failed",
+                latency_ms=int((time.perf_counter() - started) * 1000),
+            )
+            raise ApiError(
+                status_code=500, code="gym_step_failed", message=f"物理推进失败：{exc}"
+            ) from exc
         session.step_count += 1
 
         distance = _distance(session)
@@ -282,6 +310,17 @@ async def step(
             session.terminated = True
         if truncated:
             session.truncated = True
+
+        gym_audit.finish_step(
+            db,
+            log.id,
+            applied=True,
+            distance=round(distance, 4),
+            reward=round(reward, 4),
+            terminated=terminated,
+            truncated=truncated,
+            latency_ms=int((time.perf_counter() - started) * 1000),
+        )
 
         return {
             "observation": observe(session),
