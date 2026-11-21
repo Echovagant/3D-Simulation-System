@@ -6,12 +6,16 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.errors import ApiError
 from app.models import GymStepLog
+
+logger = logging.getLogger(__name__)
 
 AUDIT_PAGE_SIZE = 200
 
@@ -82,8 +86,9 @@ def finish_step(
     row.latency_ms = latency_ms
     try:
         session.commit()
-    except (SQLAlchemyError, RuntimeError):
-        # 行已存在，证据不丢；二次写失败只退到 rollback，不再抛
+    except (SQLAlchemyError, RuntimeError) as exc:
+        # 行已存在，证据不丢；二次写失败退到日志告警，不再抛
+        logger.warning("审计结果回写失败，log_id=%s：%s", log_id, exc)
         session.rollback()
 
 

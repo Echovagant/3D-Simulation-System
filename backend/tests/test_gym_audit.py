@@ -1,5 +1,7 @@
 """gym 审计服务：写行、回写结果、按归属查询。"""
 
+import logging
+
 import pytest
 from sqlalchemy.orm import Session
 
@@ -104,3 +106,41 @@ def test_record_step_db_failure_raises_503(db_session, monkeypatch):
             _record(db)
         assert exc.value.status_code == 503
         assert exc.value.code == "gym_audit_unavailable"
+
+
+def test_finish_step_db_failure_warns_no_raise(db_session, monkeypatch, caplog):
+    with Session(engine) as db:
+        row = _record(db)
+        log_id = row.id
+
+        def boom(*args: object, **kwargs: object) -> None:
+            raise RuntimeError("库炸了")
+
+        monkeypatch.setattr(db, "commit", boom)
+        # 契约：二次写失败不抛（物理已推进，抛也无法回滚）
+        with caplog.at_level(logging.WARNING):
+            gym_audit.finish_step(
+                db,
+                log_id,
+                applied=False,
+                error_code="gym_step_failed",
+                distance=1.5,
+                reward=0.25,
+                terminated=True,
+                truncated=True,
+                latency_ms=7,
+            )
+        warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warnings) == 1
+        message = warnings[0].getMessage()
+        assert str(log_id) in message
+        assert "库炸了" in message
+        # 残余行为：行仍在，但结果字段没写进去（写丢失）
+        db.refresh(row)
+        assert row.applied is True
+        assert row.error_code is None
+        assert row.distance is None
+        assert row.reward is None
+        assert row.terminated is False
+        assert row.truncated is False
+        assert row.latency_ms == 2
