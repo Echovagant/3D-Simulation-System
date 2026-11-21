@@ -1391,6 +1391,28 @@ try {
   problems.push(`读不到提供商清单：${err.message}`)
 }
 
+// 前后端的水平加速度上限是同一个物理量的两侧，文档各钉自己那侧——
+// 还得保证两侧相等，否则改一侧没改另一侧，所有单源闸门仍全绿、口径就此分裂。
+try {
+  const frontend = CONTRACT.find((entry) => entry.key === 'AI_MAX_ACCELERATION')
+  const backend = CONTRACT.find((entry) => entry.key === 'SIM_BACKEND_MAX_ACCELERATION')
+  const frontendValue = toNumber(frontend.read())
+  const backendValue = toNumber(backend.read())
+  if (
+    !Number.isFinite(frontendValue) ||
+    !Number.isFinite(backendValue) ||
+    !nearlyEqual(frontendValue, backendValue)
+  ) {
+    problems.push(
+      `前后端的水平加速度上限不一致：AI_MAX_ACCELERATION = ${frontendValue}，SIM_BACKEND_MAX_ACCELERATION = ${backendValue}——改一侧必须改另一侧`,
+    )
+  } else {
+    notes.push(`前后端水平加速度上限一致（${frontendValue}） ✓`)
+  }
+} catch (err) {
+  problems.push(`读不到水平加速度上限：${err.message}`)
+}
+
 if (baselineLoad.error) {
   problems.push(`读不到基线记录：${BASELINE_RECORD}（${baselineLoad.error}）`)
 } else {
