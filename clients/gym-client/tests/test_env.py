@@ -4,12 +4,29 @@
 """
 
 import json
+import math
 
 import httpx
 import numpy as np
 import pytest
 
 from threesim_gym import ArenaEnv, DEFAULT_SCENE
+
+
+def _created_payload(force_limit: float) -> dict:
+    """create 会话的响应体（回显生效参数三字段 + forceLimit）。"""
+    return {
+        "sessionId": "s1",
+        "observation": {
+            "agent": {"uuid": "a", "position": {"x": 0, "y": 0.5, "z": 0},
+                      "velocity": {"x": 0, "y": 0, "z": 0}},
+            "objects": [], "target": {"x": 5.0, "z": 0.0},
+            "step": 0, "maxSteps": 300, "distance": 5.0,
+        },
+        "reward": 0.0, "terminated": False, "truncated": False,
+        "effectiveParams": {}, "droppedParamKeys": [],
+        "defaultedParamKeys": [], "forceLimit": force_limit,
+    }
 
 
 def _make_env_with_fake_api(max_steps: int = 300):
@@ -198,3 +215,36 @@ def test_default_scene_is_a_valid_minimal_scene():
     """默认场景自带一个动态物体——没有后端也能看出结构合法。"""
     objects = DEFAULT_SCENE["objects"]
     assert any(obj["physics"]["type"] == "dynamic" for obj in objects)
+
+
+def test_client_sends_owner_token():
+    """所有 gym 端点必需 X-Owner-Token：客户端把 owner_token 放进请求头。"""
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["owner"] = request.headers.get("X-Owner-Token", "")
+        return httpx.Response(201, json=_created_payload(30.0))
+
+    env = ArenaEnv(owner_token="client-owner", transport=httpx.MockTransport(handler))
+    env.reset()
+    assert seen["owner"] == "client-owner"
+    env.close()
+
+
+def test_action_space_inscribed_in_server_force_limit():
+    """reset 后按服务端回显的 forceLimit 把矩形 Box 内接进圆形可行域。
+
+    服务端可行域是圆（按模长），Box 是矩形，取 limit/√2 内接，
+    保证 Box 顶点（最大模长动作）不被服务端力拦截。
+    """
+    limit = 15.708
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(201, json=_created_payload(limit))
+
+    env = ArenaEnv(owner_token="client-owner", transport=httpx.MockTransport(handler))
+    env.reset()
+    corner = float(np.hypot(env.action_space.high[0], env.action_space.high[1]))
+    assert corner <= limit
+    assert env.action_space.high[0] == pytest.approx(limit / math.sqrt(2), rel=1e-6)
+    env.close()

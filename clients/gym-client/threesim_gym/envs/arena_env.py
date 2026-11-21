@@ -8,16 +8,20 @@
 * ``close()``      销毁服务端会话
 
 * **动作** ``Box(-force_limit, +force_limit, (2,))``：施加在智能体上的水平力 (fx, fz)。
-  服务端按「冲量 = 力 × dt」换算，与浏览器同一口径。
+  服务端按「冲量 = 力 × dt」换算，与浏览器同一口径。构造参数只是 reset 前的
+  占位值：reset() 会按服务端回显的 ``forceLimit``（圆形可行域半径）把矩形 Box
+  内接重建为 ``±limit/√2``，保证动作不被服务端力拦截。
 * **观测** ``Box(-inf, +inf, (6,))``：智能体的位置与速度 [x, y, z, vx, vy, vz]。
   全场景物体的位姿放 ``info["objects"]``——观测空间必须固定形状，
   物体数量随场景变的东西不能进观测空间。
+* **归属**：所有请求带 ``X-Owner-Token`` 头（服务端必需，缺失即 401）。
 * **任务**：把智能体推到目标点；进入目标半径 terminated=True（服务端判），
   步数到上限 truncated=True。
 """
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 import gymnasium as gym
@@ -56,13 +60,24 @@ class ArenaEnv(gym.Env):
         agent_uuid: str | None = None,
         target: tuple[float, float] = (5.0, 0.0),
         max_steps: int = 300,
-        force_limit: float = 50.0,
+        # 这只是 reset 之前的占位值。服务端可行域是圆：
+        # hypot(Fx,Fz) <= forceLimit（= 30 × 运行时质量）。
+        # reset() 会用 create 回显的 forceLimit 重建 action_space，
+        # 取 limit/√2 把矩形 Box 内接进圆，保证动作不被拦。
+        force_limit: float = 21.21,
         timeout: float = 10.0,
         transport: httpx.BaseTransport | None = None,
+        owner_token: str = "gym-client",
     ) -> None:
         super().__init__()
+        self._force_limit = force_limit
         # transport 主要是给测试用的替身入口；业务调用保持默认
-        self._client = httpx.Client(base_url=base_url, timeout=timeout, transport=transport)
+        self._client = httpx.Client(
+            base_url=base_url,
+            timeout=timeout,
+            transport=transport,
+            headers={"X-Owner-Token": owner_token},
+        )
         self._create_payload: dict[str, Any] = {
             "scene": scene if scene is not None else DEFAULT_SCENE,
             "params": params or {},
@@ -91,6 +106,15 @@ class ArenaEnv(gym.Env):
             payload = response.json()
             # 只有建会话的应答带 sessionId；reset 应答不带（会话没变）
             self._session_id = payload["sessionId"]
+            # 动作空间的唯一真相源是服务端：create 回显的 forceLimit 是圆形
+            # 可行域半径（缺字段回落构造参数）。矩形 Box 取 limit/√2 内接进圆，
+            # 顶点动作才不会被服务端力拦截。
+            server_limit = payload.get("forceLimit")
+            limit = self._force_limit if server_limit is None else float(server_limit)
+            inscribed = limit / math.sqrt(2)
+            self.action_space = gym.spaces.Box(
+                low=-inscribed, high=inscribed, shape=(2,), dtype=np.float32
+            )
         else:
             response = self._client.post(f"/api/gym/sessions/{self._session_id}/reset")
             response.raise_for_status()
