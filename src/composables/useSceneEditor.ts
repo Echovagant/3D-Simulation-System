@@ -4,6 +4,9 @@ import { ref, watch, type Ref, onUnmounted } from 'vue'
 import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
+import { WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
+import { createRandom, DEFAULT_SEED } from '../utils/prng'
+import type { ScenePrimitiveSpec } from '@/types'
 import { simulationConfig } from '../config/simulation'
 import { RENDER_POWER_PREFERENCE } from '../config/rendering'
 import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
@@ -15,6 +18,17 @@ import type {
   RigidBodyDesc,
   IntegrationParameters,
 } from '@dimforge/rapier3d'
+
+/**
+ * 随机出生点：种子化 PRNG（M4）。
+ * 同一颗种子 + 同一序号 = 同一出生位置——「随机」只是别叠在一起，
+ * 不是实验条件里的不可控项。
+ */
+let spawnSeq = 0
+const seededSpawn = (): { x: number; y: number; z: number } => {
+  const random = createRandom(DEFAULT_SEED + spawnSeq++)
+  return { x: (random() - 0.5) * 5, y: 2, z: (random() - 0.5) * 5 }
+}
 
 /**
  * 场景编辑器的组装层：three 场景、物理世界、物体账本与事件桥都在这里。
@@ -53,6 +67,7 @@ type RapierWorld = World & {
 type ColliderShapeSpec =
   | { kind: 'cuboid'; halfExtents: { x: number; y: number; z: number } }
   | { kind: 'ball'; radius: number }
+  | { kind: 'trimesh'; vertices: Float32Array; indices: Uint32Array }
 
 // 模型库条目在导入流程里用到的字段（modelStore.models 的元素还带缩略图等元数据，这里用不上）
 interface Item {
@@ -74,9 +89,17 @@ interface Item {
  * ⚠️ 材质**不能**共享：点击高亮是通过 `material.emissive.set(0xffff00)` 实现的，
  * 共享材质会让所有同材质物体一起变黄。材质必须每对象独立。
  */
-const sharedGeometries: Record<'cube' | 'sphere', THREE.BufferGeometry> = {
+const sharedGeometries: Record<'cube' | 'sphere' | 'ramp', THREE.BufferGeometry> = {
   cube: new THREE.BoxGeometry(1, 1, 1),
   sphere: new THREE.SphereGeometry(0.5, 32, 32),
+  ramp: (() => {
+    // 楔形顶点/索引来自 primitiveFactory 的同一份数据：编辑器、渲染页、物理 trimesh 三处共用
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute([...WEDGE_VERTICES], 3))
+    geometry.setIndex([...WEDGE_INDICES])
+    geometry.computeVertexNormals()
+    return geometry
+  })(),
 }
 
 export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) {
@@ -385,6 +408,18 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       return
     }
 
+    if (spec.kind === 'trimesh') {
+      // 楔形缩放：基准顶点逐轴乘缩放后重建 trimesh（Rapier 没有可缩放的 trimesh 形状）
+      const scaled = new Float32Array(spec.vertices.length)
+      for (let i = 0; i < spec.vertices.length; i += 3) {
+        scaled[i] = spec.vertices[i] * sx
+        scaled[i + 1] = spec.vertices[i + 1] * sy
+        scaled[i + 2] = spec.vertices[i + 2] * sz
+      }
+      collider.setShape(new rapier.TriMesh(scaled, new Uint32Array(spec.indices)))
+      return
+    }
+
     // Rapier 没有椭球碰撞体：球体的非等比缩放用三轴均值近似半径
     // （等比缩放时与视觉完全一致）
     const meanScale = (sx + sy + sz) / 3
@@ -540,7 +575,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     object: THREE.Object3D,
     rigidBody: RigidBody,
     collider: Collider,
-    shape: 'box' | 'sphere',
+    shape: 'box' | 'sphere' | 'mesh',
   ): void => {
     object.userData.physics = {
       ...(object.userData.physics ?? {}),
@@ -554,10 +589,15 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
   // 创建几何体（抽象通用方法）
   const createGeometry = (
-    type: 'cube' | 'sphere',
+    type: 'cube' | 'sphere' | 'ramp',
     geometry: THREE.BufferGeometry,
     size: number,
     name?: string,
+    transform?: {
+      position?: { x: number; y: number; z: number }
+      rotation?: { x: number; y: number; z: number }
+      scale?: { x: number; y: number; z: number }
+    },
   ): THREE.Mesh | null => {
     if (!isSceneInitialized || !physicsWorld || !rapier) {
       return null
@@ -575,7 +615,19 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
     mesh.name = name || `${type}-${Date.now()}`
     mesh.castShadow = true
-    mesh.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
+    if (transform?.position) {
+      mesh.position.set(transform.position.x, transform.position.y, transform.position.z)
+    } else {
+      // 随机出生点走种子化 PRNG：同一序号同一位置，不参与「实验条件不可控」
+      const spawn = seededSpawn()
+      mesh.position.set(spawn.x, spawn.y, spawn.z)
+    }
+    if (transform?.rotation) {
+      mesh.rotation.set(transform.rotation.x, transform.rotation.y, transform.rotation.z)
+    }
+    if (transform?.scale) {
+      mesh.scale.set(transform.scale.x, transform.scale.y, transform.scale.z)
+    }
 
     // 刚体一创建出来就登记进账本：否则中途抛错会留下「孤儿刚体」——
     // 它会永远参与碰撞，却不在任何账本里，再也无法被移除。
@@ -596,22 +648,41 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       let colliderDesc: unknown // 使用unknown类型替代any
       if (type === 'cube') {
         colliderDesc = rapier.ColliderDesc.cuboid(size, size, size)
+      } else if (type === 'ramp') {
+        // 楔形用 trimesh 精确贴合斜面（cuboid 近似会让物体悬在斜面下方的空腔里）
+        colliderDesc = rapier.ColliderDesc.trimesh(
+          new Float32Array(WEDGE_VERTICES),
+          new Uint32Array(WEDGE_INDICES),
+        )
       } else {
         colliderDesc = rapier.ColliderDesc.ball(size)
       }
 
       const collider = physicsWorld.createCollider(colliderDesc, rigidBody)
       // 登记碰撞体基准尺寸：之后的缩放都以它为原点换算
-      colliderShapes.set(
-        mesh.uuid,
-        type === 'cube'
-          ? { kind: 'cuboid', halfExtents: { x: size, y: size, z: size } }
-          : { kind: 'ball', radius: size },
-      )
+      if (type === 'cube') {
+        colliderShapes.set(mesh.uuid, {
+          kind: 'cuboid',
+          halfExtents: { x: size, y: size, z: size },
+        })
+      } else if (type === 'ramp') {
+        colliderShapes.set(mesh.uuid, {
+          kind: 'trimesh',
+          vertices: new Float32Array(WEDGE_VERTICES),
+          indices: new Uint32Array(WEDGE_INDICES),
+        })
+      } else {
+        colliderShapes.set(mesh.uuid, { kind: 'ball', radius: size })
+      }
 
       // 设置userData以便反向查找
       ;(rigidBody as RapierRigidBody).userData = { object: mesh }
-      attachRigidBodyToUserData(mesh, rigidBody, collider, type === 'cube' ? 'box' : 'sphere')
+      attachRigidBodyToUserData(
+        mesh,
+        rigidBody,
+        collider,
+        type === 'cube' ? 'box' : type === 'ramp' ? 'mesh' : 'sphere',
+      )
 
       // 将物体添加到场景中
       if (scene) {
@@ -669,6 +740,24 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     return sphere !== null
   }
 
+  // 添加斜面（楔形）：教学场景「斜面滑块/滚动」的基础地形件
+  const addRamp = (): boolean => {
+    const ramp = createGeometry('ramp', sharedGeometries.ramp, 1, 'Ramp')
+    return ramp !== null
+  }
+
+  // 程序化摆放基础体（LLM 场景生成等需要精确变换的路径）：
+  // 与工具栏按钮的随机出生不同，位置/旋转/缩放完全按调用方给定
+  const addPrimitive = (spec: ScenePrimitiveSpec): boolean => {
+    const size = spec.type === 'ramp' ? 1 : 0.5
+    const mesh = createGeometry(spec.type, sharedGeometries[spec.type], size, spec.name, {
+      position: spec.position,
+      rotation: spec.rotation,
+      scale: spec.scale,
+    })
+    return mesh !== null
+  }
+
   // 导入模型（与模型库集成）
   const importModel = async (modelId: string): Promise<boolean> => {
     if (!isSceneInitialized || !physicsWorld || !rapier || !scene) {
@@ -697,11 +786,25 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         return false
       }
 
-      // 设置模型位置
-      model.position.set((Math.random() - 0.5) * 5, 2, (Math.random() - 0.5) * 5)
+      // 尺度归一：GLB 的真实尺度方差极大（实测 9 个内置模型 maxDim 0.3~8.7 单位），
+      // 不归一的话 8 米级的城市/太空站会把相机整个罩住（表现为「导入成功但看不到」），
+      // 小模型又几乎不可见。统一归到 maxDim = 2（与机甲这个已知可视基准一致），
+      // 归一后重算包围盒——物理碰撞体与落地位置都按缩放后的来。
+      const rawBox = new THREE.Box3().setFromObject(model)
+      const rawSize = rawBox.getSize(new THREE.Vector3())
+      const rawMaxDim = Math.max(rawSize.x, rawSize.y, rawSize.z)
+      const TARGET_MAX_DIM = 2
+      if (rawMaxDim > 0 && Math.abs(rawMaxDim - TARGET_MAX_DIM) > 0.01) {
+        model.scale.multiplyScalar(TARGET_MAX_DIM / rawMaxDim)
+        model.updateMatrixWorld(true)
+      }
+
+      // 设置模型位置（随机出生点同样种子化，与基本体的口径一致）
+      const spawn = seededSpawn()
+      model.position.set(spawn.x, spawn.y, spawn.z)
       model.castShadow = true
 
-      // 创建物理刚体（简化处理，使用模型包围盒）
+      // 创建物理刚体（简化处理，使用模型包围盒）——注意在尺度归一之后取包围盒
       const box = new THREE.Box3().setFromObject(model)
       const size = box.getSize(new THREE.Vector3())
       const halfExtents = size.multiplyScalar(0.5)
@@ -865,6 +968,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     cleanupEditor,
     addCube,
     addSphere,
+    addRamp,
+    addPrimitive,
     importModel,
     updatePhysics,
     getIsSceneInitialized: () => isSceneInitialized,

@@ -1,0 +1,73 @@
+# GitHub Pages（单仓单源）：前端静态产物由本工作流构建并部署，
+# 不建 gh-pages 分支、不建第二个仓库——同一份源码、同一条构建链。
+#
+# 触发：push 到 main（PR 合并后）与手动 workflow_dispatch。
+# 后端不在 Pages 上：前端是「后端可选增强」，拔掉后端照常工作
+# （离线降级由 verify:offline 闸门保证，CI 里每次都验）。
+#
+# 子路径：项目站点挂在 /3D-Simulation-System/ 下——构建时用
+# VITE_PUBLIC_BASE 告诉 vite；深链接（如 /simulation-lab/share/<id>）
+# 由 404.html 回退页接住、交给前端路由接管（SPA 常规做法）。
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一分支上的新运行自动取消旧运行，避免连续推送时排队占用额度
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 构建前端（Pages 基准路径）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 准备 Node.js 22（启用 npm 缓存）
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          # 缓存 npm 下载产物，命中时能省掉 install 的大部分耗时
+          cache: 'npm'
+
+      - name: 安装依赖（npm ci）
+        run: npm ci
+
+      # 与 CI 完全同一条构建链（type-check → build → vitest → 全部 verify:*），
+      # 只是基准路径换成 Pages 的子路径
+      - name: 构建并执行全部门禁（npm run build）
+        run: npm run build
+        env:
+          VITE_PUBLIC_BASE: /3D-Simulation-System/
+
+      - name: 生成 404 回退页（SPA 深链接）
+        run: cp dist/index.html dist/404.html
+
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: 部署到 GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署
+        id: deployment
+        uses: actions/deploy-pages@v4

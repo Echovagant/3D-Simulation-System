@@ -154,7 +154,9 @@ const chrome = spawn(CHROME, [
   `--user-data-dir=${join(repoRoot, 'node_modules', '.cache', 'chrome-docs-assets')}`,
   '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
   '--force-device-scale-factor=1', '--window-size=1280,640', 'about:blank',
-], { stdio: ['ignore', 'pipe', 'pipe'] })
+], { stdio: 'ignore' }) /* stderr 必须丢弃：WebGL 花瓣背景引入后 SwiftShader 每帧
+   往 stderr 打渲染日志，pipe 无人消费会在约 60s 写满缓冲、Chrome 整进程
+   写阻塞，Page.captureScreenshot 永不返回（git 历史：gen:docs 曾因此超时） */
 
 let ws = null
 for (let i = 0; i < 40; i++) {
@@ -210,18 +212,18 @@ for (let i = 0; i < nodes.length; i++) {
     const d = Math.hypot(dx, dy)
     if (d < 190) {
       lines.push(
-        `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}" stroke="#6E5AF0" stroke-width="1" opacity="${(0.09 * (1 - d / 190)).toFixed(3)}"/>`,
+        `<line x1="${nodes[i].x.toFixed(1)}" y1="${nodes[i].y.toFixed(1)}" x2="${nodes[j].x.toFixed(1)}" y2="${nodes[j].y.toFixed(1)}" stroke="#ff6101" stroke-width="1" opacity="${(0.13 * (1 - d / 190)).toFixed(3)}"/>`,
       )
     }
   }
 }
 const dots = nodes
-  .map((n) => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r.toFixed(1)}" fill="#6E5AF0" opacity="${n.a.toFixed(2)}"/>`)
+  .map((n) => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${n.r.toFixed(1)}" fill="#ff6101" opacity="${n.a.toFixed(2)}"/>`)
   .join('')
 const amberDots = nodes
   .filter(() => rnd() > 0.86)
   .slice(0, 6)
-  .map((n) => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${(n.r + 1.6).toFixed(1)}" fill="#96560A" opacity="0.5"/>`)
+  .map((n) => `<circle cx="${n.x.toFixed(1)}" cy="${n.y.toFixed(1)}" r="${(n.r + 1.6).toFixed(1)}" fill="#ffa117" opacity="0.5"/>`)
   .join('')
 
 const metricCards = [
@@ -243,7 +245,7 @@ const coverHtml = `<!doctype html>
   * { margin:0; padding:0; box-sizing:border-box; }
   html,body { width:${W}px; height:${H}px; overflow:hidden; }
   body {
-    background: #F7F8FC;
+    background: #0e1015;
     font-family: 'Microsoft YaHei','PingFang SC','Segoe UI',Arial,sans-serif;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     position:relative;
@@ -252,23 +254,23 @@ const coverHtml = `<!doctype html>
   .glow {
     position:absolute; left:50%; top:44%; width:900px; height:420px;
     transform: translate(-50%,-50%);
-    background: radial-gradient(ellipse at center, rgba(110,90,240,0.10), rgba(110,90,240,0) 70%);
+    background: radial-gradient(ellipse at center, rgba(124,106,242,0.14), rgba(124,106,242,0) 70%);
   }
   .inner { position:relative; text-align:center; z-index:2; }
   /* 块级 div 在居中容器里会靠左 —— 必须 margin: auto */
   .logo { width:92px; height:92px; margin:0 auto 18px; }
   .logo svg { width:100%; height:100%; display:block; }
-  h1 { font-size:58px; line-height:1.1; color:#333333; font-weight:800; letter-spacing:.02em; }
-  .en { font-size:15px; color:#8A8A99; letter-spacing:.34em; margin-top:9px; text-transform:uppercase; }
-  .rule { width:76px; height:3px; border-radius:2px; background:#6E5AF0; margin:18px auto 0; opacity:.85; }
-  .sub { margin-top:16px; font-size:21px; color:#666666; letter-spacing:.01em; }
+  h1 { font-size:58px; line-height:1.1; color:#e9ebf3; font-weight:800; letter-spacing:.02em; }
+  .en { font-size:15px; color:#828aa3; letter-spacing:.34em; margin-top:9px; text-transform:uppercase; }
+  .rule { width:76px; height:3px; border-radius:2px; background:#ff6101; margin:18px auto 0; opacity:.85; }
+  .sub { margin-top:16px; font-size:21px; color:#a9aec1; letter-spacing:.01em; }
   .metrics { display:flex; gap:14px; justify-content:center; margin-top:30px; }
   .metric {
-    min-width:132px; padding:13px 20px 11px; border-radius:12px; background:#FFFFFF;
-    border:1px solid #E4E9F5; box-shadow:0 2px 8px rgba(110,90,240,0.05);
+    min-width:132px; padding:13px 20px 11px; border-radius:12px; background:#171b25;
+    border:1px solid rgba(255,255,255,0.08); box-shadow:0 2px 8px rgba(0,0,0,0.4);
   }
-  .metric-value { font-size:25px; font-weight:800; color:#6E5AF0; line-height:1.15; letter-spacing:-0.01em; }
-  .metric-label { font-size:12px; color:#8A8A99; margin-top:3px; letter-spacing:.04em; }
+  .metric-value { font-size:25px; font-weight:800; color:#ff6101; line-height:1.15; letter-spacing:-0.01em; }
+  .metric-label { font-size:12px; color:#828aa3; margin-top:3px; letter-spacing:.04em; }
 </style></head>
 <body>
   <svg class="net" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${lines.join('')}${dots}${amberDots}</svg>
@@ -359,7 +361,7 @@ const DEMO_SCENE = {
 
 /** 物体配色（场景编辑器建体时随机上色，截图要稳定就得这里定死） */
 const DEMO_COLORS = {
-  '立方体 A': 0x6e5af0,
+  '立方体 A': 0xff6101,
   '立方体 B': 0x3b82f6,
   '球体 A': 0xf97316,
   '球体 B': 0x10b981,
@@ -373,7 +375,6 @@ const SHOTS = [
   ['/simulation-lab?preset=newtons-cradle', 'simulation-lab', 4500],
   ['/model-library', 'model-library', 4500],
   ['/ai-playground', 'ai-playground', 6000],
-  ['/docs', 'docs', 3600],
 ]
 
 // 静态服务要先能吐 dist/ 里的文件
@@ -421,7 +422,9 @@ await evalJs(
 console.log(`✓ 预置演示场景 scene-${DEMO_SCENE_ID}（${DEMO_SCENE.objects.length} 个物体）`)
 
 for (const [route, name, wait] of SHOTS) {
-  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 2, mobile: false }, sessionId)
+  /* DPR 1：WebGL 花瓣背景的每帧成本随像素量增长，2x 下软渲染合成器
+     出不了帧（captureScreenshot 超时）；1x 下实测可承受 */
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false }, sessionId)
   await cdp.send('Page.navigate', { url: `http://127.0.0.1:${DIST_PORT}${route}` }, sessionId)
   await sleep(wait)
   await evalJs(cdp, sessionId, `document.fonts ? document.fonts.ready.then(()=>1) : 1`)

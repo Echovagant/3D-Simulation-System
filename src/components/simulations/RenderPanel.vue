@@ -96,6 +96,10 @@
     >
       {{ submitting ? '提交中…' : '提交渲染任务' }}
     </button>
+    <InfoTip
+      label="关于服务端渲染的前置条件"
+      text="渲染要真的跑起来，生产产物、Chrome、ffmpeg 缺一不可（路径可用环境变量 CHROME_PATH / FFMPEG_PATH 覆盖）；宽高必须是偶数（H.264 yuv420p），单次最多 3600 帧、最长 600 秒。"
+    />
 
     <!-- 进度 -->
     <div v-if="jobId" class="sim-mt-3 sim-mb-3 sim-render-progress">
@@ -140,6 +144,7 @@ import {
 } from '@/services/api/render'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import type { SceneDocument, SceneIndexEntry } from '@/types'
+import InfoTip from '@/components/common/InfoTip.vue'
 
 /** 轮询间隔（毫秒） */
 const POLL_INTERVAL_MS = 1500
@@ -446,15 +451,15 @@ onBeforeUnmount(() => {
 /* 面板标题：这一页的 h3 沿用旧样式（深蓝字 + 蓝下划线），
    面板按 DESIGN.md 走品牌靛紫，不跟旧样式混 */
 .sim-render-panel h3 {
-  color: #6e5af0;
-  border-bottom-color: #6e5af0;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 /* 进度条：用品牌靛紫，与这一页的浅色面板同一套配色 */
 .sim-render-progress-bar {
   width: 100%;
   height: 6px;
-  accent-color: #6e5af0;
+  accent-color: var(--accent);
 }
 
 /* 任务 ID 是 32 位十六进制，挤在一行里会把状态文字压成竖排 */

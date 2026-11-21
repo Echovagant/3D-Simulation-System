@@ -14,6 +14,8 @@ import { useThree } from './useThree'
 import { usePhysics } from './usePhysics'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
 import { formatLogParameters } from '@/utils/agentLogExport'
+import { createRandom, DEFAULT_SEED } from '@/utils/prng'
+import type { AgentMetricInput } from '@/utils/agentMetrics'
 import { simulationConfig } from '@/config/simulation'
 import { llmConfig } from '@/config/llm'
 import type { AgentSnapshot, LlmAction } from '@/services/llm/prompts'
@@ -59,8 +61,6 @@ const AVOID_ANGLE = Math.PI / 3
 const MAX_OBSTACLES = 12
 /** 视野里没有障碍物时的距离读数 */
 const NO_OBSTACLE_DISTANCE = 999
-/** 障碍物布局的随机种子——同一密度下场地布局稳定可复现 */
-const ARENA_SEED = 20260101
 
 /** 智能体配色（按类型区分） */
 const AGENT_COLORS: Record<string, number> = {
@@ -108,6 +108,10 @@ interface AgentRuntime {
   lastDecisionAt: number | null
   /** 最近一次感知时是否真的撞上了障碍物（来自物理引擎的接触流形） */
   blocked: boolean
+  /** 累计走过的水平路程（米）——路径效率的分母（M3） */
+  pathLength: number
+  /** 累计撞上障碍物的次数（blocked 上升沿计一次）（M3） */
+  collisionCount: number
   /** 上一次执行的动作（喂给 LLM 当上下文） */
   lastAction?: string
   /** 上一次执行的动作参数 */
@@ -158,20 +162,9 @@ const llmInFlight = new Set<string>()
 const llmFallbacks = new Set<string>()
 /** 上一次发起 LLM 请求的时间戳（毫秒） */
 let lastLlmRequestAt = 0
-/** 上一次构建障碍物时的密度，用来判断需不需要重建 */
-let lastObstacleDensity: number | null = null
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max)
-
-/** 线性同余伪随机数：让场地布局可复现，而不是每次刷新都换一副样子 */
-const createRandom = (seed: number): (() => number) => {
-  let state = seed >>> 0
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0
-    return state / 4294967296
-  }
-}
 
 /** 角度插值（走最短弧） */
 const lerpAngle = (from: number, to: number, factor: number): number => {
@@ -397,13 +390,13 @@ export function useAI() {
     }
   }
 
-  /** 按障碍物密度重建场地里的障碍物 */
-  const rebuildObstacles = (force = false): void => {
+  /** 按当前密度与种子重建场地里的障碍物（调用方要么在建新世界、要么是设置变了） */
+  const rebuildObstacles = (): void => {
     const currentScene = three.scene.value
     if (!currentScene) return
     const density = clamp(Number(aiStore.environmentSettings.obstaclesDensity) || 0, 0, 1)
-    if (!force && density === lastObstacleDensity) return
-    lastObstacleDensity = density
+    const seedSetting = Number(aiStore.environmentSettings.arenaSeed)
+    const seed = Number.isFinite(seedSetting) ? Math.abs(Math.floor(seedSetting)) : DEFAULT_SEED
 
     for (const obstacle of arenaObstacles) {
       currentScene.remove(obstacle.mesh)
@@ -412,7 +405,7 @@ export function useAI() {
     arenaObstacles.length = 0
 
     const count = Math.round(density * MAX_OBSTACLES)
-    const random = createRandom(ARENA_SEED)
+    const random = createRandom(seed)
     for (let i = 0; i < count; i++) {
       const angle = (i / MAX_OBSTACLES) * Math.PI * 2 + (random() - 0.5) * 0.4
       const radius = 9 + random() * 6
@@ -493,6 +486,8 @@ export function useAI() {
         goalReached: false,
         lastDecisionAt: null,
         blocked: false,
+        pathLength: 0,
+        collisionCount: 0,
         body: null,
         collider: null,
       })
@@ -579,6 +574,12 @@ export function useAI() {
 
       const velocity = body.linvel()
       runtime.velocity.set(velocity.x, 0, velocity.z)
+
+      // M3 指标原始数据：累计水平路程 + 碰撞上升沿计数
+      runtime.pathLength += runtime.velocity.length() * fixedTimeStep
+      const touching = isTouchingObstacle(runtime.collider)
+      if (touching && !runtime.blocked) runtime.collisionCount += 1
+      runtime.blocked = touching
 
       // 到达目标点后换一个新目标
       const toGoal = runtime.goal.clone().sub(object.position)
@@ -1045,6 +1046,9 @@ export function useAI() {
       runtime.goal.copy(goalPosition(runtime.goalIndex))
       runtime.goalReached = false
       runtime.blocked = false
+      // 重置 = 新一轮实验：里程与碰撞从零计
+      runtime.pathLength = 0
+      runtime.collisionCount = 0
       runtime.lastDecisionAt = null
       runtime.lastAction = undefined
       runtime.lastParameters = undefined
@@ -1078,7 +1082,6 @@ export function useAI() {
     llmInFlight.clear()
     llmFallbacks.clear()
     lastLlmRequestAt = 0
-    lastObstacleDensity = null
     accumulator.reset()
   }
 
@@ -1087,10 +1090,14 @@ export function useAI() {
     () => aiStore.agents.map((agent) => agent.id).join('|'),
     () => syncScene(),
   )
-  // 障碍物密度变化 → 重建障碍物
+  // 障碍物密度 / 种子变化 → 重建障碍物（换种子就是换场地）
   watch(
-    () => aiStore.environmentSettings.obstaclesDensity,
-    () => rebuildObstacles(true),
+    () =>
+      [
+        aiStore.environmentSettings.obstaclesDensity,
+        aiStore.environmentSettings.arenaSeed,
+      ].join('|'),
+    () => rebuildObstacles(),
   )
   // 重置令牌变化 → 把智能体送回出生点
   watch(
@@ -1107,6 +1114,22 @@ export function useAI() {
   onMounted(() => initializeAiSystem())
   onUnmounted(() => cleanup())
 
+  /** M3 指标快照：UI 指标条与日志导出都用它。纯数据，聚合在 agentMetrics.ts */
+  const getMetricsSnapshot = (): AgentMetricInput[] =>
+    Array.from(agentRuntimes.entries()).map(([agentId, runtime]) => {
+      const agent = aiStore.agents.find((item) => item.id === agentId)
+      const toGoal = runtime.goal.clone().sub(runtime.spawn)
+      toGoal.y = 0
+      return {
+        agentId,
+        agentName: agent?.name ?? agentId,
+        goalReached: runtime.goalReached,
+        collisionCount: runtime.collisionCount,
+        pathLength: runtime.pathLength,
+        straightDistance: toGoal.length(),
+      }
+    })
+
   return {
     decisionQueue,
     generateAgentDecision,
@@ -1117,6 +1140,7 @@ export function useAI() {
     initPhysics,
     /** 智能体当前状态快照——LLM 解释层用它当输入 */
     buildSnapshot,
+    getMetricsSnapshot,
     cleanup,
   }
 }

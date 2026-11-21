@@ -1,7 +1,8 @@
 <template>
   <div class="app">
+    <!-- 背景单层：WebGL 动态背景（黑金波浪/漂浮点，AI 页路由切冻结流体） -->
     <div class="app-background">
-      <TechGridUniverse />
+      <canvas ref="bgCanvas" class="bg-webgl" aria-hidden="true"></canvas>
     </div>
     <div class="app-container">
       <!-- 侧边导航 -->
@@ -27,7 +28,7 @@
               @click="setActiveNav('overview')"
             >
               <RouterLink to="/overview" class="nav-link" title="返回主门户">
-                <div class="icon">🏠</div>
+                <div class="icon"><i class="fa-solid fa-house"></i></div>
                 <div class="text">总览</div>
               </RouterLink>
             </li>
@@ -38,7 +39,7 @@
               @click="setActiveNav('scene-editor')"
             >
               <RouterLink to="/scene-editor" class="nav-link" title="构建和编辑3D场景">
-                <div class="icon">🛠️</div>
+                <div class="icon"><i class="fa-solid fa-cubes"></i></div>
                 <div class="text">场景编辑器</div>
               </RouterLink>
             </li>
@@ -49,7 +50,7 @@
               @click="setActiveNav('simulation-lab')"
             >
               <RouterLink to="/simulation-lab" class="nav-link" title="运行和观察物理仿真">
-                <div class="icon">🔬</div>
+                <div class="icon"><i class="fa-solid fa-flask"></i></div>
                 <div class="text">仿真实验室</div>
               </RouterLink>
             </li>
@@ -60,7 +61,7 @@
               @click="setActiveNav('model-library')"
             >
               <RouterLink to="/model-library" class="nav-link" title="管理3D资产">
-                <div class="icon">📦</div>
+                <div class="icon"><i class="fa-solid fa-box-open"></i></div>
                 <div class="text">模型库</div>
               </RouterLink>
             </li>
@@ -71,19 +72,8 @@
               @click="setActiveNav('ai-playground')"
             >
               <RouterLink to="/ai-playground" class="nav-link" title="AI与3D环境交互">
-                <div class="icon">🧠</div>
+                <div class="icon"><i class="fa-solid fa-robot"></i></div>
                 <div class="text">AI演武场</div>
-              </RouterLink>
-            </li>
-
-            <li
-              class="nav-item"
-              :class="{ active: activeNavKey === 'docs' }"
-              @click="setActiveNav('docs')"
-            >
-              <RouterLink to="/docs" class="nav-link" title="系统使用指南">
-                <div class="icon">❓</div>
-                <div class="text">文档</div>
               </RouterLink>
             </li>
           </ul>
@@ -91,7 +81,6 @@
       </aside>
 
       <main class="main-container">
-        <Header />
         <div class="page-content" :class="{ 'page-content--full': isFullBleed }">
           <RouterView />
         </div>
@@ -99,20 +88,28 @@
     </div>
 
     <!-- 移动端菜单按钮 -->
-    <div class="mobile-menu-btn" @click="toggleSidebar" v-show="showNavigate()">☰</div>
+    <div class="mobile-menu-btn" @click="toggleSidebar" v-show="showNavigate()">
+      <i class="fa-solid fa-bars"></i>
+    </div>
   </div>
 </template>
 
 <script lang="ts" setup name="App">
-import Header from './components/layout/Header.vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
-import { defineAsyncComponent, ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import {
+  mountWebGLBackground,
+  type BackgroundMode,
+  type WebGLBackgroundHandle,
+} from '@/background/webgl-background'
 import '@/assets/styles/app-global.css'
 
-// 背景是纯装饰组件，用异步组件加载：即使它只有几 KB，也不该阻塞首屏渲染。
-const TechGridUniverse = defineAsyncComponent(
-  () => import('./components/common/Background/TechGridUniverse.vue'),
-)
+/*
+ * 背景单层 .bg-webgl：WebGL 动态背景（blackgold：白灰波浪 + 漂浮金点；
+ * AI 演武场路由切 frozen 冻结流体，保证该页观感整体不变）。
+ */
+const bgCanvas = ref<HTMLCanvasElement | null>(null)
+let bgHandle: WebGLBackgroundHandle | null = null
 
 const isMobile = ref(false)
 // 监听窗口大小变化，更新设备类型
@@ -186,9 +183,12 @@ watch(
       '/simulation-lab': 'simulation-lab',
       '/model-library': 'model-library',
       '/ai-playground': 'ai-playground',
-      '/docs': 'docs',
     }
     activeNavKey.value = keyMap[newPath] || 'overview' // 默认值避免空值
+
+    // AI 演武场路由：背景切冻结模式；其余页面走黑金缎面
+    const bgMode: BackgroundMode = newPath === '/ai-playground' ? 'frozen' : 'blackgold'
+    bgHandle?.setMode(bgMode)
 
     // 路由跳转后关闭侧边栏
     if (sidebarShow.value) {
@@ -203,6 +203,22 @@ onMounted(() => {
   window.addEventListener('resize', checkIsMobile)
   // 添加点击事件监听，用于关闭侧边栏
   document.addEventListener('click', handleOutsideClick)
+  // WebGL 背景：reduced-motion 时模块内部只画一帧静态氛围
+  if (bgCanvas.value) {
+    bgHandle = mountWebGLBackground(bgCanvas.value, 'blackgold')
+  }
+  // 空闲预热 Rapier wasm：仿真实验室/场景编辑器首开免等引擎下载。
+  // 动态 import 发生在浏览器空闲时，不占首屏带宽与 LCP。
+  const warmRapier = () => {
+    void import('./composables/loadRapier')
+      .then((m) => m.loadRapier())
+      .catch(() => {}) // 预热失败不响应用户：真正进入页面时按需加载会重试
+  }
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(warmRapier, { timeout: 4000 })
+  } else {
+    setTimeout(warmRapier, 2500)
+  }
 })
 
 // 组件卸载时移除监听，避免内存泄漏
@@ -210,19 +226,35 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkIsMobile)
   // 移除点击事件监听
   document.removeEventListener('click', handleOutsideClick)
+  bgHandle?.dispose()
+  bgHandle = null
 })
 </script>
 
 <style scoped>
 /*
- * 背景容器：背景是纯装饰组件，异步加载期间用它占位，避免闪白。
- * 底色与背景 canvas 铺的底色一致（#f7f8fc 浅色靛紫网络的画布底色），
- * 异步分块到位时不会有可见的跳变。
+ * 背景：WebGL 动态背景（黑金体系：白灰波浪 + 漂浮金点）。
+ *
+ * 分层（自底向上）：
+ *   .app-background —— 纯 --bg-canvas 底（WebGL 不可用时的回退底色）；
+ *   .bg-webgl       —— 全屏 canvas，动态背景 shader（见
+ *                      src/background/webgl-background.ts）。
+ *                      模式 uniform 切换：blackgold 为默认，
+ *                      AI 演武场路由切冻结流体模式。
  */
 .app-background {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: #f7f8fc;
+  background-color: var(--bg-canvas);
+  overflow: hidden;
+}
+
+.bg-webgl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 </style>

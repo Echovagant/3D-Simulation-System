@@ -79,6 +79,25 @@
           >
         </div>
 
+        <!-- 场地种子：同一种子 + 同一密度 = 同一布局（可复现） -->
+        <div>
+          <label class="ai-t-amber-soft ai-fs-sm ai-mb-1" for="ai-arena-seed">
+            场地种子
+          </label>
+          <input
+            id="ai-arena-seed"
+            type="number"
+            min="0"
+            step="1"
+            v-model.number="settings.arenaSeed"
+            @change="updateSettings"
+            class="ai-w-full ai-bg-sunken ai-b ai-b-gray ai-t-primary ai-r-sm ai-px-3 ai-py-2 ai-fs-sm"
+          >
+          <p class="ai-fs-xs ai-t-muted ai-mt-1">
+            同一种子 + 同一密度 = 同一障碍布局；换个种子就是一张新场地。
+          </p>
+        </div>
+
         <!-- 时间限制 -->
         <div>
           <label class="block ai-t-amber-soft ai-fs-sm ai-mb-1">
@@ -147,21 +166,30 @@ const formattedObstaclesDensity = computed(() =>
 watch(
   () => aiStore.environmentSettings,
   (newSettings) => {
-    // 密度正在防抖写入时，仓库里还是旧值——不能把用户正在拖的值覆盖回去
+    // 布局字段（密度 / 种子）正在防抖写入时，仓库里还是旧值——
+    // 不能把用户正在拖的值覆盖回去
     settings.value = densityTimer
-      ? { ...newSettings, obstaclesDensity: settings.value.obstaclesDensity }
+      ? {
+          ...newSettings,
+          obstaclesDensity: settings.value.obstaclesDensity,
+          arenaSeed: settings.value.arenaSeed,
+        }
       : { ...newSettings }
   }
 )
 
-const writeDensity = () => {
+/** 防抖落库：密度与种子都会重建场地 */
+const writeLayout = () => {
   densityTimer = null
-  aiStore.updateEnvironmentSettings({ obstaclesDensity: settings.value.obstaclesDensity })
+  aiStore.updateEnvironmentSettings({
+    obstaclesDensity: settings.value.obstaclesDensity,
+    arenaSeed: settings.value.arenaSeed,
+  })
 }
 
 /**
  * 实时写入：场景类型、难度、时间限制、胜利条件立刻生效，
- * 障碍物密度防抖后生效（它会重建场地）。
+ * 障碍物密度与种子防抖后生效（它们会重建场地）。
  */
 const updateSettings = () => {
   aiStore.updateEnvironmentSettings({
@@ -171,7 +199,7 @@ const updateSettings = () => {
     winCondition: settings.value.winCondition
   })
   if (densityTimer) clearTimeout(densityTimer)
-  densityTimer = setTimeout(writeDensity, DENSITY_DEBOUNCE_MS)
+  densityTimer = setTimeout(writeLayout, DENSITY_DEBOUNCE_MS)
 }
 
 /** 「应用设置」：一次性提交全部字段（含密度），并撤掉待执行的防抖写入 */

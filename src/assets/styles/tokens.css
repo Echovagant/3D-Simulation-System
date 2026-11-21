@@ -1,0 +1,88 @@
+/**
+ * 设计令牌——全站唯一的颜色 / 圆角 / 阴影 / 字号真源。
+ *
+ * 调性：黑金缎面（2026-11-19 用户定稿，复现项目早期版本的观感）——
+ *   纯白     #FFFFFF  波浪顶区 / 高光
+ *   深灰阶   #262626…  缎面底 / 面板
+ *   金黄     #FFD400 系  强调 / 动作 / 金光文字
+ * 动态背景由 WebGL 渲染：白波浪分界 + 金色缎面光带流动 + 漂浮金点
+ * （src/background/webgl-background.ts，色板与本文件同源）；
+ * AI 演武场的观感在其根类里整体冻结（teal 玻璃深空）。
+ *
+ * 组件里的颜色一律引用这里的变量，不许写硬编码 hex；
+ * scripts/check-light-contrast.mjs 从本文件读底色做 WCAG AA 对账，
+ * 改令牌值之前先想清楚对应的前景色还能不能达标。
+ */
+
+:root {
+  /* ---- 基础层：深灰阶（缎面底的静态部分，背景流动由 WebGL 承担） ---- */
+  --ink-950: #1f1f1f; /* 最深底：页面画布回退色（WebGL 不可用时兜底） */
+  --ink-900: #262626; /* 常规面板 */
+  --ink-850: #2e2e2e; /* 悬浮面板 / 卡片 */
+  --ink-800: #383838; /* 输入框、嵌入区、工具条 */
+  --ink-700: #454545; /* hover 面、边框强调 */
+
+  /* ---- 语义层：底 ---- */
+  --bg-canvas: var(--ink-950);
+  --bg-panel: var(--ink-900);
+  --bg-panel-raised: var(--ink-850);
+  --bg-inset: var(--ink-800);
+  --bg-hover: rgba(255, 255, 255, 0.06);
+
+  /* ---- 语义层：边框（白基） ---- */
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* ---- 语义层：文字（对比度按 --bg-canvas / --bg-panel 计） ---- */
+  --text-1: #f2f2ee; /* 主文字（off-white，禁纯白——纯白 kill depth），on canvas ≈13.5:1 */
+  --text-2: #cfcfcf; /* 次级，≈9.5:1 */
+  --text-3: #a8a8a8; /* 弱化标注，≈6.2:1 */
+
+  /* ---- 语义层：强调（金黄，老版导航胶囊黄） ---- */
+  --accent: #ffce3a; /* 作文字/金光用：on canvas ≈10:1 */
+  --accent-strong: #ffd400; /* 作按钮/胶囊实底用：其上文字配 --accent-on（≈12:1，老版黄底黑字） */
+  --accent-strong-hover: #ffe066; /* 深色底下 hover 提亮 */
+  --accent-on: #201a02; /* 黄实底上的文字（近黑暖调，不用纯黑——深底禁纯黑的同源纪律） */
+  --accent-rgb: 255, 212, 0;
+  --accent-soft: rgba(255, 212, 0, 0.13);
+  --accent-2: #ffa117; /* 琥珀：AI 演武场面板 kit 的域色（kit 内 rgba 硬编码与它同源） */
+  --accent-2-rgb: 255, 161, 23;
+  --accent-2-soft: rgba(255, 161, 23, 0.14);
+
+  /* ---- 玻璃拟态：白基毛玻璃（深灰底上透出缎面光） ---- */
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-bg-strong: rgba(255, 255, 255, 0.08);
+  --glass-bg-hover: rgba(255, 255, 255, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-blur: 24px;
+
+  /* ---- 语义层：状态 ---- */
+  --danger: #f0616a; /* 作文字用 */
+  --warning: #ffa117;
+  --success: #43c07f; /* 作文字用 */
+  /* 作底色用（配白字，≈5:1）——状态按钮/徽章 */
+  --danger-strong: #b91c1c;
+  --success-strong: #15803d;
+
+  /* ---- 几何 ---- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.55);
+  --shadow-pop: 0 6px 18px rgba(0, 0, 0, 0.5);
+
+  /* ---- 卡片网格统一参数（三页各自为政的 minmax/gap 收敛于此） ---- */
+  --grid-min: 220px;
+  --grid-gap: 20px;
+
+  /* ---- 字号阶 ---- */
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+
+  /* ---- 等宽数字体系：仿真参数 / 坐标 / 帧率 / 统计值用 ---- */
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, 'Courier New', monospace;
+}

@@ -11,6 +11,7 @@
 <script lang="ts" setup>
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 import { useSceneEditor } from '@/composables/useSceneEditor'
+import type { ScenePrimitiveSpec } from '@/types'
 
 const container: Ref<HTMLDivElement | null> = ref<HTMLDivElement | null>(null)
 const isInitializing = ref(true)
@@ -26,6 +27,8 @@ const emits = defineEmits<{
     methods: {
       addCube: () => boolean
       addSphere: () => boolean
+      addRamp: () => boolean
+      addPrimitive: (spec: ScenePrimitiveSpec) => boolean
       importModel: (modelId: string) => Promise<boolean>
       getIsSceneInitialized: () => boolean
       updatePhysics: () => void
@@ -42,6 +45,8 @@ const {
   cleanupEditor,
   addCube,
   addSphere,
+  addRamp,
+  addPrimitive,
   importModel,
   getIsSceneInitialized,
   updatePhysics,
@@ -72,6 +77,8 @@ onMounted(() => {
     emits('expose-methods', {
       addCube,
       addSphere,
+      addRamp,
+      addPrimitive,
       importModel,
       getIsSceneInitialized,
       updatePhysics,

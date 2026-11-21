@@ -62,8 +62,8 @@ if (args.help) {
 可用接入线：
   minimax                     api.minimax.io                 按量计费
   minimax-subscription        api.minimax.io                 订阅
-  minimax-cn                  api.minimaxi.com               按量计费
-  minimax-cn-subscription     api.minimaxi.com               订阅
+  minimax-cn                  api.minimax.cn                 按量计费
+  minimax-cn-subscription     api.minimax.cn                 订阅
   deepseek                    api.deepseek.com               按量计费
   zhipu                       open.bigmodel.cn               按量计费
   zhipu-coding                open.bigmodel.cn               订阅
@@ -71,6 +71,7 @@ if (args.help) {
   qwen-coding                 coding.dashscope.aliyuncs.com   订阅（无模型列表接口）
   ark                         ark.cn-beijing.volces.com      按量计费
   ark-coding                  ark.cn-beijing.volces.com      订阅
+  moonshot                    api.moonshot.cn                按量计费
 
 密钥来源二选一：--key-file（文件里是裸 key，一行）与 --key-env（环境变量名）。`)
   process.exit(0)
@@ -121,9 +122,9 @@ const PROVIDERS = {
     reasoningEffort: 'low',
     model: 'MiniMax-M3.1-Flash',
   },
-  'minimax-cn': { baseUrl: 'https://api.minimaxi.com/v1', reasoningEffort: 'low', model: 'MiniMax-M3.1-Flash' },
+  'minimax-cn': { baseUrl: 'https://api.minimax.cn/v1', reasoningEffort: 'low', model: 'MiniMax-M3.1-Flash' },
   'minimax-cn-subscription': {
-    baseUrl: 'https://api.minimaxi.com/v1',
+    baseUrl: 'https://api.minimax.cn/v1',
     reasoningEffort: 'low',
     model: 'MiniMax-M3.1-Flash',
   },
@@ -136,12 +137,13 @@ const PROVIDERS = {
   },
   qwen: {
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-    reasoningEffort: 'low',
+    // 百炼的思考是布尔开关（enable_thinking），不发 reasoning_effort
+    reasoningEffort: null,
     model: 'qwen3.8-max',
   },
   'qwen-coding': {
     baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
-    reasoningEffort: 'low',
+    reasoningEffort: null,
     model: 'qwen3.8-max',
     // 百炼 Coding Plan 不开放模型列表接口
     models: false,
@@ -152,6 +154,8 @@ const PROVIDERS = {
     reasoningEffort: null,
     model: 'Doubao-Seed-Code',
   },
+  // 2026-11-20 探活 api.moonshot.cn 返回官方 401——端点在线（kit 2026-11-15 核对现役模型）
+  moonshot: { baseUrl: 'https://api.moonshot.cn/v1', reasoningEffort: null, model: 'kimi-k3.1-pro' },
 }
 
 const provider = PROVIDERS[args.provider]

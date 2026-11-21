@@ -42,6 +42,22 @@
       </div>
     </div>
 
+    <!-- 运行指标（M3）：导航成功率 / 碰撞 / 路径效率。口径见 utils/agentMetrics.ts -->
+    <div class="ai-fs-xs ai-t ai-mb-3 ai-grid ai-grid-2 ai-gap-2">
+      <div>
+        <span class="ai-t-amber">导航成功率:</span> {{ metricsDisplay.successRate }}
+      </div>
+      <div>
+        <span class="ai-t-amber">碰撞次数:</span> {{ metricsDisplay.collisions }}
+      </div>
+      <div>
+        <span class="ai-t-amber">平均路径效率:</span> {{ metricsDisplay.efficiency }}
+      </div>
+      <div>
+        <span class="ai-t-amber">达成目标:</span> {{ metricsDisplay.goals }}
+      </div>
+    </div>
+
     <!-- 物理模式：如实说明碰撞由 Rapier 刚体引擎求解 -->
     <p class="physics-mode">物理模式：Rapier 刚体物理（质量 · 摩擦 · 弹性 · 固定步长 1/60 秒）</p>
 
@@ -121,9 +137,44 @@
 <script lang="ts" setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useAiStore } from '@/stores/aiStore'
+import { useAI } from '@/composables/useAI'
 import { serializeAgentLogs, exportFileStamp } from '@/utils/agentLogExport'
+import { computeAgentMetrics, formatMetricsSummary, type AgentMetrics } from '@/utils/agentMetrics'
 
 const aiStore = useAiStore()
+const ai = useAI()
+
+// ===================== 运行指标（M3） =====================
+// runtime 不是响应式的：500ms 轮询一次快照，指标条够新鲜又不抢主线程
+const METRICS_REFRESH_MS = 500
+
+const metrics = ref<AgentMetrics | null>(null)
+let metricsTimer: number | undefined
+
+const refreshMetrics = (): void => {
+  metrics.value = computeAgentMetrics(ai.getMetricsSnapshot())
+}
+
+const metricsDisplay = computed(() => ({
+  successRate:
+    metrics.value?.successRate == null
+      ? '—'
+      : `${(metrics.value.successRate * 100).toFixed(0)}%`,
+  collisions: String(metrics.value?.collisionCountTotal ?? 0),
+  efficiency:
+    metrics.value?.meanPathEfficiency == null ? '—' : metrics.value.meanPathEfficiency.toFixed(2),
+  goals:
+    metrics.value === null ? '—' : `${metrics.value.goalReachedCount} / ${metrics.value.totalAgents}`,
+}))
+
+onMounted(() => {
+  refreshMetrics()
+  metricsTimer = window.setInterval(refreshMetrics, METRICS_REFRESH_MS)
+})
+
+onBeforeUnmount(() => {
+  if (metricsTimer !== undefined) window.clearInterval(metricsTimer)
+})
 
 // 状态
 const simulationActive = computed(() => aiStore.simulationActive)
@@ -269,7 +320,14 @@ const clearLogs = () => {
  * 事后复盘要的是完整信息，不是省略号。
  */
 const exportLogs = (): void => {
-  const text = serializeAgentLogs(filteredLogs.value)
+  // 指标摘要追加在最后一行（type: metrics）——复盘时先看这一行
+  const metricsLine = JSON.stringify({
+    time: new Date().toISOString(),
+    type: 'metrics',
+    message: formatMetricsSummary(computeAgentMetrics(ai.getMetricsSnapshot())),
+  })
+  const logLines = serializeAgentLogs(filteredLogs.value)
+  const text = logLines ? `${logLines}${metricsLine}\n` : `${metricsLine}\n`
   const blob = new Blob([text], { type: 'application/x-ndjson;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
@@ -329,7 +387,7 @@ const formatDifficulty = (difficulty: string) => {
   margin: 0 0 0.5rem;
   font-size: 0.7rem;
   line-height: 1.5;
-  color: #9ca3af;
+  color: var(--text-2);
   opacity: 0.85;
 }
 

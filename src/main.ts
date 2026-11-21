@@ -11,9 +11,11 @@ import { installTelemetryReporter } from "@/services/api/telemetry";
 // regular / brands / v4compatibility 三套用不到的字体文件带进构建产物。
 import '@fortawesome/fontawesome-free/css/fontawesome.min.css'
 import '@fortawesome/fontawesome-free/css/solid.min.css'
+// 设计令牌必须最先加载：后面的 kit / 页面样式全部引用它定义的 --bg-* / --text-* 变量
+import './assets/styles/tokens.css'
 import './assets/styles/global.css'
 import './assets/styles/ai-panel-kit.css'
-// 浅色页面的工具层（仿真实验室右栏）：白底 + 靛紫，与 ai-* 那套深色 HUD 分开
+// 工具层（仿真实验室右栏面板）。深色统一后与 ai-* 用同一套令牌，只是类名前缀不同
 import './assets/styles/simulation-panel-kit.css'
 
 // DevTools 悬浮按钮的观感：默认几乎看不见，鼠标移上去才显形。

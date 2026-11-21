@@ -375,3 +375,202 @@ class RenderJobDetail(ApiModel):
     artifact_url: str | None = None
     duration_ms: int | None = None
     created_at: datetime
+
+
+class TripoJobAccepted(ApiModel):
+    """TripoSR 排队成功。"""
+
+    job_id: str
+
+
+class TripoJobSummary(ApiModel):
+    """TripoSR 任务摘要（列表用）。"""
+
+    job_id: str
+    status: str
+    label: str | None = None
+    image_name: str
+    created_at: datetime
+    duration_ms: int | None = None
+
+
+class TripoJobDetail(ApiModel):
+    """TripoSR 任务详情。
+
+    与渲染不同，这里**没有 progress**：run.py 只在结束时产出结果，
+    中途拿不到可靠的进度，推理中就是等——不猜。
+    """
+
+    job_id: str
+    status: str
+    label: str | None = None
+    image_name: str
+    error: str | None = None
+    artifact_url: str | None = None
+    duration_ms: int | None = None
+    created_at: datetime
+
+
+class GymTarget(ApiModel):
+    """Gym 任务的目标点（水平面）。"""
+
+    x: float
+    z: float
+
+
+class GymSessionCreateRequest(ApiModel):
+    """建一个 Gym 会话。
+
+    ``scene`` 是**完整的前端场景文档**（与批量仿真同一口径）；
+    ``agentUuid`` 缺省时自动选第一个动态物体；
+    ``target`` 缺省 (5, 0)。
+    """
+
+    scene: dict[str, Any]
+    params: dict[str, Any] = Field(default_factory=dict)
+    agent_uuid: str | None = None
+    target: GymTarget = Field(default_factory=lambda: GymTarget(x=5.0, z=0.0))
+    max_steps: int = Field(default=300, ge=1, le=10000)
+
+
+class GymSessionCreated(ApiModel):
+    """建会话成功：会话 id + 初始观测。"""
+
+    session_id: str
+    observation: dict[str, Any]
+    reward: float
+    terminated: bool
+    truncated: bool
+
+
+class GymSessionSummary(ApiModel):
+    """Gym 会话摘要（列表用）。"""
+
+    session_id: str
+    agent_uuid: str
+    step: int
+    max_steps: int
+    terminated: bool
+    truncated: bool
+
+
+class GymResetResponse(ApiModel):
+    """reset 之后的观测载荷。"""
+
+    observation: dict[str, Any]
+    reward: float
+    terminated: bool
+    truncated: bool
+
+
+class GymStepRequest(ApiModel):
+    """一步的动作：施加在智能体上的水平力（牛）。
+
+    服务端按 ``冲量 = 力 × dt`` 换算，与前端同一口径。
+    """
+
+    force_x: float
+    force_z: float
+
+
+class GymStepResponse(ApiModel):
+    """一步的结果：观测 + reward + terminated/truncated + info。"""
+
+    observation: dict[str, Any]
+    reward: float
+    terminated: bool
+    truncated: bool
+    info: dict[str, Any]
+
+
+# --------------------------------------------------------------------------
+# 云端「生成 3D」（混元生 3D / 百炼 Tripo）
+# --------------------------------------------------------------------------
+
+
+class Model3dProviderInfo(ApiModel):
+    """一家云端 3D 供应商的目录条目（界面上如实展示计费 / 授权 / 限制）。"""
+
+    provider_id: str
+    name: str
+    # "tc3"（SecretId+SecretKey）或 "bearer"（单把 API Key）
+    auth_kind: str
+    available: bool
+    supports_prompt: bool
+    supports_image_upload: bool
+    free_tier: str | None = None
+    cost_note: str | None = None
+    license_note: str | None = None
+    note: str | None = None
+    docs_url: str | None = None
+    # 这个 owner 有没有托管 key（只回布尔，不回 key 本身）
+    configured: bool = False
+
+
+class Model3dKeyStatus(ApiModel):
+    """只回「配没配」——不回密文、明文或盐。"""
+
+    provider_id: str
+    configured: bool
+    updated_at: datetime | None = None
+
+
+class Model3dKeyUpsertRequest(ApiModel):
+    """托管一把云端 3D 密钥。
+
+    形状按供应商分：混元要 ``secretId`` + ``secretKey``（TC3 签名是一对），
+    百炼要 ``apiKey``（sk- 开头）与可选的 ``workspaceId``。
+    形状校验在服务层做——这里只约束长度。
+    """
+
+    provider_id: str = Field(min_length=1, max_length=64)
+    secret_id: str | None = Field(default=None, max_length=256)
+    secret_key: str | None = Field(default=None, max_length=256)
+    api_key: str | None = Field(default=None, max_length=256)
+    workspace_id: str | None = Field(default=None, max_length=128)
+    passphrase: str | None = Field(default=None, max_length=1024)
+
+
+class Model3dKeyCreated(ApiModel):
+    provider_id: str
+    configured: bool
+
+
+class Model3dJobAccepted(ApiModel):
+    """云端生成任务排队成功。"""
+
+    job_id: str
+
+
+class Model3dJobSummary(ApiModel):
+    """云端生成任务摘要（列表用，只看自己的）。"""
+
+    job_id: str
+    provider_id: str
+    status: str
+    label: str | None = None
+    prompt: str | None = None
+    image_name: str
+    created_at: datetime
+    duration_ms: int | None = None
+
+
+class Model3dJobDetail(ApiModel):
+    """云端生成任务详情。
+
+    与本地推理一样**没有 progress**：轮询只知道厂商的终态，
+    中途的百分比拿不到——不猜。
+    """
+
+    job_id: str
+    provider_id: str
+    status: str
+    label: str | None = None
+    prompt: str | None = None
+    image_name: str
+    remote_task_id: str | None = None
+    error: str | None = None
+    error_code: str | None = None
+    artifact_url: str | None = None
+    duration_ms: int | None = None
+    created_at: datetime

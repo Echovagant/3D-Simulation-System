@@ -362,25 +362,25 @@ watch(
   min-height: 500px; /* 确保有最小高度 */
   overflow: hidden;
   position: relative;
-  background-color: #1a1a1a; /* 深色背景，便于区分3D物体 */
+  background-color: var(--bg-canvas); /* 深色背景，便于区分3D物体 */
   transition: background-color 0.5s ease; /* 添加过渡效果 */
 }
 
 /* 组件加载时的特殊样式 */
 .viewport-container.loading {
-  background-color: #2d3748; /* 加载时的背景色 */
+  background-color: var(--bg-inset); /* 加载时的背景色 */
   animation: pulse 2s infinite; /* 脉冲动画 */
 }
 
 @keyframes pulse {
   0% {
-    border-color: #3b82f6;
+    border-color: var(--accent);
   }
   50% {
-    border-color: #10b981;
+    border-color: var(--success);
   }
   100% {
-    border-color: #3b82f6;
+    border-color: var(--accent);
   }
 }
 

@@ -207,3 +207,77 @@ class RenderJob(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
+
+
+class TripoJob(Base):
+    """一次 TripoSR 本地推理任务（单图 → GLB）。
+
+    「单图生成 3D」跑在**本机 venv** 里：不依赖任何第三方云 API，
+    输入图不出本机——界面上必须如实告诉用户这一点。
+    输入图与产物都落盘（``backend_data/triposr/<job_id>/``），
+    库里只存路径与状态——与渲染任务同一口径。
+    """
+
+    __tablename__ = "tripo_jobs"
+
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # queued -> running -> succeeded | failed
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 原始文件名：只用来展示，推理读的是落盘后的 input.*
+    image_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    image_path: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 最后一步的 stderr 摘要：出错时最有用的是最后几行
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 产物（GLB）的落盘路径
+    model_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
+class Model3dCloudJob(Base):
+    """一次云端「生成 3D」任务（混元生 3D / 百炼 Tripo）。
+
+    与本地 TripoSR 同一套状态机（``queued → running → succeeded | failed``），
+    但跑在**供应商侧**：输入（文本 / 图片）要出本机发给厂商，
+    产物 URL 有时效（混元 24h、百炼 2h）——轮询到终态就立即下载落盘。
+
+    ``owner_token`` 是密钥库的归属键：后台任务拿它去 key_vault 解出
+    这家 owner 托管的 key（只在内存），列表也按它过滤——
+    别人的任务和任务里用过的 key 都不外泄。
+    """
+
+    __tablename__ = "model3d_cloud_jobs"
+
+    job_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    provider_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_token: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # 文生 3D 的提示词；图生 3D 时为空
+    prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 上传的本地文件（混元 ImageBase64）；公网 URL 方式时为空
+    image_name: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    image_path: Mapped[str] = mapped_column(String(500), nullable=False, default="")
+    # 公网图片 URL（百炼图生 3D 只收这个形态）；上传文件方式时为空
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # 厂商侧的任务 id（混元 JobId / 百炼 task_id）——对账与排障用
+    remote_task_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    model_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
