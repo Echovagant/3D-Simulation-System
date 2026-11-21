@@ -59,14 +59,14 @@ def create_gym_session(
     agent = session.agent
     if agent is None or agent.body is None:
         raise ApiError(status_code=500, code="gym_agent_missing", message="智能体绑定丢了")
+    # 上限按运行时质量算（rapier 0.36.1 的 mass 是 property），与 step 同一公式源
     return GymSessionCreated(
         session_id=session.session_id,
         observation=gym_service.observe(session),
         reward=0.0,
         terminated=False,
         truncated=False,
-        # 上限按运行时质量算（rapier 0.36.1 的 mass 是 property），与 step 同一公式源
-        force_limit=gym_service.force_limit_for(agent.body.mass),
+        **gym_service.params_payload(session),
     )
 
 

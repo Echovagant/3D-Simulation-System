@@ -412,3 +412,27 @@ def test_audit_failure_stops_physics(gym: TestClient, monkeypatch):
     # 503 那一步没推进：步数只 +1（来自这次合法步），不是 +2。
     # 不断言位置相等——物体带着前一步的速度会继续漂移，位置不是不变量。
     assert after["step"] == first["step"] + 1
+
+
+def test_create_echoes_effective_params(gym: TestClient):
+    body = _create(gym, params={"dt": 0.02, "bogus": 1, "steps": True})
+    assert body["effectiveParams"]["dt"] == 0.02
+    assert body["droppedParamKeys"] == ["bogus"]
+    assert body["defaultedParamKeys"] == ["steps"]
+
+
+def test_create_clean_params_echo_empty_lists(gym: TestClient):
+    body = _create(gym, params={"dt": 0.01})
+    assert body["droppedParamKeys"] == []
+    assert body["defaultedParamKeys"] == []
+
+
+def test_reset_echoes_params_and_bumps_round(gym: TestClient):
+    created = _create(gym, params={"dt": 0.02, "bogus": 1})
+    session_id = created["sessionId"]
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 1.0, "forceZ": 0.0})
+    reset = gym.post(f"/api/gym/sessions/{session_id}/reset").json()
+
+    assert reset["effectiveParams"]["dt"] == 0.02
+    assert reset["droppedParamKeys"] == ["bogus"]
+    assert reset["forceLimit"] == created["forceLimit"]

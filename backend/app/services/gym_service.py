@@ -206,6 +206,31 @@ def force_limit_for(mass: float) -> float:
     return simulator.MAX_ACCELERATION * mass
 
 
+def params_payload(session: GymSession) -> dict[str, Any]:
+    """生效参数 + 被丢键 + 被回落键 + 力上限。create 与 reset 共用一份口径。
+
+    键是 camelCase，router 直接 ``**`` 展开进响应模型（ApiModel 接受 alias）。
+    """
+    params, dropped, defaulted = SimulationParams.resolve(session.params_raw)
+    agent = session.agent
+    # rapier 0.36.1 的 mass 是 property 不是方法（与 step 同一取法）
+    mass = agent.body.mass if agent is not None and agent.body is not None else 0.0
+    return {
+        "effectiveParams": {
+            "gravityY": params.gravity_y,
+            "friction": params.friction,
+            "restitution": params.restitution,
+            "dt": params.dt,
+            "steps": params.steps,
+            "trace": params.trace,
+            "initialVelocityY": params.initial_velocity_y,
+        },
+        "droppedParamKeys": dropped,
+        "defaultedParamKeys": defaulted,
+        "forceLimit": force_limit_for(mass),
+    }
+
+
 async def step(
     db: Session,
     session_id: str,
@@ -347,6 +372,7 @@ async def reset_session(session_id: str, owner_token: str) -> dict[str, Any]:
             )
         session.sim = sim
         session.step_count = 0
+        session.round_index += 1
         session.terminated = False
         session.truncated = False
         return {
@@ -354,6 +380,7 @@ async def reset_session(session_id: str, owner_token: str) -> dict[str, Any]:
             "reward": 0.0,
             "terminated": False,
             "truncated": False,
+            **params_payload(session),
         }
 
 

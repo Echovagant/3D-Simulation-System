@@ -434,13 +434,17 @@ class GymSessionCreateRequest(ApiModel):
 
 
 class GymSessionCreated(ApiModel):
-    """建会话成功：会话 id + 初始观测。"""
+    """建会话成功：会话 id + 初始观测 + 实际生效的参数口径。"""
 
     session_id: str
     observation: dict[str, Any]
     reward: float
     terminated: bool
     truncated: bool
+    # 生效参数 / 被丢键 / 被回落键：声明参数 ≠ 生效参数时必须看得见
+    effective_params: dict[str, Any]
+    dropped_param_keys: list[str]
+    defaulted_param_keys: list[str]
     # 力上限（N）= 加速度上限 × 运行时质量，客户端动作空间的唯一真相源
     force_limit: float
 
@@ -457,12 +461,17 @@ class GymSessionSummary(ApiModel):
 
 
 class GymResetResponse(ApiModel):
-    """reset 之后的观测载荷。"""
+    """reset 之后的观测载荷 + 实际生效的参数口径。"""
 
     observation: dict[str, Any]
     reward: float
     terminated: bool
     truncated: bool
+    # 与建会话同一份口径：生效参数 / 被丢键 / 被回落键 / 力上限
+    effective_params: dict[str, Any]
+    dropped_param_keys: list[str]
+    defaulted_param_keys: list[str]
+    force_limit: float
 
 
 class GymStepRequest(ApiModel):
