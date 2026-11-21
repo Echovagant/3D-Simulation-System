@@ -495,6 +495,27 @@ class GymStepResponse(ApiModel):
     info: dict[str, Any]
 
 
+class GymStepLogItem(ApiModel):
+    """一步动作的审计留档。"""
+
+    id: int
+    ts: datetime
+    owner_token: str
+    session_id: str
+    round_index: int
+    step_index: int
+    force_x: float
+    force_z: float
+    force_limit: float
+    applied: bool
+    error_code: str | None
+    distance: float | None
+    reward: float | None
+    terminated: bool
+    truncated: bool
+    latency_ms: int
+
+
 # --------------------------------------------------------------------------
 # 云端「生成 3D」（混元生 3D / 百炼 Tripo）
 # --------------------------------------------------------------------------

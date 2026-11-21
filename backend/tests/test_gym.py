@@ -436,3 +436,54 @@ def test_reset_echoes_params_and_bumps_round(gym: TestClient):
     assert reset["effectiveParams"]["dt"] == 0.02
     assert reset["droppedParamKeys"] == ["bogus"]
     assert reset["forceLimit"] == created["forceLimit"]
+
+
+def test_logs_endpoint_returns_steps(gym: TestClient):
+    created = _create(gym)
+    session_id = created["sessionId"]
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 5.0, "forceZ": 0.0})
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 999.0, "forceZ": 0.0})
+
+    response = gym.get(f"/api/gym/sessions/{session_id}/logs")
+    assert response.status_code == 200
+    rows = response.json()
+    assert len(rows) == 2
+    assert rows[0]["applied"] is True
+    assert rows[1]["applied"] is False
+    assert rows[1]["errorCode"] == "gym_force_out_of_range"
+    # 力上限 = 30 × 运行时质量（≈15.7N，见 test_force_limit_equals_max_accel_times_runtime_mass），
+    # 不硬编码 30.0——与 create 回显同一份真相
+    assert rows[0]["forceLimit"] == created["forceLimit"]
+
+
+def test_logs_limit_validation(gym: TestClient):
+    session_id = _create(gym)["sessionId"]
+    assert gym.get(f"/api/gym/sessions/{session_id}/logs?limit=0").status_code == 422
+    assert gym.get(f"/api/gym/sessions/{session_id}/logs?limit=1001").status_code == 422
+    assert gym.get(f"/api/gym/sessions/{session_id}/logs?limit=1000").status_code == 200
+
+
+def test_logs_unknown_round_is_empty(gym: TestClient):
+    session_id = _create(gym)["sessionId"]
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 5.0, "forceZ": 0.0})
+    response = gym.get(f"/api/gym/sessions/{session_id}/logs?round=99")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_logs_round_filter_after_reset(gym: TestClient):
+    session_id = _create(gym)["sessionId"]
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 5.0, "forceZ": 0.0})
+    gym.post(f"/api/gym/sessions/{session_id}/reset")
+    gym.post(f"/api/gym/sessions/{session_id}/step", json={"forceX": 5.0, "forceZ": 0.0})
+
+    assert len(gym.get(f"/api/gym/sessions/{session_id}/logs?round=0").json()) == 1
+    assert len(gym.get(f"/api/gym/sessions/{session_id}/logs?round=1").json()) == 1
+
+
+def test_logs_cross_owner_is_404(gym: TestClient):
+    session_id = _create(gym)["sessionId"]
+    response = gym.get(
+        f"/api/gym/sessions/{session_id}/logs", headers={"X-Owner-Token": OTHER_OWNER}
+    )
+    assert response.status_code == 404

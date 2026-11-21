@@ -4,7 +4,7 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：37
+后端版本：0.1.0　端点总数：38
 
 ## 端点
 
@@ -13,6 +13,7 @@
 | `GET` | `/api/gym/sessions` | `list_gym_sessions_api_gym_sessions_get` | 列出在场会话 |
 | `POST` | `/api/gym/sessions` | `create_gym_session_api_gym_sessions_post` | 建一个 Gym 会话 |
 | `DELETE` | `/api/gym/sessions/{sessionId}` | `delete_gym_session_api_gym_sessions__sessionId__delete` | 销毁会话 |
+| `GET` | `/api/gym/sessions/{sessionId}/logs` | `list_gym_logs_api_gym_sessions__sessionId__logs_get` | 取一个会话的动作审计日志 |
 | `POST` | `/api/gym/sessions/{sessionId}/reset` | `reset_gym_session_api_gym_sessions__sessionId__reset_post` | 重建世界回到初始状态 |
 | `POST` | `/api/gym/sessions/{sessionId}/step` | `step_gym_session_api_gym_sessions__sessionId__step_post` | 推进一步（施加水平冲量） |
 | `GET` | `/api/health` | `health_api_health_get` | 存活探针 |

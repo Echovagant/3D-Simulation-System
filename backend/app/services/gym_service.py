@@ -201,6 +201,11 @@ def _get(session_id: str, owner_token: str) -> GymSession:
     return session
 
 
+def ensure_owned(session_id: str, owner_token: str) -> GymSession:
+    """校验会话归属；越权与不存在都抛 404。"""
+    return _get(session_id, owner_token)
+
+
 def force_limit_for(mass: float) -> float:
     """力上限 = 加速度上限 × 运行时质量。公式只有这一份。"""
     return simulator.MAX_ACCELERATION * mass
