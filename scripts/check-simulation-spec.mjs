@@ -726,6 +726,18 @@ const CONTRACT = [
       ),
   },
   {
+    // 转向加速度上限：与后端 SIM_BACKEND_MAX_ACCELERATION 是同一物理量的两侧，改一侧必须改另一侧。
+    key: 'AI_MAX_ACCELERATION',
+    source: AI,
+    kind: 'number',
+    read: () =>
+      capture(
+        readText(AI),
+        new RegExp(`^const\\s+MAX_ACCELERATION\\s*=\\s*(${NUM})`, 'm'),
+        'MAX_ACCELERATION',
+      ),
+  },
+  {
     key: 'AI_ACTION_NAMES',
     source: PROMPTS,
     kind: 'list',
@@ -812,6 +824,14 @@ const CONTRACT = [
     kind: 'number',
     read: () =>
       capture(readText(SIMPY), new RegExp(`^DEFAULT_GRAVITY_Y\\s*=\\s*(${NUM})`, 'm'), 'DEFAULT_GRAVITY_Y'),
+  },
+  {
+    // 水平加速度上限：与前端 AI_MAX_ACCELERATION 同口径，改一侧必须改另一侧。
+    key: 'SIM_BACKEND_MAX_ACCELERATION',
+    source: SIMPY,
+    kind: 'number',
+    read: () =>
+      capture(readText(SIMPY), new RegExp(`^MAX_ACCELERATION\\s*=\\s*(${NUM})`, 'm'), 'MAX_ACCELERATION'),
   },
   {
     key: 'SIM_GROUND_HALF_X',

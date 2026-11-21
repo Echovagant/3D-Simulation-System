@@ -445,9 +445,10 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `ARENA_CAMERA_FOV` | `50` | 度 | `src/config/sceneFraming.ts` |
 | `AI_GROUND_COLOR` | `0x2a3340` | — | `src/composables/useAI.ts` |
 | `AI_WALL_OPACITY` | `0.6` | — | `src/composables/useAI.ts` |
-| `MAX_ACCELERATION`（前端 ↔ 后端） | 前端 `30` / 后端 `30.0` | m/s² | `src/composables/useAI.ts:47` ↔ `backend/app/services/simulator.py` |
+| `AI_MAX_ACCELERATION` | `30` | m/s² | `src/composables/useAI.ts` |
+| `SIM_BACKEND_MAX_ACCELERATION` | `30.0` | m/s² | `backend/app/services/simulator.py` |
 
-`MAX_ACCELERATION`（前端 ↔ 后端）是双源登记：水平加速度上限，gym 力上限 = 30 × 质量。对账脚本目前只支持单源条目，这一行暂不参与机器对账——改任一侧必须同步另一侧；后端值由 `backend/tests/test_simulator.py` 的 `test_max_acceleration_matches_frontend` 钉住。
+`AI_MAX_ACCELERATION`（前端）与 `SIM_BACKEND_MAX_ACCELERATION`（后端）登记同一个物理量：水平加速度上限，gym 力上限 = 30 × 质量，两侧必须同步。两行各按自己的单源参与机器对账；后端值另由 `backend/tests/test_simulator.py` 的 `test_max_acceleration_matches_frontend` 钉住。
 
 ### 6.1 接入线明细
 
