@@ -1,6 +1,7 @@
 from concurrent.futures import ThreadPoolExecutor
 
 from sqlalchemy import text
+from sqlalchemy.orm import Session
 
 from app.db import SessionLocal, engine, init_db
 
@@ -64,3 +65,29 @@ def test_upgrade_database_builds_a_fresh_database(tmp_path, monkeypatch):
         engine.dispose()
 
     assert {"scenes", "telemetry_events"} <= tables
+
+
+def test_gym_step_log_roundtrip(db_session):
+    from app.models import GymStepLog
+
+    with Session(engine) as session:
+        row = GymStepLog(
+            owner_token="owner-a",
+            session_id="sess-1",
+            round_index=0,
+            step_index=0,
+            force_x=10.0,
+            force_z=0.0,
+            force_limit=30.0,
+            applied=True,
+            latency_ms=3,
+        )
+        session.add(row)
+        session.commit()
+        session.refresh(row)
+        assert row.id is not None
+        assert row.ts is not None
+        assert row.error_code is None
+        assert row.distance is None
+        assert row.terminated is False
+        assert row.truncated is False

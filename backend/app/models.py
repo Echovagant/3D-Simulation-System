@@ -10,7 +10,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -281,3 +281,30 @@ class Model3dCloudJob(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
+
+
+class GymStepLog(Base):
+    """gym 的一步动作留档。
+
+    拦截与推进都写行——「物理推进了但没有审计行」不允许发生。
+    回合摘要从这里聚合，不另建计数表（与 llm_call_audit 同一原则）。
+    """
+
+    __tablename__ = "gym_step_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
+    owner_token: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    session_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    round_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    step_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    force_x: Mapped[float] = mapped_column(Float, nullable=False)
+    force_z: Mapped[float] = mapped_column(Float, nullable=False)
+    force_limit: Mapped[float] = mapped_column(Float, nullable=False)
+    applied: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    distance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    reward: Mapped[float | None] = mapped_column(Float, nullable=True)
+    terminated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    truncated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
