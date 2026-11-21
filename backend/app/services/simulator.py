@@ -39,6 +39,15 @@ DEFAULT_GRAVITY_Y = -9.81
 DEFAULT_DT = 1.0 / 60.0
 DEFAULT_STEPS = 240
 
+# 水平加速度上限（m/s²）。与前端 useAI.ts 的 MAX_ACCELERATION 同口径，
+# 对账表登记在 docs/simulation-spec.md，改一侧必须改另一侧。
+MAX_ACCELERATION = 30.0
+
+# 请求体里认识的参数键。不在这里的键会被忽略，并如实报告给调用方。
+_KNOWN_PARAM_KEYS = frozenset(
+    {"gravityY", "friction", "restitution", "dt", "steps", "trace", "initialVelocityY"}
+)
+
 # 地面：固定刚体下移 0.1，碰撞体顶面因此落在 y=0
 GROUND_TRANSLATION = (0.0, -0.1, 0.0)
 GROUND_HALF_EXTENTS = (5.0, 0.1, 5.0)
@@ -87,28 +96,30 @@ class SimulationParams:
     initial_velocity_y: float = 0.0
 
     @classmethod
-    def from_mapping(cls, raw: Mapping[str, Any] | None) -> SimulationParams:
-        """从请求体里的 ``params`` 解析参数。
+    def _parse(cls, raw: Mapping[str, Any]) -> tuple[SimulationParams, list[str]]:
+        """解析并记下哪些键回落了默认值。解析逻辑只有这一份。"""
+        defaulted: list[str] = []
 
-        未知键直接忽略：请求体是前端拼的，多一个键不该让整个任务失败。
-        """
-        if not raw:
-            return cls()
+        def take(key: str, caster: type, fallback: Any) -> Any:
+            value, fell_back = _coerce(raw.get(key), caster, fallback)
+            if fell_back and key in raw:
+                defaulted.append(key)
+            return value
 
-        gravity_y = _as_float(raw.get("gravityY"), DEFAULT_GRAVITY_Y)
-        friction = _as_optional_float(raw.get("friction"))
-        restitution = _as_optional_float(raw.get("restitution"))
-        dt = _as_float(raw.get("dt"), DEFAULT_DT)
-        steps = _as_int(raw.get("steps"), DEFAULT_STEPS)
+        gravity_y = take("gravityY", float, DEFAULT_GRAVITY_Y)
+        friction = take("friction", float, None)
+        restitution = take("restitution", float, None)
+        dt = take("dt", float, DEFAULT_DT)
+        steps = take("steps", int, DEFAULT_STEPS)
+        initial_velocity_y = take("initialVelocityY", float, 0.0)
         trace = bool(raw.get("trace", False))
-        initial_velocity_y = _as_float(raw.get("initialVelocityY"), 0.0)
 
         if dt <= 0:
             raise SimulationError(f"dt 必须大于 0，收到 {dt}")
         if steps <= 0:
             raise SimulationError(f"steps 必须大于 0，收到 {steps}")
 
-        return cls(
+        params = cls(
             gravity_y=gravity_y,
             friction=friction,
             restitution=restitution,
@@ -117,6 +128,31 @@ class SimulationParams:
             trace=trace,
             initial_velocity_y=initial_velocity_y,
         )
+        return params, sorted(defaulted)
+
+    @classmethod
+    def from_mapping(cls, raw: Mapping[str, Any] | None) -> SimulationParams:
+        """从请求体里的 ``params`` 解析参数。
+
+        未知键直接忽略：请求体是前端拼的，多一个键不该让整个任务失败。
+        """
+        if not raw:
+            return cls()
+        return cls._parse(raw)[0]
+
+    @classmethod
+    def resolve(
+        cls, raw: Mapping[str, Any] | None
+    ) -> tuple[SimulationParams, list[str], list[str]]:
+        """解析参数，并如实报告被丢弃与被回落的键。
+
+        供配置一致性校验用：声明参数 ≠ 生效参数时必须看得见。
+        """
+        if not raw:
+            return cls(), [], []
+        params, defaulted = cls._parse(raw)
+        dropped = sorted(key for key in raw if key not in _KNOWN_PARAM_KEYS)
+        return params, dropped, defaulted
 
 
 @dataclass
@@ -152,31 +188,26 @@ class SimulationWorld:
         return [obj for obj in self.objects if obj.skipped is None]
 
 
-def _as_float(value: Any, fallback: float) -> float:
-    if isinstance(value, bool) or value is None:
-        return fallback
+def _coerce(value: Any, caster: type, fallback: Any) -> tuple[Any, bool]:
+    """返回 (值, 是否回落)。bool / None / 不可解析都算回落。"""
+    if value is None or isinstance(value, bool):
+        return fallback, True
     try:
-        return float(value)
+        return caster(value), False
     except (TypeError, ValueError):
-        return fallback
+        return fallback, True
+
+
+def _as_float(value: Any, fallback: float) -> float:
+    return _coerce(value, float, fallback)[0]
 
 
 def _as_optional_float(value: Any) -> float | None:
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
+    return _coerce(value, float, None)[0]
 
 
 def _as_int(value: Any, fallback: int) -> int:
-    if value is None or isinstance(value, bool):
-        return fallback
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return fallback
+    return _coerce(value, int, fallback)[0]
 
 
 def _vector(raw: Any, fallback: tuple[float, float, float]) -> tuple[float, float, float]:

@@ -269,3 +269,53 @@ def test_sweeping_gravity_changes_the_outcome():
 
     slow, fast = runs[0]["objects"][0], runs[1]["objects"][0]
     assert slow["settledAtFrame"] > fast["settledAtFrame"]
+
+
+# --------------------------------------------------------------------------
+# 参数解析：丢键 / 回落键报告与加速度常量
+# --------------------------------------------------------------------------
+
+
+def test_max_acceleration_matches_frontend():
+    """与 src/composables/useAI.ts:47 同口径，改一侧必须改另一侧。"""
+    assert simulator.MAX_ACCELERATION == 30.0
+
+
+def test_resolve_reports_unknown_keys():
+    params, dropped, defaulted = simulator.SimulationParams.resolve({"dt": 0.02, "bogus": 1})
+    assert params.dt == 0.02
+    assert dropped == ["bogus"]
+    assert defaulted == []
+
+
+def test_resolve_reports_illegal_values():
+    _, dropped, defaulted = simulator.SimulationParams.resolve(
+        {"dt": "abc", "steps": True, "gravityY": None}
+    )
+    assert dropped == []
+    assert defaulted == ["dt", "gravityY", "steps"]
+
+
+def test_resolve_clean_params_report_nothing():
+    _, dropped, defaulted = simulator.SimulationParams.resolve({"dt": 0.01, "steps": 10})
+    assert dropped == []
+    assert defaulted == []
+
+
+def test_resolve_trace_never_defaulted():
+    """trace 走 bool()，任何值都能转，不算回落。"""
+    _, _, defaulted = simulator.SimulationParams.resolve({"trace": "yes"})
+    assert defaulted == []
+
+
+def test_resolve_empty_returns_defaults():
+    params, dropped, defaulted = simulator.SimulationParams.resolve(None)
+    assert params == simulator.SimulationParams()
+    assert dropped == []
+    assert defaulted == []
+
+
+def test_from_mapping_behavior_unchanged():
+    """既有批量仿真调用方不能受影响：非法值仍静默回落。"""
+    assert simulator.SimulationParams.from_mapping({"dt": "abc"}).dt == simulator.DEFAULT_DT
+    assert simulator.SimulationParams.from_mapping(None) == simulator.SimulationParams()
