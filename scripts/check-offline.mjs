@@ -9,7 +9,7 @@
  *
  * 做法：用无头 Chrome 打开**生产产物**，把 `/api/*` 全部按
  * 503 `backend_unavailable` 应答（与开发期代理在后端缺席时的行为一致），
- * 然后逐个走完 7 个页面，逐页断言：
+ * 然后逐个走完 6 个页面，逐页断言：
  *
  * - 页面渲染出来了（页面根节点在）
  * - **0 条 console error、0 个未捕获异常**
@@ -34,15 +34,17 @@ import { CDP, evalJs, sleep } from './lib/cdp.mjs'
 const repoRoot = fileURLToPath(new URL('..', import.meta.url))
 const DIST = join(repoRoot, 'dist')
 
-/** 7 个页面与各自的根节点标记 */
+/** 6 个页面与各自的根节点标记。
+ * 首页与总览是同一个组件（e017643 合并门户后 Overview 即首页，
+ * `/overview` redirect 到 `/`），根节点都是 `.overview-stage`——
+ * 别再等 Welcome 时代的 `.welcome-container` / `.overview-container`（已不存在）。 */
 const ROUTES = [
-  { path: '/', selector: '.welcome-container', name: '首页' },
-  { path: '/overview', selector: '.overview-container', name: '总览' },
+  { path: '/', selector: '.overview-stage', name: '首页' },
+  { path: '/overview', selector: '.overview-stage', name: '总览' },
   { path: '/scene-editor', selector: '.scene-editor', name: '场景编辑器' },
   { path: '/simulation-lab', selector: '.simulation-lab', name: '仿真实验室' },
   { path: '/model-library', selector: '.model-library-container', name: '模型资源库' },
   { path: '/ai-playground', selector: '.ai-playground-container', name: 'AI 演武场' },
-  { path: '/docs', selector: '.docs-page', name: '系统文档' },
 ]
 
 /**

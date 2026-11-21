@@ -27,11 +27,30 @@ const notes = []
 /**
  * 第三方资产：文件名 -> 必须在 NOTICE 里出现的署名片段。
  *
- * 当前是**空的**——仓库里所有资产都由本项目自己生成，不含第三方素材。
- * 这张表留着是为了将来真要引入外部素材时，有个明确的位置记录它的署名，
- * 而不是随手把文件丢进仓库。往里加一条，就必须在 NOTICE 里写上对应的署名。
+ * 第三方资产（CC0 1.0 公共领域，无需署名但如实记录来源）：
+ * - Kenney：Mini Characters / Space Kit / Nature Kit / Furniture Kit
+ *   https://kenney.nl/（CC0 1.0）
+ * - Poly Haven：cassette_player / cross_pein_hammer / russian_food_cans_01
+ *   https://polyhaven.com/（CC0 1.0）
+ * 键为资产文件名（basename），值为必须出现在 NOTICE 里的署名片段。
  */
-const THIRD_PARTY = new Map([])
+const THIRD_PARTY = new Map([
+  ['alien.glb', 'Kenney (CC0 1.0)'],
+  ['astronaut.glb', 'Kenney (CC0 1.0)'],
+  ['robot.glb', 'Kenney (CC0 1.0)'],
+  ['soldier.glb', 'Kenney (CC0 1.0)'],
+  ['rock_large.glb', 'Kenney (CC0 1.0)'],
+  ['tree_oak.glb', 'Kenney (CC0 1.0)'],
+  ['tree_pine.glb', 'Kenney (CC0 1.0)'],
+  ['hangar_large.glb', 'Kenney (CC0 1.0)'],
+  ['station_corridor.glb', 'Kenney (CC0 1.0)'],
+  ['books.glb', 'Kenney (CC0 1.0)'],
+  ['computer_screen.glb', 'Kenney (CC0 1.0)'],
+  ['rover.glb', 'Kenney (CC0 1.0)'],
+  ['cassette-player.glb', 'Poly Haven (CC0 1.0)'],
+  ['cross-pein-hammer.glb', 'Poly Haven (CC0 1.0)'],
+  ['russian-food-cans.glb', 'Poly Haven (CC0 1.0)'],
+])
 
 /** 本项目生成：路径匹配（相对仓库根） */
 const SELF_GENERATED = [
@@ -78,8 +97,10 @@ if (!notice.trim()) {
  * `backend_data` 是后端的**运行时数据目录**（本地数据库、服务端渲染产出的 MP4），
  * 它被 gitignore 排除、永远不进仓库——里面出现什么文件都不算「仓库里的资产」，
  * 所以扫描要跳过它。否则本地跑过一次渲染，产物就会被当成「来源不明的资产」报错。
+ * `.venv` / `venv` 同理：Python 虚拟环境是本地依赖缓存（如 gym-client 的
+ * gymnasium 自带贴图），被 gitignore 排除，不代表仓库的资产来源。
  */
-const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.cache', 'backend_data'])
+const SKIP_DIRS = new Set(['.git', 'node_modules', 'dist', '.cache', 'backend_data', '.venv', 'venv'])
 
 const assets = walk(repoRoot, SKIP_DIRS).filter((p) => {
   const rel = relative(repoRoot, p).split('\\').join('/')

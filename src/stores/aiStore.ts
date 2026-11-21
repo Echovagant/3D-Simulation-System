@@ -7,6 +7,7 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { DEFAULT_SEED } from '@/utils/prng'
 
 // AI代理类型
 export type AiAgentType = 'basic' | 'advanced' | 'custom'
@@ -84,6 +85,8 @@ export interface AiEnvironmentSettings {
   timeLimit: number // 以秒为单位，0表示无限制
   winCondition: AiWinCondition
   obstaclesDensity: number // 0-1之间
+  /** 障碍布局种子：同一种子 + 同一密度 = 同一场地布局（可复现） */
+  arenaSeed: number
 }
 
 /** 场景类型选项 */
@@ -144,7 +147,8 @@ export const useAiStore = defineStore('ai', () => {
     difficulty: 'medium',
     timeLimit: 0,
     winCondition: '到达目标点',
-    obstaclesDensity: 0.5
+    obstaclesDensity: 0.5,
+    arenaSeed: DEFAULT_SEED
   })
   const simulationActive = ref(false)
   const simulationTime = ref(0) // 以秒为单位

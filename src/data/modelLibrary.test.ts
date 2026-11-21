@@ -30,12 +30,12 @@ describe('createModelLibrary', () => {
     expect(createModelLibrary()).not.toBe(createModelLibrary())
   })
 
-  it('包含 9 个模型且分类齐全', () => {
+  it('包含 24 个模型且分类齐全', () => {
     const list = createModelLibrary()
-    expect(list).toHaveLength(9)
-    expect(list.filter((m) => m.category === 'characters')).toHaveLength(3)
-    expect(list.filter((m) => m.category === 'environments')).toHaveLength(3)
-    expect(list.filter((m) => m.category === 'props')).toHaveLength(3)
+    expect(list).toHaveLength(24)
+    expect(list.filter((m) => m.category === 'characters')).toHaveLength(7)
+    expect(list.filter((m) => m.category === 'environments')).toHaveLength(8)
+    expect(list.filter((m) => m.category === 'props')).toHaveLength(9)
   })
 
   it('每个模型的 uploadDate 是有效 ISO 字符串', () => {

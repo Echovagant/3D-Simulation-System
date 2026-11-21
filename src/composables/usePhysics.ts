@@ -301,9 +301,17 @@ export function usePhysics(): PhysicsInstance {
     }
     // 已经建过刚体就不要再建一个：否则场景里会出现两个碰撞体，
     // 物体会被重复推挤。
-    if (object.userData.physics.body) return
+    if (object.userData.physics.body) {
+      if (object.userData.physics.world === world.value) return
+      // 旧世界的残留句柄：旧世界已释放，句柄随之失效——清掉重建。
+      // 拿旧句柄去 remove 会让 wasm 直接 unreachable，所以这里只清不调。
+      object.userData.physics.body = null
+      object.userData.physics.collider = null
+    }
 
     const physicsData = object.userData.physics
+    // 记下这个刚体属于哪个世界：remove 时比对引用，旧世界的句柄一律跳过
+    physicsData.world = world.value
 
     let shape: RapierModule.ColliderDesc
     switch (physicsData.shape || 'box') {
@@ -367,10 +375,19 @@ export function usePhysics(): PhysicsInstance {
 
   /** 销账：把刚体从世界里移除，并清掉 mesh 上的引用（留着会变成悬空指针） */
   const removeRigidBody = (object: Object3D) => {
-    if (!world.value || !object.userData.physics?.body) return
-    world.value.removeRigidBody(object.userData.physics.body)
-    object.userData.physics.body = null
-    object.userData.physics.collider = null
+    const physicsData = object.userData.physics
+    if (!world.value || !physicsData?.body) return
+    if (physicsData.world !== world.value) {
+      // 旧世界的残留句柄：旧世界已 free，句柄随之失效——跳过 wasm 调用。
+      // disposeWorld 的 traverse 只清得到还在场景里的对象，被调用方账本
+      // 攥着的那些只能在这里兜住。
+      physicsData.body = null
+      physicsData.collider = null
+      return
+    }
+    world.value.removeRigidBody(physicsData.body)
+    physicsData.body = null
+    physicsData.collider = null
   }
 
   const resetPhysics = () => {

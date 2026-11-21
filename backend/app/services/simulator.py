@@ -63,6 +63,7 @@ DEFAULT_SIZE = 1.0
 
 SKIP_UNSUPPORTED_TYPE = "unsupported_type"
 SKIP_MISSING_POSITION = "missing_position"
+SKIP_KINEMATIC = "kinematic_unsupported"
 
 
 class SimulationError(Exception):
@@ -130,6 +131,7 @@ class ObjectBinding:
     initial_y: float = 0.0
     skipped: str | None = None
     reason: str | None = None
+    is_static: bool = False
 
 
 @dataclass
@@ -319,6 +321,21 @@ def _add_object(world: Any, raw: Mapping[str, Any], params: SimulationParams) ->
             reason="物体没有 position，无法确定初始位置",
         )
 
+    # 前端的 physics.type 三态：static（地面/墙/障碍）、dynamic（落体）、
+    # kinematic（运动学）。没写 physics 的 cube/sphere 按宽容约定继续当
+    # dynamic 跑（历史行为，测试依赖它）；kinematic 后端暂不支持，跳过并写明。
+    physics = raw.get("physics")
+    physics_type = "dynamic"
+    if isinstance(physics, Mapping):
+        physics_type = str(physics.get("type", "dynamic"))
+    if physics_type == "kinematic":
+        return ObjectBinding(
+            uuid=uuid,
+            type=obj_type,
+            skipped=SKIP_KINEMATIC,
+            reason="运动学刚体后端暂不支持",
+        )
+
     translation = _vector(position, (0.0, 0.0, 0.0))
     rotation = _vector(raw.get("rotation"), (0.0, 0.0, 0.0))
     sx, sy, sz = _scale_factors(raw.get("scale"))
@@ -333,13 +350,21 @@ def _add_object(world: Any, raw: Mapping[str, Any], params: SimulationParams) ->
         builder = _collider_builder("sphere", params, (0.0, 0.0, 0.0), radius)
         half_height = radius
 
-    handle = world.add_body(
-        rp.RigidBody.dynamic(
-            translation=translation,
-            linvel=(0.0, params.initial_velocity_y, 0.0),
-        ),
-        colliders=[builder],
-    )
+    if physics_type == "static":
+        # 静态刚体不吃重力也不吃初始速度：用户摆的地面/墙要真的固定住，
+        # 不然会被落体撞飞（穿透深度爆表，结果整个不可信）。
+        handle = world.add_body(
+            rp.RigidBody.fixed(translation=translation),
+            colliders=[builder],
+        )
+    else:
+        handle = world.add_body(
+            rp.RigidBody.dynamic(
+                translation=translation,
+                linvel=(0.0, params.initial_velocity_y, 0.0),
+            ),
+            colliders=[builder],
+        )
     body = world.rigid_bodies[handle]
 
     # 旋转：Rapier 的 builder 只收缩放轴角，前端给的是欧拉角，
@@ -356,6 +381,7 @@ def _add_object(world: Any, raw: Mapping[str, Any], params: SimulationParams) ->
         collider=collider,
         half_height=half_height,
         initial_y=translation[1],
+        is_static=physics_type == "static",
     )
 
 
@@ -419,7 +445,9 @@ def run_once(
 
     for binding in sim.simulated:
         traces[binding.uuid] = []
-        resting_since[binding.uuid] = None
+        # static 物体天然 settled：从「全场景稳定」判定里排除，
+        # 悬空的墙/柱不能把 settled_at 拖成永远 null。
+        resting_since[binding.uuid] = 0 if binding.is_static else None
         max_penetration[binding.uuid] = 0.0
 
     def _record(frame: int) -> None:
@@ -437,9 +465,12 @@ def run_once(
 
         everyone_settled = True
         for binding in sim.simulated:
-            depth = binding.half_height - binding.body.translation.y
-            if depth > PENETRATION_TOLERANCE:
-                max_penetration[binding.uuid] = max(max_penetration[binding.uuid], depth)
+            # static 结构与系统地面重叠是正常场景设计（用户地面/墙故意埋进
+            # 场景），不算穿透；它也不参与落地判定。
+            if not binding.is_static:
+                depth = binding.half_height - binding.body.translation.y
+                if depth > PENETRATION_TOLERANCE:
+                    max_penetration[binding.uuid] = max(max_penetration[binding.uuid], depth)
 
             if resting_since[binding.uuid] is None:
                 slow = _speed(binding.body) < RESTING_SPEED
@@ -466,7 +497,10 @@ def run_once(
 
         # resting 说的是**最终状态**：速度够低且仍然贴着地面。
         # 中间某一步静止过不算——弹起来的物体最后并没有落地。
-        at_rest = _speed(binding.body) < RESTING_SPEED and _is_touching_ground(sim, binding)
+        # static 物体天然静止。
+        at_rest = binding.is_static or (
+            _speed(binding.body) < RESTING_SPEED and _is_touching_ground(sim, binding)
+        )
 
         entry: dict[str, Any] = {
             "uuid": binding.uuid,

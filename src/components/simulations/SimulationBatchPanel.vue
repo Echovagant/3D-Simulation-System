@@ -1,6 +1,12 @@
 <template>
   <div class="sim-form sim-batch-panel sim-p-4 sim-bg-panel sim-r-lg sim-b sim-b-accent sim-mb-4">
-    <h3 class="sim-t-accent sim-fs-lg sim-fw-bold sim-mb-3">批量仿真</h3>
+    <h3 class="sim-t-accent sim-fs-lg sim-fw-bold sim-mb-3">
+      批量仿真
+      <InfoTip
+        label="关于批量仿真的物体支持"
+        text="只支持立方体与球体，其它类型（包括模型）会被跳过；场景里一个可渲染物体都没有时判为场景无效。"
+      />
+    </h3>
 
     <!-- 后端是可选增强：缺席时只说明情况，不影响本页其它功能 -->
     <p v-if="backendMissing" class="sim-fs-xs sim-t-accent-soft sim-mb-3 sim-backend-missing">
@@ -137,6 +143,10 @@
     >
       {{ submitting ? '提交中…' : '提交批量仿真' }}
     </button>
+    <InfoTip
+      label="关于批量仿真的队列依赖"
+      text="提交提示队列不可用（返回 503，任务不会被收下）：批量仿真走 Redis 队列，需另起 worker 进程——先 cd backend，再运行 uv run arq app.workers.simulation.WorkerSettings。"
+    />
 
     <!-- 进度 -->
     <div v-if="jobId" class="sim-mt-3 sim-mb-3 sim-progress">
@@ -203,6 +213,7 @@ import {
 } from '@/services/api/simulations'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import type { SceneDocument, SceneIndexEntry } from '@/types'
+import InfoTip from '@/components/common/InfoTip.vue'
 
 /** 轮询间隔（毫秒） */
 const POLL_INTERVAL_MS = 1500
@@ -536,15 +547,15 @@ onBeforeUnmount(() => {
 /* 面板标题：这一页的 h3 沿用旧样式（深蓝字 + 蓝下划线），
    面板按 DESIGN.md 走品牌靛紫，不跟旧样式混 */
 .sim-batch-panel h3 {
-  color: #6e5af0;
-  border-bottom-color: #6e5af0;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
 }
 
 /* 进度条：用品牌靛紫，与这一页的浅色面板同一套配色 */
 .sim-progress-bar {
   width: 100%;
   height: 6px;
-  accent-color: #6e5af0;
+  accent-color: var(--accent);
 }
 
 /* 任务 ID 是 32 位十六进制，挤在一行里会把状态文字压成竖排：

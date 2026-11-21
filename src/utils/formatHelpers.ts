@@ -1,5 +1,3 @@
-import DOMPurify from 'dompurify';
-
 /**
  * 格式化文件大小（字节 -> KB, MB, GB）
  * @param bytes 文件大小（字节）
@@ -41,45 +39,5 @@ export const formatDate = (
  */
 export const formatNumber = (num: number): string => {
   return new Intl.NumberFormat().format(num);
-};
-
-/**
- * 净化HTML内容，防止XSS攻击
- * @param html 原始HTML字符串
- * @returns 净化后的HTML字符串
- */
-export const sanitizeHtml = (html: string): string => {
-  // DOMPurify 3.x 默认已允许 pre/code/kbd/samp/var 与 class/id/style，data-* 默认放行，
-  // 之前那几个 ADD_* 配置项全是 no-op，写着只会造成"已经在收紧"的错觉。
-  // 同时关掉"允许未知协议"开关：URI 回到白名单校验（相对路径、http/https、data: 图片仍然可用）。
-  return DOMPurify.sanitize(html)
-};
-
-/**
- * 格式化文档标题，用于导航和显示
- * @param title 原始标题
- * @returns 格式化后的标题
- */
-export const formatDocTitle = (title: string): string => {
-  if (!title) return '';
-
-  // 首字母大写，替换连字符为空格
-  return title
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-};
-
-/**
- * 解析文档路径，提取章节信息
- * @param path 文档路径
- * @returns 章节信息对象
- */
-export const parseDocPath = (path: string): { category: string; name: string } => {
-  const parts = path.split('/');
-  return {
-    category: parts[0] || '',
-    name: parts[1] || ''
-  };
 };
     

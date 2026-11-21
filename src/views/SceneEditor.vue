@@ -12,7 +12,7 @@
       <button @click="retryInit" class="retry-btn">重试</button>
     </div>
 
-    <Toolbar class="editor-toolbar" />
+    <Toolbar class="editor-toolbar ws-toolbar" />
     <div class="editor-main-content">
       <!-- ThreeScene组件在整个生命周期都需要存在，负责初始化和管理场景 -->
       <ThreeScene
@@ -23,7 +23,7 @@
       />
 
       <!-- Viewport组件也在整个生命周期存在，负责渲染场景 -->
-      <div class="viewport-wrapper">
+      <div class="viewport-wrapper ws-viewport">
         <Viewport
           :scene="sceneStore.getScene()"
           :camera="sceneStore.getCamera()"
@@ -33,18 +33,51 @@
           @update-camera="handleUpdateCamera"
         />
       </div>
-      <PropertyPanel class="property-panel" />
+
+      <!-- 右栏：属性编辑与场景管理两条动线分 tab，v-show 保持挂载（选中状态不丢） -->
+      <aside class="editor-side ws-side">
+        <div class="side-tabs" role="tablist" aria-label="编辑器侧栏">
+          <button
+            type="button"
+            class="side-tab"
+            :class="{ active: editorTab === 'props' }"
+            role="tab"
+            :aria-selected="editorTab === 'props'"
+            @click="editorTab = 'props'"
+          >
+            属性
+          </button>
+          <button
+            type="button"
+            class="side-tab"
+            :class="{ active: editorTab === 'scenes' }"
+            role="tab"
+            :aria-selected="editorTab === 'scenes'"
+            @click="editorTab = 'scenes'"
+          >
+            场景
+          </button>
+        </div>
+        <div v-show="editorTab === 'props'" class="side-body">
+          <PropertyPanel />
+        </div>
+        <div v-show="editorTab === 'scenes'" class="side-body">
+          <SceneList />
+        </div>
+      </aside>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onUnmounted, provide, watch } from 'vue'
+import type { ScenePrimitiveSpec } from '@/types'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import ThreeScene from '@/components/three/core/ThreeScene.vue'
 import Toolbar from '@/components/three/panels/Toolbar.vue'
 import PropertyPanel from '@/components/three/panels/PropertyPanel.vue'
+import SceneList from '@/components/three/panels/SceneList.vue'
 import Viewport from '@/components/three/panels/Viewport.vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import { useModelStore } from '@/stores/modelStore'
@@ -53,6 +86,14 @@ import { useModelStore } from '@/stores/modelStore'
 const threeScene = ref<InstanceType<typeof ThreeScene> | null>(null)
 const isLoading = ref(true)
 const errorMessage = ref('')
+// 加载动画最短可见时长：本地热缓存下 Three.js 初始化瞬间完成，动画会
+// 一闪而过（用户感知为「加载动画取消了」），低于此时长则补足剩余时间。
+const LOADING_MIN_MS = 600
+const loadingStartedAt = Date.now()
+
+// 右栏当前 tab：「属性」编辑与「场景」管理两条动线分开。
+// 两个面板都 v-show 挂载——切换 tab 不卸载组件，选中状态与场景列表不丢。
+const editorTab = ref<'props' | 'scenes'>('props')
 
 // 状态管理
 const sceneStore = useSceneEditorStore()
@@ -63,6 +104,8 @@ const router = useRouter()
 const sceneMethods = ref<{
   addCube: () => boolean
   addSphere: () => boolean
+  addRamp: () => boolean
+  addPrimitive: (spec: ScenePrimitiveSpec) => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   // 物理推进函数接收 rAF 的时间戳：固定步长累加器靠它算真实时间
@@ -70,6 +113,8 @@ const sceneMethods = ref<{
 }>({
   addCube: () => false,
   addSphere: () => false,
+  addRamp: () => false,
+  addPrimitive: () => false,
   importModel: async () => false,
   getIsSceneInitialized: () => false,
   updatePhysics: () => {},
@@ -78,6 +123,11 @@ const sceneMethods = ref<{
 // 提供方法给Toolbar组件
 provide('addCube', () => sceneMethods.value.addCube())
 provide('addSphere', () => sceneMethods.value.addSphere())
+provide('addRamp', () => sceneMethods.value.addRamp())
+provide(
+  'addPrimitive',
+  (spec: ScenePrimitiveSpec) => sceneMethods.value.addPrimitive(spec),
+)
 provide('importModel', (modelId: string) => sceneMethods.value.importModel(modelId))
 provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized())
 
@@ -85,6 +135,8 @@ provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized(
 const exposeMethods = (methods: {
   addCube: () => boolean
   addSphere: () => boolean
+  addRamp: () => boolean
+  addPrimitive: (spec: ScenePrimitiveSpec) => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   updatePhysics: (timestamp?: number) => void
@@ -103,11 +155,20 @@ const handleInitError = (err: string) => {
 
 // 处理场景初始化成功
 const handleSceneInitSuccess = () => {
-  isLoading.value = false
   errorMessage.value = ''
 
   // 启用物理模拟
   sceneStore.togglePlayState()
+
+  // 加载动画保底可见：不足最短时长则补足后再收起遮罩
+  const remain = LOADING_MIN_MS - (Date.now() - loadingStartedAt)
+  if (remain > 0) {
+    window.setTimeout(() => {
+      isLoading.value = false
+    }, remain)
+  } else {
+    isLoading.value = false
+  }
 }
 
 // 重试初始化
@@ -206,6 +267,11 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/*
+ * 骨架类分工：.ws-toolbar（工具条底色/分隔）、.ws-viewport（视口底色）、
+ * .ws-side（右栏底色/边框）由 app-global.css 统一提供，
+ * 这里只保留各容器的差异化布局。
+ */
 .scene-editor {
   display: flex;
   flex-direction: column;
@@ -228,12 +294,79 @@ onUnmounted(() => {
   flex: 1 1 auto;
   position: relative;
   height: 100%;
-  background: #000; /* 添加黑色背景以便更好地显示3D内容 */
 }
 
-.property-panel {
+.editor-side {
   flex: 0 0 300px;
-  height: 100%;
+  /* tab 常驻：滚动交给 .side-body，骨架类的 overflow-y:auto 在此收口 */
+  overflow: hidden;
+}
+
+/* 「属性 | 场景」tab 条：样式对齐 ModelLibrary 的 category-tab 风格 */
+.side-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex: 0 0 auto;
+}
+
+.side-tab {
+  flex: 1 1 0;
+  padding: 7px 12px;
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.side-tab.active {
+  background-color: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.side-tab:hover:not(.active) {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+.side-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 窄屏：视口在上（固定高度），右栏全宽落到下方，整页纵向滚动 */
+@media (max-width: 992px) {
+  .scene-editor {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .editor-main-content {
+    flex: 0 0 auto;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .viewport-wrapper {
+    flex: 0 0 auto;
+    width: 100%;
+    height: 420px;
+    min-height: 420px;
+  }
+
+  .editor-side {
+    flex: 0 0 auto;
+    width: 100%;
+    border-left: 0;
+  }
 }
 
 .loading-overlay {
@@ -248,15 +381,15 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  color: white;
+  color: var(--text-1);
 }
 
 .loading-spinner {
   width: 50px;
   height: 50px;
-  border: 5px solid rgba(255, 255, 255, 0.3);
+  border: 5px solid var(--border-strong);
   border-radius: 50%;
-  border-top-color: white;
+  border-top-color: var(--text-1);
   animation: spin 1s ease-in-out infinite;
 }
 
@@ -272,22 +405,27 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  color: white;
+  color: var(--text-1);
 }
 
 .error-message {
-  color: #ff4444;
+  color: var(--danger);
   font-size: 18px;
   margin-bottom: 20px;
 }
 
 .retry-btn {
   padding: 10px 20px;
-  background: #3b82f6;
-  color: white;
+  background: var(--accent-strong);
+  color: var(--accent-on);
   border: none;
   border-radius: 4px;
   cursor: pointer;
+  transition: background 0.2s;
+}
+
+.retry-btn:hover {
+  background: var(--accent-strong-hover);
 }
 
 @keyframes spin {

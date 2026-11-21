@@ -23,14 +23,22 @@ project itself and is covered by the Apache License 2.0 in LICENSE:
   - the demo recording docs/assets/demo.gif and docs/assets/demo.mp4
     (scripts/record-demo.mjs)
 
-No third-party artwork, model or font is bundled.
+Third-party CC0 assets (public domain dedication, no attribution required):
+
+- Kenney (CC0 1.0) — Mini Characters, Space Kit, Nature Kit and Furniture Kit:
+  alien.glb, astronaut.glb, robot.glb, soldier.glb, rock_large.glb, tree_oak.glb,
+  tree_pine.glb, hangar_large.glb, station_corridor.glb, books.glb,
+  computer_screen.glb and rover.glb
+- Poly Haven (CC0 1.0) — cassette-player.glb, cross-pein-hammer.glb and
+  russian-food-cans.glb (converted to glTF-Binary with embedded textures)
 
 --------------------------------------------------------------------------------
 Software dependencies
 --------------------------------------------------------------------------------
 
 Runtime and build dependencies are listed with their exact versions in
-package.json and package-lock.json. Notable projects:
+package.json and package-lock.json (frontend) and in backend/pyproject.toml
+and backend/uv.lock (backend). Notable projects:
 
   Three.js (MIT)             https://threejs.org/
   Rapier (Apache-2.0)        https://rapier.rs/
@@ -38,6 +46,9 @@ package.json and package-lock.json. Notable projects:
   Vite (MIT)                 https://vite.dev/
   Pinia (MIT)                https://pinia.vuejs.org/
   Vue Router (MIT)           https://router.vuejs.org/
-  marked (MIT)               https://github.com/markedjs/marked
-  DOMPurify (MPL-2.0 OR Apache-2.0)  https://github.com/cure53/DOMPurify
   Font Awesome Free (CC BY 4.0 / OFL 1.1 / MIT)  https://fontawesome.com/
+
+  psycopg (LGPL-3.0)         https://www.psycopg.org/psycopg3/
+    Linked as a separate Python process, not statically bundled. If you
+    distribute this product with the backend, include the LGPL-3.0 license
+    text and the library's source availability notice alongside it.

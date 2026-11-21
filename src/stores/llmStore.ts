@@ -10,6 +10,11 @@ import { computed, ref } from 'vue'
 import { llmConfig } from '@/config/llm'
 import { findProvider, llmProviders, type LlmProvider } from '@/config/llmProviders'
 import { ApiError, isApiUnavailable } from '@/services/api/client'
+import type { ScenePrimitiveSpec } from '@/types'
+import {
+  buildSceneGenerationMessages,
+  parseGeneratedScene,
+} from '@/services/llm/sceneGeneration'
 import {
   completeLlm,
   deleteLlmKey,
@@ -664,6 +669,49 @@ export const useLlmStore = defineStore('llm', () => {
     return action
   }
 
+  /**
+   * 场景生成：用户一句话描述 → 基础体清单。
+   *
+   * 守卫口径与决策动作一致（上限/冷却/降级都如实报错）；
+   * 解析层（parseGeneratedScene）永不抛异常，畸形输出逐条转成 skipped。
+   */
+  const requestSceneGeneration = async (
+    userPrompt: string,
+  ): Promise<
+    | { ok: true; objects: ScenePrimitiveSpec[]; skipped: string[] }
+    | { ok: false; error: string }
+  > => {
+    if (degraded.value) {
+      return { ok: false, error: lastError.value || 'LLM 控制器已降级' }
+    }
+    if (!canCall()) {
+      const reason =
+        callCount.value >= llmConfig.maxCallsPerSession
+          ? `已达本次会话的调用上限（${llmConfig.maxCallsPerSession} 次）`
+          : '上一次调用失败后仍在冷却期，稍后再试'
+      return { ok: false, error: reason }
+    }
+    const result = await invoke(
+      buildSceneGenerationMessages(userPrompt),
+      llmConfig.controllerMaxTokens * 2,
+    )
+    if (!result.ok) {
+      return { ok: false, error: lastError.value || 'LLM 调用失败' }
+    }
+    if (!result.content) {
+      return {
+        ok: false,
+        error:
+          result.emptyReason === 'truncated' ? '模型输出被长度上限截断' : '模型返回了空内容',
+      }
+    }
+    const parsed = parseGeneratedScene(result.content)
+    if (!parsed.ok) {
+      return { ok: false, error: parsed.error }
+    }
+    return { ok: true, objects: parsed.objects, skipped: parsed.skipped }
+  }
+
   /** 标记降级（LLM 控制器用不了） */
   const markDegraded = (reason: string): void => {
     degraded.value = true
@@ -742,6 +790,7 @@ export const useLlmStore = defineStore('llm', () => {
     keyFamilyMismatch,
     requestExplanation,
     requestAction,
+    requestSceneGeneration,
     markDegraded,
     clearDegraded,
     setError,

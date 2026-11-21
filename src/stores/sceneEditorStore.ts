@@ -87,6 +87,7 @@ const sceneKey = (sceneId: string): string => `${SCENE_KEY_PREFIX}${sceneId}`
 export type PrimitiveFactory = {
   createCube: () => boolean
   createSphere: () => boolean
+  createRamp: () => boolean
 }
 
 export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
@@ -590,7 +591,12 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     const factory = primitiveFactory.value
     if (factory) {
       const before = objects.value.length
-      const created = objData.type === 'sphere' ? factory.createSphere() : factory.createCube()
+      const created =
+        objData.type === 'sphere'
+          ? factory.createSphere()
+          : objData.type === 'ramp'
+            ? factory.createRamp()
+            : factory.createCube()
 
       const restored = created ? objects.value[before] : undefined
       if (restored) {

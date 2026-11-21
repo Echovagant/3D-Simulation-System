@@ -2,14 +2,16 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
-import wasm from 'vite-plugin-wasm'
-import topLevelAwait from 'vite-plugin-top-level-await'
 
 // https://vite.dev/config/
 export default defineConfig({
+  // 部署基准路径：GitHub Pages（单仓单源）的项目站点挂在 /3D-Simulation-System/ 子路径，
+  // 由 Pages workflow 设 VITE_PUBLIC_BASE；本地与常规部署留空走根路径。
+  base: process.env.VITE_PUBLIC_BASE || '/',
   plugins: [
-    wasm(), // 处理 Wasm
-    topLevelAwait(), // 支持顶级 await
+    // 不再用 vite-plugin-wasm：vite 8 的 rolldown 内核原生支持 wasm ESM 集成，
+    // 旧插件的转换叠在原生路径上会把 rapier 的 imports 接线打断
+    // （症状：WebAssembly.instantiate 报 "__wbg_call_*: function import requires a callable"）。
     vue(), // Vue 插件
     vueDevTools(), // Vue 开发工具插件
   ],
@@ -68,14 +70,15 @@ export default defineConfig({
          */
         configure: (proxy) => {
           proxy.on('error', (_err, _req, res) => {
-            if (res.writeHead && !res.headersSent) {
-              res.writeHead(503, { 'Content-Type': 'application/json' })
-              res.end(
-                JSON.stringify({
-                  error: { code: 'backend_unavailable', message: '后端不可达', detail: null },
-                }),
-              )
-            }
+            /* vite 8 的 res 类型是 Socket | ServerResponse 联合——
+               用 in 收窄到 ServerResponse 才有 writeHead */
+            if (!('writeHead' in res) || res.headersSent) return
+            res.writeHead(503, { 'Content-Type': 'application/json' })
+            res.end(
+              JSON.stringify({
+                error: { code: 'backend_unavailable', message: '后端不可达', detail: null },
+              }),
+            )
           })
         },
       },

@@ -122,29 +122,31 @@ export const llmProviders: LlmProvider[] = [
   },
   {
     id: 'minimax-cn',
-    name: 'MiniMax（api.minimaxi.com）',
+    name: 'MiniMax（国内版）',
     protocol: 'openai',
-    baseUrl: 'https://api.minimaxi.com/v1',
+    // 2026-11-20 探活：api.minimax.cn 返回官方 401 authorized_error（kit 2026-10-21 实测同源）；
+    // 旧域名 api.minimaxi.com 也在线且错误体相同——域名以 kit 为准。
+    baseUrl: 'https://api.minimax.cn/v1',
     model: 'MiniMax-M3.1-Flash',
-    docsUrl: 'https://platform.minimaxi.com/document/guides/text-generation',
+    docsUrl: 'https://platform.minimax.cn/',
     reasoningEffort: 'low',
     keyKind: 'standard',
     keyFamily: 'minimax',
     keyPrefix: 'sk-api-',
-    note: 'api.minimaxi.com 与 api.minimax.io 是两套账号体系，key 不通用：拿错会返回 401。',
+    note: '国内版按量计费的 API Key。M3.1-Flash 不允许关闭思考，只能把 reasoning_effort 调低。旧域名 api.minimaxi.com 也在线，账号体系以平台控制台为准。',
   },
   {
     id: 'minimax-cn-subscription',
-    name: 'MiniMax（api.minimaxi.com · 订阅）',
+    name: 'MiniMax（国内版 · 订阅）',
     protocol: 'openai',
-    baseUrl: 'https://api.minimaxi.com/v1',
+    baseUrl: 'https://api.minimax.cn/v1',
     model: 'MiniMax-M3.1-Flash',
-    docsUrl: 'https://platform.minimaxi.com/document/token-plan/intro',
+    docsUrl: 'https://platform.minimax.cn/',
     reasoningEffort: 'low',
     keyKind: 'subscription',
     keyFamily: 'minimax',
     keyPrefix: 'sk-cp-',
-    note: '订阅 Key + api.minimaxi.com 端点。端点与凭证类型都对上才调得通。',
+    note: '订阅 Key（M Plan / Token Plan）+ 国内版端点。端点与凭证类型都对上才调得通。',
   },
   {
     id: 'deepseek',
@@ -187,11 +189,12 @@ export const llmProviders: LlmProvider[] = [
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     model: 'qwen3.8-max',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/',
-    reasoningEffort: 'low',
+    // ⚠️ 不发 reasoningEffort：百炼的思考是布尔开关（enable_thinking），
+    // OpenAI 兼容端点遇到不认识的参数可能直接 400（kit 实测纪律）。
     keyKind: 'standard',
     keyFamily: 'qwen',
     keyPrefix: 'sk-',
-    note: '按量计费的标准 Key（`sk-` 开头）。百炼平台也提供 Anthropic 协议端点，模型名相同。',
+    note: '按量计费的标准 Key（`sk-` 开头）。思考是布尔型开关（enable_thinking），不是档位。',
   },
   {
     id: 'qwen-coding',
@@ -200,7 +203,6 @@ export const llmProviders: LlmProvider[] = [
     baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
     model: 'qwen3.8-max',
     docsUrl: 'https://help.aliyun.com/zh/model-studio/coding-plan',
-    reasoningEffort: 'low',
     keyKind: 'subscription',
     keyFamily: 'qwen',
     keyPrefix: 'sk-sp-',
@@ -228,6 +230,19 @@ export const llmProviders: LlmProvider[] = [
     keyKind: 'subscription',
     keyFamily: 'ark',
     note: 'Coding Plan 有独立端点与专属 key，配错会直接 403；额度也只认套餐里的 key。',
+  },
+  {
+    // kit（llm-provider-kit，2026-11-15 核对）：现役为 Kimi K3 / K3.1 Pro，
+    // 2026-11-20 探活 api.moonshot.cn 返回官方 401——端点在线。
+    id: 'moonshot',
+    name: '月之暗面 Kimi',
+    protocol: 'openai',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    model: 'kimi-k3.1-pro',
+    docsUrl: 'https://platform.moonshot.cn/docs',
+    keyKind: 'standard',
+    keyFamily: 'moonshot',
+    note: '按量计费的 API Key。moonshot-v1 与 kimi-k2.5 已于 2026-08-31 下线；现役为 Kimi K3 / K3.1 Pro。',
   },
   {
     id: 'openai',

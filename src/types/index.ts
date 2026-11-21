@@ -25,6 +25,15 @@ interface PhysicsData {
   isFalling?: boolean
 }
 
+/** 程序化摆放的基础体规格（LLM 场景生成等路径共用） */
+export interface ScenePrimitiveSpec {
+  name: string
+  type: 'cube' | 'sphere' | 'ramp'
+  position: { x: number; y: number; z: number }
+  rotation?: { x: number; y: number; z: number }
+  scale?: { x: number; y: number; z: number }
+}
+
 // 场景对象类型
 export interface SceneObject {
   uuid: string
@@ -129,6 +138,13 @@ export interface PresetCatalogEntry {
   description: string
   thumbnail: string
   scene: PresetScene
+  /** 实验说明卡：实验目的、观察点与作业题（实验室右栏展示；缺省则不显示该卡） */
+  experiment?: {
+    purpose: string
+    observations: string[]
+    /** 作业题：实现边界也写成可动手的题目（如钟摆的摆线约束） */
+    assignments?: string[]
+  }
 }
 
 // 跨组件共享状态一律用 Pinia 的 useXxxStore()，其类型由 store 自动推导。

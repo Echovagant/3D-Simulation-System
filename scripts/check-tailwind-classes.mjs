@@ -64,7 +64,7 @@ const srcDir = join(repoRoot, 'src')
  * 收紧它意味着有人在真的清理；放宽它意味着有人在新增。
  * 可用环境变量 MAX_DEAD_TAILWIND_CLASSES 覆盖。
  */
-const MAX_DEAD_TAILWIND_CLASSES = 239
+const MAX_DEAD_TAILWIND_CLASSES = 74
 const parsedMax = Number.parseInt(process.env.MAX_DEAD_TAILWIND_CLASSES ?? '', 10)
 const maxDead =
   Number.isFinite(parsedMax) && parsedMax >= 0 ? parsedMax : MAX_DEAD_TAILWIND_CLASSES

@@ -5,7 +5,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import sceneRoutes from './modules/sceneRoutes';
 import simulationRoutes from './modules/simulationRoutes';
 import aiRoutes from './modules/aiRoutes';
-import docsRoutes from './modules/docsRoutes';
 
 // 第二步：创建路由器实例。
 //
@@ -19,16 +18,20 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/', // 根路径路由
-      name: 'Welcome',
-      component: () => import('@/views/Welcome.vue'),
-      meta: { title: '3D仿真系统 - 首页' }
-    },
-    {
-      path: '/overview',
+      // 根路径 = 首页：黑金总览（老版中央面板复现）。Welcome 打字机页与
+      // 总览是两个重叠的门户，2026-11-19 合并——首页即总览，导航高亮只有一处。
+      path: '/',
       name: 'Overview',
       component: () => import('@/views/Overview.vue'),
-      meta: { title: '3D仿真系统 - 总览', icon: '📊' }
+      meta: { title: '3D仿真系统' }
+    },
+    {
+      // 老总览地址重定向到根路径，保持外部链接可达
+      // （meta.title 满足「每条顶层路由都有标题」的测试约定，实际导航
+      // 会被重定向到 / 的标题）
+      path: '/overview',
+      redirect: '/',
+      meta: { title: '3D仿真系统' },
     },
     {
       path: '/scene-editor',
@@ -46,7 +49,6 @@ const router = createRouter({
     ...sceneRoutes,
     ...simulationRoutes,
     ...aiRoutes,
-    ...docsRoutes, // 添加文档路由
   ],
 })
 

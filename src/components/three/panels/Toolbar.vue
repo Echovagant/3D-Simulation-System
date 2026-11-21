@@ -20,6 +20,10 @@
       >
         <i class="fas fa-redo"></i>
       </button>
+      <InfoTip
+        label="关于重置模拟"
+        text="「重置模拟」复位的是物体创建时的初始变换，不是你最后摆的位置；想让某个位置成为「初始位置」，重新摆一次再重置。"
+      />
     </div>
 
     <!-- 物体添加按钮组 -->
@@ -42,11 +46,27 @@
       </button>
       <button
         class="toolbar-btn"
+        @click="handleAddRamp"
+        :disabled="!isSceneInitialized"
+        title="添加斜面"
+      >
+        <i class="fas fa-mountain"></i>
+      </button>
+      <button
+        class="toolbar-btn"
         @click="handleImportModel"
         :disabled="!isSceneInitialized"
         title="导入模型"
       >
         <i class="fas fa-box"></i>
+      </button>
+      <button
+        class="toolbar-btn"
+        @click="showAiSceneDialog = true"
+        :disabled="!isSceneInitialized"
+        title="AI 生成场景"
+      >
+        <i class="fas fa-wand-magic-sparkles"></i>
       </button>
     </div>
 
@@ -83,31 +103,42 @@
       {{ statusMessage }}
     </div>
   </div>
+  <ImportModelDialog
+    v-if="showImportDialog"
+    @close="showImportDialog = false"
+  />
+  <AiSceneDialog
+    v-if="showAiSceneDialog"
+    @close="showAiSceneDialog = false"
+  />
 </template>
 
 <script setup>
 import { inject, computed, ref, watch } from 'vue';
 import { useSceneEditorStore } from '@/stores/sceneEditorStore';
-import { useRouter } from 'vue-router';
 import { useModelStore } from '@/stores/modelStore';
 import { reportError } from '@/services/api/telemetry';
 import InfoTip from '@/components/common/InfoTip.vue';
+import ImportModelDialog from './ImportModelDialog.vue';
+import AiSceneDialog from './AiSceneDialog.vue';
 
 // 状态管理
 const store = useSceneEditorStore();
-const router = useRouter();
 const modelStore = useModelStore();
 
 // 从父组件注入的方法。兜底成「返回 false」的空实现：
 // 没有上游提供时按钮点了不炸，只提示失败
 const addCube = inject('addCube') ?? (() => false);
 const addSphere = inject('addSphere') ?? (() => false);
+const addRamp = inject('addRamp') ?? (() => false);
 const importModel = inject('importModel') ?? (async () => false);
 const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
 
 // 状态
 const statusMessage = ref('');
 const importingModel = ref(false);
+const showImportDialog = ref(false);
+const showAiSceneDialog = ref(false);
 
 // 计算属性
 const isSceneInitialized = computed(() => getIsSceneInitialized());
@@ -157,12 +188,22 @@ const handleAddSphere = () => {
   }
 };
 
-// 导入模型
-const handleImportModel = async () => {
-  if (!isSceneInitialized.value) return;
+// 添加斜面
+const handleAddRamp = () => {
+  const success = addRamp();
+  if (success) {
+    showTempMessage('斜面添加成功');
+  } else {
+    showTempMessage('斜面添加失败', 3000);
+  }
+};
 
-  // 跳转到模型库页面
-  await router.push(`/model-library?returnUrl=${encodeURIComponent(router.currentRoute.value.fullPath)}`);
+// 导入模型：编辑器内直接选（不再跳模型库页）。
+// 选择写进 modelStore.selectedModelId，由下方 watch 消费——与「模型库页跳回
+// 编辑器」是同一条导入链路，导入逻辑零重复。
+const handleImportModel = () => {
+  if (!isSceneInitialized.value) return;
+  showImportDialog.value = true;
 };
 
 // 删除选中对象
@@ -262,20 +303,26 @@ watch(
 </script>
 
 <style scoped>
+/*
+ * 底色、边框、内边距与组间距由 app-global.css 的工作台骨架类 .ws-toolbar
+ * 统一提供（SceneEditor 给根元素附加了 ws-toolbar），这里只保留差异部分。
+ */
 .toolbar {
   display: flex;
   align-items: center;
-  padding: 0 15px;
   height: 50px;
-  background-color: #2c3e50;
-  color: white;
-  border-bottom: 1px solid #34495e;
-  gap: 10px;
+  color: var(--text-1);
 }
 
 .toolbar-group {
   display: flex;
-  gap: 2px;
+  gap: 4px;
+}
+
+/* 组与组之间的分隔：靠兄弟选择器画一条淡分隔线，不再依赖纯间距猜分组 */
+.toolbar-group + .toolbar-group {
+  border-left: 1px solid var(--border-subtle);
+  padding-left: 10px;
 }
 
 .toolbar-btn {
@@ -286,8 +333,8 @@ watch(
   height: 36px;
   border: none;
   border-radius: 4px;
-  background-color: #34495e;
-  color: white;
+  background-color: transparent;
+  color: var(--text-2);
   cursor: pointer;
   transition: all 0.2s;
   gap: 6px;
@@ -295,12 +342,12 @@ watch(
 }
 
 .toolbar-btn:hover {
-  background-color: #3d5a7c;
+  background-color: var(--bg-hover);
 }
 
 .toolbar-btn:disabled {
-  background-color: #4a6988;
-  color: #95a5a6;
+  background-color: transparent;
+  color: var(--text-3);
   cursor: not-allowed;
 }
 
@@ -310,10 +357,10 @@ watch(
 
 .toolbar-status {
   margin-left: auto;
-  color: #ecf0f1;
+  color: var(--text-2);
   font-size: 14px;
   padding: 4px 8px;
   border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: var(--bg-inset);
 }
 </style>

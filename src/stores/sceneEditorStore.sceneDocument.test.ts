@@ -188,6 +188,11 @@ describe('场景文档的加载', () => {
         store.addObject(newObject('from-factory'))
         return true
       },
+      createRamp: () => {
+        calls.push('ramp')
+        store.addObject(newObject('from-factory'))
+        return true
+      },
     })
 
     await store.loadScene(saved)

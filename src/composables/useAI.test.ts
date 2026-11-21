@@ -8,6 +8,7 @@ import { useAiStore } from '@/stores/aiStore'
 import { useLlmStore } from '@/stores/llmStore'
 import { useThree } from './useThree'
 import { useAI } from './useAI'
+import { createRandom, DEFAULT_SEED } from '@/utils/prng'
 import type { AiDecision } from '@/types'
 
 type AIApi = ReturnType<typeof useAI>
@@ -16,8 +17,18 @@ const AGENT_MESH_PREFIX = 'ai-agent-'
 const OBSTACLE_MESH_PREFIX = 'ai-obstacle-'
 /** 场地半边长（米） */
 const ARENA_HALF_SIZE = 24
+/** 障碍物朝向的旋转轴（纯 Y 轴） */
+const UP_AXIS = new THREE.Vector3(0, 1, 0)
 
 let wrapper: VueWrapper | null = null
+
+/** 卸载当前宿主组件。统一走这里：wrapper 被 TS 控制流窄化成 never 时 `?.` 过不了类型检查 */
+const unmountAI = (): void => {
+  if (wrapper) {
+    wrapper.unmount()
+    wrapper = null
+  }
+}
 
 /** 挂载一个只调用 useAI 的宿主组件（composable 需要组件上下文才能用 onMounted） */
 const mountAI = (): AIApi => {
@@ -67,9 +78,12 @@ const makeDecision = (
  *
  * @param density 障碍物密度（0 = 空场地，方便断言纯运动学）
  */
-const setupArena = async (density = 0): Promise<{ api: AIApi; store: ReturnType<typeof useAiStore> }> => {
+const setupArena = async (
+  density = 0,
+  arenaSeed = DEFAULT_SEED,
+): Promise<{ api: AIApi; store: ReturnType<typeof useAiStore> }> => {
   const store = useAiStore()
-  store.updateEnvironmentSettings({ obstaclesDensity: density })
+  store.updateEnvironmentSettings({ obstaclesDensity: density, arenaSeed })
   await nextTick()
 
   const api = mountAI()
@@ -582,5 +596,86 @@ describe('useAI —— LLM 拍数计数（面板上「LLM 到底有没有在起�
     expect(store.llmRejected).toBe(0)
     expect(store.llmPending).toBe(0)
     expect(store.llmFallbacks).toBe(0)
+  })
+})
+
+describe('场地种子（种子参数化）', () => {
+  it('障碍布局由种子决定：同一颗种子重放推导，与场景逐位一致', async () => {
+    const { api } = await setupArena(0.5, 20260101)
+    const obstacles = findObstacleMeshes()
+    const expectedCount = Math.round(0.5 * 12)
+    expect(obstacles.length).toBe(expectedCount)
+
+    // 用同一颗种子重放 rebuildObstacles 的推导，应与场景逐位一致——
+    // 「可复现」不是巧合，是种子 → LCG 序列 → 摆放的确定性链路
+    const random = createRandom(20260101)
+    const MAX_OBSTACLES = 12
+    obstacles.forEach((mesh, i) => {
+      const angle = (i / MAX_OBSTACLES) * Math.PI * 2 + (random() - 0.5) * 0.4
+      const radius = 9 + random() * 6
+      const size = 1.4 + random() * 1.2
+      expect(mesh.position.x).toBeCloseTo(Math.cos(angle) * radius, 6)
+      expect(mesh.position.z).toBeCloseTo(Math.sin(angle) * radius, 6)
+      // 尺寸落在 BoxGeometry 的参数上（mesh.scale 恒为 1，别拿错地方）
+      const box = (mesh as THREE.Mesh).geometry as THREE.BoxGeometry
+      expect(box.parameters.width).toBeCloseTo(size, 6)
+      // 朝向比 quaternion 而不是 rotation.y：物理同步把四元数拷回 mesh 后，
+      // Euler 的 XYZ 分解会把 >90° 的纯 Y 旋转读成 (x=π, y=π−θ, z=π)——
+      // 取向等价，但 Euler 分量对不上原始角度
+      const expectedQ = new THREE.Quaternion().setFromAxisAngle(UP_AXIS, random() * Math.PI)
+      expect(mesh.quaternion.x).toBeCloseTo(expectedQ.x, 5)
+      expect(mesh.quaternion.y).toBeCloseTo(expectedQ.y, 5)
+      expect(mesh.quaternion.z).toBeCloseTo(expectedQ.z, 5)
+      expect(mesh.quaternion.w).toBeCloseTo(expectedQ.w, 5)
+    })
+
+    api.cleanup()
+    wrapper?.unmount()
+    wrapper = null
+  })
+
+  it('同一种子重挂载后布局逐位还原', async () => {
+    const firstRun = await setupArena(0.5, 20260101)
+    const first = findObstacleMeshes().map((mesh) => ({
+      position: mesh.position.toArray(),
+      rotationY: mesh.rotation.y,
+    }))
+    firstRun.api.cleanup()
+    unmountAI()
+    const three = useThree()
+    three.disposeThree()
+    three.initThree()
+
+    const secondRun = await setupArena(0.5, 20260101)
+    const second = findObstacleMeshes().map((mesh) => ({
+      position: mesh.position.toArray(),
+      rotationY: mesh.rotation.y,
+    }))
+    expect(second).toEqual(first)
+
+    secondRun.api.cleanup()
+    unmountAI()
+  })
+
+  it('换一个种子就是一张新场地', async () => {
+    const { api, store } = await setupArena(0.5, 20260101)
+    const first = findObstacleMeshes().map((mesh) => ({
+      position: mesh.position.toArray(),
+      rotationY: mesh.rotation.y,
+    }))
+
+    store.updateEnvironmentSettings({ arenaSeed: 42 })
+    await nextTick()
+
+    const second = findObstacleMeshes().map((mesh) => ({
+      position: mesh.position.toArray(),
+      rotationY: mesh.rotation.y,
+    }))
+    // 密度不变 → 障碍物数量不变；种子换了 → 摆放换了一张场地
+    expect(second.length).toBe(first.length)
+    expect(second).not.toEqual(first)
+
+    api.cleanup()
+    unmountAI()
   })
 })

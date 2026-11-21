@@ -4,18 +4,31 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：20
+后端版本：0.1.0　端点总数：37
 
 ## 端点
 
 | 方法 | 路径 | 操作 id | 说明 |
 | --- | --- | --- | --- |
+| `GET` | `/api/gym/sessions` | `list_gym_sessions_api_gym_sessions_get` | 列出在场会话 |
+| `POST` | `/api/gym/sessions` | `create_gym_session_api_gym_sessions_post` | 建一个 Gym 会话 |
+| `DELETE` | `/api/gym/sessions/{sessionId}` | `delete_gym_session_api_gym_sessions__sessionId__delete` | 销毁会话 |
+| `POST` | `/api/gym/sessions/{sessionId}/reset` | `reset_gym_session_api_gym_sessions__sessionId__reset_post` | 重建世界回到初始状态 |
+| `POST` | `/api/gym/sessions/{sessionId}/step` | `step_gym_session_api_gym_sessions__sessionId__step_post` | 推进一步（施加水平冲量） |
 | `GET` | `/api/health` | `health_api_health_get` | 存活探针 |
 | `POST` | `/api/llm/complete` | `complete_api_llm_complete_post` | 托管调用 |
 | `GET` | `/api/llm/keys` | `list_keys_api_llm_keys_get` | 查各厂商密钥配没配 |
 | `POST` | `/api/llm/keys` | `upsert_key_api_llm_keys_post` | 托管一把厂商密钥 |
 | `DELETE` | `/api/llm/keys/{providerId}` | `delete_key_api_llm_keys__providerId__delete` | 删掉一把托管密钥 |
 | `GET` | `/api/llm/quota` | `quota_api_llm_quota_get` | 查今天的托管额度 |
+| `GET` | `/api/model3d/cloud/jobs` | `list_cloud_jobs_api_model3d_cloud_jobs_get` | 列出自己最近的云端生成任务 |
+| `POST` | `/api/model3d/cloud/jobs` | `create_cloud_job_api_model3d_cloud_jobs_post` | 提交一次云端生成 3D（混元 / 百炼） |
+| `GET` | `/api/model3d/cloud/jobs/{jobId}` | `get_cloud_job_api_model3d_cloud_jobs__jobId__get` | 读取一个云端生成任务的状态 |
+| `GET` | `/api/model3d/cloud/jobs/{jobId}/model.glb` | `get_cloud_model_api_model3d_cloud_jobs__jobId__model_glb_get` | 下载生成的模型 |
+| `GET` | `/api/model3d/keys` | `list_keys_api_model3d_keys_get` | 查各供应商密钥配没配 |
+| `POST` | `/api/model3d/keys` | `upsert_key_api_model3d_keys_post` | 托管一把云端 3D 密钥 |
+| `DELETE` | `/api/model3d/keys/{providerId}` | `delete_key_api_model3d_keys__providerId__delete` | 删掉一把托管密钥 |
+| `GET` | `/api/model3d/providers` | `list_providers_api_model3d_providers_get` | 云端 3D 供应商目录（计费 / 授权 / 限制如实标注） |
 | `GET` | `/api/render` | `list_renders_api_render_get` | 列出最近的服务端渲染 |
 | `POST` | `/api/render` | `create_render_api_render_post` | 提交一次服务端渲染 |
 | `GET` | `/api/render/{jobId}` | `get_render_api_render__jobId__get` | 读取一个渲染任务的状态 |
@@ -30,6 +43,10 @@
 | `GET` | `/api/simulations/{jobId}` | `get_simulation_api_simulations__jobId__get` | 读取一个批量仿真任务的状态 |
 | `GET` | `/api/simulations/{jobId}/results` | `get_simulation_results_api_simulations__jobId__results_get` | 读取一个批量仿真的全部结果 |
 | `POST` | `/api/telemetry` | `ingest_api_telemetry_post` | 上报一批遥测事件 |
+| `GET` | `/api/triposr` | `list_triposr_jobs_api_triposr_get` | 列出最近的 TripoSR 任务 |
+| `POST` | `/api/triposr` | `create_triposr_job_api_triposr_post` | 提交一次单图生成 3D |
+| `GET` | `/api/triposr/{jobId}` | `get_triposr_job_api_triposr__jobId__get` | 读取一个 TripoSR 任务的状态 |
+| `GET` | `/api/triposr/{jobId}/model.glb` | `get_triposr_model_api_triposr__jobId__model_glb_get` | 下载生成的模型 |
 
 ## 统一错误形状
 

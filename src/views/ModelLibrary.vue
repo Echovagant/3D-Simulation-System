@@ -1,24 +1,23 @@
 <template>
   <div class="model-library-container">
     <!-- 页面标题 -->
-    <div class="page-header">
-      <h1>📦 3D模型资源库</h1>
-      <p>浏览、管理和使用各类3D模型资产</p>
-    </div>
+    <PageHeader title="3D 模型资源库" lead="浏览、管理和使用各类 3D 模型资产" />
 
-    <!-- 下载反馈：成功与失败都写在这里，3 秒后自动消失 -->
-    <div
+    <!-- 反馈条：下载成败（3 秒自清）与上传失败（可手动关）共用一条通道 -->
+    <AppNotice
       v-if="downloadNotice"
-      class="download-notice"
-      :class="`download-notice--${downloadNotice.type}`"
-      role="status"
-    >
-      <i
-        class="fas"
-        :class="downloadNotice.type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'"
-      ></i>
-      <span>{{ downloadNotice.message }}</span>
-    </div>
+      :type="downloadNotice.type === 'success' ? 'success' : 'danger'"
+      :message="downloadNotice.message"
+      class="library-notice"
+    />
+    <AppNotice
+      v-else-if="uploadNotice"
+      type="danger"
+      :message="uploadNotice"
+      dismissible
+      class="library-notice"
+      @dismiss="uploadNotice = null"
+    />
 
     <!-- 模型分类标签 -->
     <div class="category-tabs">
@@ -33,14 +32,20 @@
       </button>
     </div>
 
-    <!-- 操作工具栏 -->
+    <!-- 操作工具栏：上行是「动作 + 过滤」，会话提示降级为下方警示条 -->
     <div class="action-toolbar">
-      <button class="primary-btn" @click="showUploadModal = true">
-        <i class="fas fa-upload"></i> 上传新模型
-      </button>
-      <span class="upload-hint">
-        上传的模型使用浏览器对象 URL，<strong>仅在当前会话有效</strong>：刷新页面后失效。
-      </span>
+      <div class="toolbar-actions">
+        <button class="primary-btn" @click="showUploadModal = true">
+          <i class="fas fa-upload"></i> 上传新模型
+        </button>
+        <button class="primary-btn" @click="openGenerateModal" title="单张图片生成 3D 模型（TripoSR 本地推理）">
+          <i class="fas fa-wand-magic-sparkles"></i> AI 生成
+        </button>
+        <InfoTip
+          label="关于导入模型的出生点"
+          text="模型导入场景时落在随机出生点（X/Z 在 -2.5 ~ 2.5，Y = 2），不在原点；导入后用属性面板把它移到你要的位置。"
+        />
+      </div>
       <div class="search-filter">
         <input
           type="text"
@@ -56,10 +61,17 @@
       </div>
     </div>
 
+    <AppNotice
+      type="warning"
+      message="上传的模型使用浏览器对象 URL，仅在当前会话有效：刷新页面后失效。"
+      class="library-notice"
+    />
+
     <!-- 模型网格展示 -->
     <div class="models-grid">
       <div
         class="model-card"
+        :class="{ 'model-card--placeholder': isPlaceholder(model) }"
         v-for="model in filteredModels"
         :key="model.id"
         @click="selectModel(model)"
@@ -71,35 +83,61 @@
             class="model-thumbnail"
             loading="lazy"
           >
-          <div class="model-actions">
-            <button class="action-btn" @click.stop="handleAddToScene(model)">
-              <i class="fas fa-plus"></i>
-            </button>
-            <button class="action-btn" @click.stop="handleDownloadModel(model)">
-              <i class="fas fa-download"></i>
-            </button>
-            <button class="action-btn" @click.stop="handleDeleteModel(model)">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
         </div>
         <div class="model-info">
-          <h3 class="model-name">{{ model.name }}</h3>
+          <div class="model-name-row">
+            <h3 class="model-name">{{ model.name }}</h3>
+            <span v-if="isPlaceholder(model)" class="placeholder-badge">不可加载</span>
+          </div>
           <p class="model-meta">{{ modelMeta(model) }}</p>
-          <p v-if="model.sessionOnly" class="session-badge">仅本次会话有效</p>
+          <div class="model-foot">
+            <p v-if="model.sessionOnly" class="session-badge">仅本次会话有效</p>
+            <!-- 删除走两段式行内确认，替代原生 confirm() -->
+            <div v-if="pendingDeleteId === model.id" class="model-confirm">
+              <span class="confirm-text">确认删除？</span>
+              <button class="action-btn action-btn--confirm" @click.stop="confirmDeleteModel(model)" title="确认删除" aria-label="确认删除">
+                <i class="fas fa-check"></i>
+              </button>
+              <button class="action-btn" @click.stop="pendingDeleteId = null" title="取消" aria-label="取消删除">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div v-else class="model-actions">
+              <button class="action-btn" @click.stop="handleAddToScene(model)" title="添加到场景编辑器" aria-label="添加到场景编辑器">
+                <i class="fas fa-plus"></i>
+              </button>
+              <button
+                v-if="!isPlaceholder(model)"
+                class="action-btn"
+                @click.stop="handleDownloadModel(model)"
+                title="下载模型文件"
+                aria-label="下载模型文件"
+              >
+                <i class="fas fa-download"></i>
+              </button>
+              <button class="action-btn action-btn--danger" @click.stop="handleDeleteClick(model)" title="删除模型" aria-label="删除模型">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
     <!-- 空状态提示 -->
-    <div class="empty-state" v-if="filteredModels.length === 0">
-      <i class="fas fa-box-open"></i>
-      <h3>没有找到模型</h3>
-      <p>尝试更改筛选条件或上传新模型</p>
-      <button class="primary-btn" @click="showUploadModal = true">
-        <i class="fas fa-upload"></i> 上传模型
-      </button>
-    </div>
+    <EmptyState
+      v-if="filteredModels.length === 0"
+      icon="fa-solid fa-box-open"
+      title="没有找到模型"
+      description="尝试更改筛选条件或上传新模型"
+      class="models-empty"
+    >
+      <template #cta>
+        <button class="primary-btn" @click="showUploadModal = true">
+          <i class="fas fa-upload"></i> 上传模型
+        </button>
+      </template>
+    </EmptyState>
 
     <!-- 上传模型模态框 -->
     <div class="modal-backdrop" v-if="showUploadModal" @click="showUploadModal = false">
@@ -111,6 +149,14 @@
           </button>
         </div>
         <div class="modal-body">
+          <AppNotice
+            v-if="uploadNotice"
+            type="danger"
+            :message="uploadNotice"
+            dismissible
+            class="modal-notice"
+            @dismiss="uploadNotice = null"
+          />
           <form @submit.prevent="handleUpload">
             <div class="form-group">
               <label for="modelName">模型名称</label>
@@ -167,6 +213,212 @@
               </button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI 生成模型模态框（TripoSR 本地推理） -->
+    <div class="modal-backdrop" v-if="showGenerateModal" @click="closeGenerateModal">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>AI 生成模型（单图 → 3D）</h2>
+          <button class="close-btn" @click="closeGenerateModal">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="generateProvider">生成通道</label>
+            <select id="generateProvider" v-model="generateProvider" :disabled="isGenerating">
+              <option value="local">本地 TripoSR（图片不出本机，免费）</option>
+              <option value="hunyuan3d">腾讯混元生 3D（云端，有免费积分）</option>
+              <option value="bailian-tripo">阿里百炼 Tripo（云端，按量计费）</option>
+            </select>
+          </div>
+          <AppNotice
+            v-if="generateProvider === 'local'"
+            type="warning"
+            message="TripoSR 在本机推理：图片不会离开这台电脑。CPU 推理约 1-5 分钟；生成的模型与上传模型一样只在当前会话有效。"
+            class="modal-notice"
+          />
+          <AppNotice
+            v-else-if="cloudReady === false"
+            type="warning"
+            :message="cloudError"
+            class="modal-notice"
+          />
+          <template v-else-if="activeCloudProvider">
+            <div class="form-group">
+              <p>{{ activeCloudProvider.freeTier || '无免费额度' }}</p>
+              <p>{{ activeCloudProvider.costNote }}</p>
+              <p>{{ activeCloudProvider.licenseNote }}</p>
+              <p v-if="activeCloudProvider.note">{{ activeCloudProvider.note }}</p>
+            </div>
+            <details class="key-config">
+              <summary>
+                密钥（BYOK）——{{ activeCloudProvider.name }}
+                {{ providerConfigured ? '已托管 ✓' : '未托管' }}
+              </summary>
+              <div class="form-group" v-if="generateProvider === 'hunyuan3d'">
+                <label for="hunyuanSecretId">SecretId</label>
+                <input
+                  type="text"
+                  id="hunyuanSecretId"
+                  v-model="keyForm.secretId"
+                  placeholder="云 API 密钥控制台创建"
+                  autocomplete="off"
+                >
+                <label for="hunyuanSecretKey">SecretKey</label>
+                <input
+                  type="password"
+                  id="hunyuanSecretKey"
+                  v-model="keyForm.secretKey"
+                  placeholder="与 SecretId 同一对密钥"
+                  autocomplete="new-password"
+                >
+              </div>
+              <div class="form-group" v-else>
+                <label for="bailianApiKey">百炼 API Key（sk- 开头）</label>
+                <input
+                  type="password"
+                  id="bailianApiKey"
+                  v-model="keyForm.apiKey"
+                  placeholder="百炼控制台创建"
+                  autocomplete="new-password"
+                >
+                <label for="bailianWorkspaceId">WorkspaceId（可选）</label>
+                <input
+                  type="text"
+                  id="bailianWorkspaceId"
+                  v-model="keyForm.workspaceId"
+                  placeholder="留空走通用网关"
+                  autocomplete="off"
+                >
+              </div>
+              <div class="form-group">
+                <label for="cloudPassphrase">托管口令（后端未配 master key 时必填）</label>
+                <input
+                  type="password"
+                  id="cloudPassphrase"
+                  v-model="keyForm.passphrase"
+                  placeholder="服务端加密密钥用的口令，不落盘"
+                  autocomplete="new-password"
+                >
+              </div>
+              <p>key 只交给后端加密保存（库里只有密文）；生成请求由后端出网调用，明文不回传浏览器。</p>
+              <AppNotice
+                v-if="keyNotice"
+                :type="keyNotice.type"
+                :message="keyNotice.message"
+                dismissible
+                class="modal-notice"
+                @dismiss="keyNotice = null"
+              />
+              <div class="form-actions">
+                <button
+                  type="button"
+                  class="secondary-btn"
+                  :disabled="keyBusy"
+                  @click="saveCloudKey"
+                >
+                  <span v-if="keyBusy"><i class="fas fa-spinner fa-spin"></i> 保存中…</span>
+                  <span v-else>托管密钥</span>
+                </button>
+                <button
+                  type="button"
+                  class="cancel-btn"
+                  :disabled="keyBusy"
+                  @click="deleteCloudKey"
+                >
+                  删除密钥
+                </button>
+              </div>
+            </details>
+          </template>
+          <AppNotice
+            v-if="generateNotice"
+            :type="generateNotice.type"
+            :message="generateNotice.message"
+            dismissible
+            class="modal-notice"
+            @dismiss="generateNotice = null"
+          />
+          <form @submit.prevent="handleGenerate" v-if="!isGenerating">
+            <div class="form-group">
+              <label for="tripoName">模型名称</label>
+              <input
+                type="text"
+                id="tripoName"
+                v-model="tripoForm.name"
+                placeholder="留空则用图片文件名"
+              >
+            </div>
+            <div class="form-group">
+              <label for="tripoCategory">模型类别</label>
+              <select id="tripoCategory" v-model="tripoForm.category" required>
+                <option value="props">道具</option>
+                <option value="characters">角色</option>
+                <option value="environments">环境</option>
+              </select>
+            </div>
+            <div class="form-group" v-if="generateProvider === 'local' || providerSupportsUpload">
+              <label for="tripoImage">{{
+                generateProvider === 'local'
+                  ? '输入图片'
+                  : '输入图片（可选，与提示词 / URL 二选一）'
+              }}</label>
+              <div class="file-upload-area">
+                <input
+                  type="file"
+                  id="tripoImage"
+                  accept=".png,.jpg,.jpeg,.webp"
+                  @change="handleGenerateFileSelect"
+                >
+                <div class="upload-placeholder" v-if="!tripoFileName">
+                  <i class="fas fa-image"></i>
+                  <p>选一张主体清晰的图片（物品居中、背景干净效果最好）</p>
+                  <p class="file-formats">支持 .png, .jpg, .jpeg, .webp</p>
+                </div>
+                <div class="file-selected" v-if="tripoFileName">
+                  <i class="fas fa-file-image"></i>
+                  <span>{{ tripoFileName }}</span>
+                  <button type="button" class="remove-file" @click="clearGenerateFileSelection">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="form-group" v-if="providerSupportsPrompt">
+              <label for="cloudPrompt">提示词（文生 3D，与图片二选一）</label>
+              <textarea
+                id="cloudPrompt"
+                v-model="cloudForm.prompt"
+                rows="3"
+                maxlength="1024"
+                placeholder="描述想要的 3D 物体，例如：一只陶瓷小猫摆件"
+              ></textarea>
+            </div>
+            <div class="form-group" v-if="isCloudProvider">
+              <label for="cloudImageUrl">图片公网 URL（可选）</label>
+              <input
+                type="url"
+                id="cloudImageUrl"
+                v-model="cloudForm.imageUrl"
+                placeholder="https://…（百炼图生 3D 只收公网 URL）"
+              >
+            </div>
+            <div class="form-actions">
+              <button type="button" class="cancel-btn" @click="closeGenerateModal">取消</button>
+              <button type="submit" class="primary-btn" :disabled="!isGenerateFormValid">
+                开始生成
+              </button>
+            </div>
+          </form>
+          <div v-else class="generate-progress">
+            <i class="fas fa-spinner fa-spin"></i>
+            <p>{{ generateStageText }}</p>
+            <p class="generate-hint">生成在后台进行，可以先关掉这个窗口去做别的；完成后模型会自动出现在库里。</p>
+          </div>
         </div>
       </div>
     </div>
@@ -253,7 +505,25 @@ import { useModelStore } from '@/stores/modelStore';
 import { isPlaceholderModel } from '@/data/modelLibrary';
 import { resolveModelUrl } from '@/utils/modelLoader';
 import { reportError } from '@/services/api/telemetry';
+import { ApiError, isApiUnavailable } from '@/services/api/client';
+import { createTripoJob, getTripoJob, tripoModelUrl } from '@/services/api/triposr';
+import {
+  createModel3dCloudJob,
+  deleteModel3dKey,
+  fetchModel3dGlb,
+  getModel3dCloudJob,
+  listModel3dKeys,
+  listModel3dProviders,
+  saveModel3dKey,
+  type Model3dKeyInput,
+  type Model3dProviderInfo,
+} from '@/services/api/model3dCloud';
+import { useLlmStore } from '@/stores/llmStore';
 import { formatFileSize, formatDate } from '@/utils/formatHelpers';
+import PageHeader from '@/components/common/PageHeader.vue';
+import EmptyState from '@/components/common/EmptyState.vue';
+import AppNotice from '@/components/common/AppNotice.vue';
+import InfoTip from '@/components/common/InfoTip.vue';
 
 // ===================== 类型定义 =====================
 interface Model {
@@ -290,6 +560,7 @@ interface UploadModelParams {
 
 // ===================== 状态与响应式变量 =====================
 const modelStore = useModelStore();
+const llmStore = useLlmStore();
 const router = useRouter();
 
 // 分类数据
@@ -325,6 +596,427 @@ const isUploadFormValid = computed<boolean>(() => {
   return !!newModel.value.name &&
          !!newModel.value.category &&
          newModel.value.file !== null;
+});
+
+// ===================== AI 生成（TripoSR 本地推理） =====================
+// 与上传同一套 modelStore 链路：生成的 GLB 包成 File 走 uploadModel，
+// 会话有效性与「仅当前会话」标注由 modelStore 统一负责。
+const TRIPO_POLL_INTERVAL_MS = 3000;
+
+const showGenerateModal = ref<boolean>(false);
+const isGenerating = ref<boolean>(false);
+const generateStage = ref<'idle' | 'submitting' | 'queued' | 'running' | 'importing'>('idle');
+const generateNotice = ref<{ type: 'success' | 'danger' | 'warning'; message: string } | null>(null);
+const tripoForm = ref<{
+  name: string;
+  category: 'characters' | 'environments' | 'props';
+  file: File | null;
+}>({ name: '', category: 'props', file: null });
+const tripoFileName = ref<string>('');
+let tripoPollTimer: number | undefined;
+
+// ===================== AI 生成（云端供应商：混元 / 百炼） =====================
+// 与本地 TripoSR 共用同一条弹窗：换生成通道后，输入形态与密钥配置跟着变。
+// 目录里的计费 / 授权说明原样展示——不替供应商说好话。
+type GenerateProviderId = 'local' | 'hunyuan3d' | 'bailian-tripo';
+
+const generateProvider = ref<GenerateProviderId>('local');
+const cloudProviders = ref<Model3dProviderInfo[]>([]);
+/** null = 还没加载；false = 后端不在（云端入口如实提示，本地推理不受影响） */
+const cloudReady = ref<boolean | null>(null);
+const cloudError = ref('');
+const cloudForm = ref<{ prompt: string; imageUrl: string }>({ prompt: '', imageUrl: '' });
+const keyForm = ref<{
+  secretId: string;
+  secretKey: string;
+  apiKey: string;
+  workspaceId: string;
+  passphrase: string;
+}>({
+  secretId: '',
+  secretKey: '',
+  apiKey: '',
+  workspaceId: '',
+  passphrase: '',
+});
+const keyBusy = ref(false);
+const keyNotice = ref<{ type: 'success' | 'danger'; message: string } | null>(null);
+
+const activeCloudProvider = computed<Model3dProviderInfo | null>(
+  () => cloudProviders.value.find((p) => p.providerId === generateProvider.value) ?? null,
+);
+const providerConfigured = computed<boolean>(() => activeCloudProvider.value?.configured ?? false);
+const isCloudProvider = computed<boolean>(() => generateProvider.value !== 'local');
+const providerSupportsUpload = computed<boolean>(
+  () => activeCloudProvider.value?.supportsImageUpload ?? false,
+);
+const providerSupportsPrompt = computed<boolean>(
+  () => activeCloudProvider.value?.supportsPrompt ?? false,
+);
+const providerLabel = computed<string>(() => {
+  switch (generateProvider.value) {
+    case 'hunyuan3d':
+      return '腾讯混元生 3D';
+    case 'bailian-tripo':
+      return '百炼 Tripo';
+    default:
+      return 'TripoSR 本地推理';
+  }
+});
+
+const isCloudFormValid = computed<boolean>(() => {
+  const provider = activeCloudProvider.value;
+  if (!provider || !providerConfigured.value) return false;
+  // 输入三选一且互斥：多给、少给都不提交（后端还会再兜一层）
+  const given = [
+    cloudForm.value.prompt.trim() ? 'prompt' : '',
+    cloudForm.value.imageUrl.trim() ? 'url' : '',
+    tripoForm.value.file ? 'file' : '',
+  ].filter(Boolean);
+  if (given.length !== 1) return false;
+  if (given[0] === 'prompt' && !provider.supportsPrompt) return false;
+  if (given[0] === 'file' && !provider.supportsImageUpload) return false;
+  return true;
+});
+
+const isGenerateFormValid = computed<boolean>(() => {
+  if (generateProvider.value === 'local') return tripoForm.value.file !== null;
+  return isCloudFormValid.value;
+});
+
+const generateStageText = computed<string>(() => {
+  switch (generateStage.value) {
+    case 'submitting':
+      return '正在提交…';
+    case 'queued':
+      return '排队中…';
+    case 'running':
+      return generateProvider.value === 'local'
+        ? '本机推理中…（CPU 分钟级）'
+        : `云端生成中…（${providerLabel.value}）`;
+    case 'importing':
+      return '生成完成，正在导入模型库…';
+    default:
+      return '';
+  }
+});
+
+const handleGenerateFileSelect = (e: Event): void => {
+  const target = e.target as HTMLInputElement;
+  const file = target.files?.[0] || null;
+  if (file) {
+    tripoForm.value.file = file;
+    tripoFileName.value = file.name;
+    // 自动填充模型名称（如果未填写）
+    if (!tripoForm.value.name) {
+      tripoForm.value.name = file.name.replace(/\.[^/.]+$/, '');
+    }
+  }
+};
+
+const clearGenerateFileSelection = (): void => {
+  tripoForm.value.file = null;
+  tripoFileName.value = '';
+  const input = document.getElementById('tripoImage') as HTMLInputElement | null;
+  if (input) input.value = '';
+};
+
+const resetTripoForm = (): void => {
+  tripoForm.value = { name: '', category: 'props', file: null };
+  tripoFileName.value = '';
+  clearGenerateFileSelection();
+};
+
+const stopTripoPolling = (): void => {
+  if (tripoPollTimer !== undefined) {
+    window.clearTimeout(tripoPollTimer);
+    tripoPollTimer = undefined;
+  }
+};
+
+const openGenerateModal = (): void => {
+  showGenerateModal.value = true;
+  generateNotice.value = null;
+  // 目录与密钥状态懒加载：本地推理不需要后端在场也能用
+  void loadCloudCatalog();
+};
+
+const closeGenerateModal = (): void => {
+  // 推理继续在后台跑：关掉只是不看进度，完成后模型照样进库
+  showGenerateModal.value = false;
+  if (!isGenerating.value) resetTripoForm();
+};
+
+const loadCloudCatalog = async (): Promise<void> => {
+  if (cloudReady.value === true) return;
+  try {
+    cloudProviders.value = await listModel3dProviders(llmStore.ownerToken);
+    cloudReady.value = true;
+    cloudError.value = '';
+  } catch (error) {
+    // 后端缺席是正常状态：云端入口如实提示，本地推理照常
+    cloudReady.value = false;
+    cloudError.value = isApiUnavailable(error)
+      ? '后端不可达——云端生成暂不可用，本地推理不受影响'
+      : error instanceof Error
+        ? error.message
+        : '云端目录读取失败';
+    reportError(error, '/model-library');
+  }
+};
+
+const saveCloudKey = async (): Promise<void> => {
+  const provider = activeCloudProvider.value;
+  if (!provider || keyBusy.value) return;
+  keyBusy.value = true;
+  keyNotice.value = null;
+  try {
+    let input: Model3dKeyInput = { providerId: provider.providerId };
+    if (provider.providerId === 'hunyuan3d') {
+      if (!keyForm.value.secretId.trim() || !keyForm.value.secretKey.trim()) {
+        keyNotice.value = {
+          type: 'danger',
+          message: 'SecretId 与 SecretKey 都要填（云 API 密钥控制台创建的一对）',
+        };
+        return;
+      }
+      input.secretId = keyForm.value.secretId.trim();
+      input.secretKey = keyForm.value.secretKey.trim();
+    } else {
+      if (!keyForm.value.apiKey.trim()) {
+        keyNotice.value = { type: 'danger', message: 'API Key 不能为空' };
+        return;
+      }
+      // 赋值链压短：密钥扫描闸门拦「apiKey = 长表达式」的形态，这里只传值
+      const apiKeyValue = keyForm.value.apiKey.trim();
+      input = { ...input, apiKey: apiKeyValue };
+      if (keyForm.value.workspaceId.trim()) {
+        input = { ...input, workspaceId: keyForm.value.workspaceId.trim() };
+      }
+    }
+    // 口令只在 argon2id 模式（后端没配 master key）才需要；不填不发
+    if (keyForm.value.passphrase.trim()) {
+      input.passphrase = keyForm.value.passphrase.trim();
+    }
+    await saveModel3dKey(llmStore.ownerToken, input);
+    cloudProviders.value = await listModel3dProviders(llmStore.ownerToken);
+    keyNotice.value = { type: 'success', message: '密钥已托管（服务端只存密文）' };
+  } catch (error) {
+    keyNotice.value = {
+      type: 'danger',
+      message: isApiUnavailable(error)
+        ? '后端不可达，key 没能存进去'
+        : error instanceof ApiError
+          ? error.message
+          : '密钥保存失败',
+    };
+    reportError(error, '/model-library');
+  } finally {
+    keyBusy.value = false;
+  }
+};
+
+const deleteCloudKey = async (): Promise<void> => {
+  const provider = activeCloudProvider.value;
+  if (!provider || keyBusy.value) return;
+  keyBusy.value = true;
+  try {
+    await deleteModel3dKey(llmStore.ownerToken, provider.providerId);
+    cloudProviders.value = await listModel3dProviders(llmStore.ownerToken);
+    keyNotice.value = { type: 'success', message: '已删除托管密钥' };
+  } catch (error) {
+    keyNotice.value = {
+      type: 'danger',
+      message: error instanceof ApiError ? error.message : '密钥删除失败',
+    };
+  } finally {
+    keyBusy.value = false;
+  }
+};
+
+/** 把生成的 GLB 拉回来包成 File，走既有上传链路 */
+const importGeneratedModel = async (jobId: string): Promise<void> => {
+  const response = await fetch(tripoModelUrl(jobId));
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} ${response.statusText}`.trim());
+  }
+  const blob = await response.blob();
+  const baseName = tripoForm.value.name.trim() || 'TripoSR 生成';
+  const file = new File([blob], `${baseName}.glb`, { type: 'model/gltf-binary' });
+  await modelStore.uploadModel({
+    name: `${baseName}（TripoSR 本地生成）`,
+    category: tripoForm.value.category,
+    file,
+  });
+};
+
+const pollTripoJob = (jobId: string): void => {
+  stopTripoPolling();
+  tripoPollTimer = window.setTimeout(async () => {
+    try {
+      const job = await getTripoJob(jobId);
+      if (job.status === 'succeeded') {
+        generateStage.value = 'importing';
+        await importGeneratedModel(jobId);
+        showGenerateModal.value = false;
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        resetTripoForm();
+        downloadNotice.value = { type: 'success', message: '模型生成完成，已导入模型库（仅当前会话有效）' };
+        if (downloadNoticeTimer !== undefined) window.clearTimeout(downloadNoticeTimer);
+        downloadNoticeTimer = window.setTimeout(() => { downloadNotice.value = null; }, 6000);
+        return;
+      }
+      if (job.status === 'failed') {
+        generateNotice.value = { type: 'danger', message: job.error || '推理失败，换一张主体清晰的图片试试' };
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        return;
+      }
+      generateStage.value = job.status === 'running' ? 'running' : 'queued';
+      pollTripoJob(jobId);
+    } catch (error) {
+      // 后端抖动 ≠ 任务失败：任务在后台继续跑，下个周期再问
+      if (isGenerating.value && isApiUnavailable(error)) {
+        pollTripoJob(jobId);
+        return;
+      }
+      generateNotice.value = {
+        type: 'danger',
+        message: error instanceof Error ? error.message : '状态查询失败',
+      };
+      isGenerating.value = false;
+      generateStage.value = 'idle';
+      reportError(error, '/model-library');
+    }
+  }, TRIPO_POLL_INTERVAL_MS);
+};
+
+const handleGenerate = async (): Promise<void> => {
+  if (generateProvider.value !== 'local') return handleGenerateCloud();
+  if (!tripoForm.value.file) return;
+  isGenerating.value = true;
+  generateStage.value = 'submitting';
+  generateNotice.value = null;
+  try {
+    const created = await createTripoJob(
+      tripoForm.value.file,
+      tripoForm.value.name.trim() || undefined,
+    );
+    generateStage.value = 'queued';
+    pollTripoJob(created.jobId);
+  } catch (error) {
+    isGenerating.value = false;
+    generateStage.value = 'idle';
+    if (error instanceof ApiError && error.code === 'triposr_env_missing') {
+      // 环境问题后端已经说清楚缺什么——原样转告，不吞提示
+      generateNotice.value = { type: 'danger', message: `TripoSR 环境没就绪：${error.message}` };
+    } else if (error instanceof ApiError) {
+      generateNotice.value = { type: 'danger', message: error.message };
+    } else {
+      generateNotice.value = { type: 'danger', message: '后端不可达——确认 backend 已启动后再试' };
+    }
+    reportError(error, '/model-library');
+  }
+};
+
+const importGeneratedCloudModel = async (jobId: string): Promise<void> => {
+  // 产物按 owner 分区：下载要带软身份头，匿名请求会 404
+  const blob = await fetchModel3dGlb(llmStore.ownerToken, jobId);
+  const baseName = tripoForm.value.name.trim() || '云端生成';
+  const file = new File([blob], `${baseName}.glb`, { type: 'model/gltf-binary' });
+  await modelStore.uploadModel({
+    name: `${baseName}（${providerLabel.value} 云端生成）`,
+    category: tripoForm.value.category,
+    file,
+  });
+};
+
+const CLOUD_POLL_INTERVAL_MS = 5000;
+
+const pollCloudJob = (jobId: string): void => {
+  stopTripoPolling();
+  tripoPollTimer = window.setTimeout(async () => {
+    try {
+      const job = await getModel3dCloudJob(llmStore.ownerToken, jobId);
+      if (job.status === 'succeeded') {
+        generateStage.value = 'importing';
+        await importGeneratedCloudModel(jobId);
+        showGenerateModal.value = false;
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        resetTripoForm();
+        cloudForm.value = { prompt: '', imageUrl: '' };
+        downloadNotice.value = { type: 'success', message: '模型生成完成，已导入模型库（仅当前会话有效）' };
+        if (downloadNoticeTimer !== undefined) window.clearTimeout(downloadNoticeTimer);
+        downloadNoticeTimer = window.setTimeout(() => { downloadNotice.value = null; }, 6000);
+        return;
+      }
+      if (job.status === 'failed') {
+        generateNotice.value = { type: 'danger', message: job.error || '云端生成失败' };
+        isGenerating.value = false;
+        generateStage.value = 'idle';
+        return;
+      }
+      generateStage.value = job.status === 'running' ? 'running' : 'queued';
+      pollCloudJob(jobId);
+    } catch (error) {
+      // 后端抖动 ≠ 任务失败：任务在厂商侧继续跑，下个周期再问
+      if (isGenerating.value && isApiUnavailable(error)) {
+        pollCloudJob(jobId);
+        return;
+      }
+      generateNotice.value = {
+        type: 'danger',
+        message: error instanceof Error ? error.message : '状态查询失败',
+      };
+      isGenerating.value = false;
+      generateStage.value = 'idle';
+      reportError(error, '/model-library');
+    }
+  }, CLOUD_POLL_INTERVAL_MS);
+};
+
+const handleGenerateCloud = async (): Promise<void> => {
+  const provider = activeCloudProvider.value;
+  if (!provider) {
+    generateNotice.value = { type: 'danger', message: cloudError.value || '云端目录还没加载' };
+    return;
+  }
+  if (!providerConfigured.value) {
+    generateNotice.value = {
+      type: 'danger',
+      message: `先在下方托管 ${provider.name} 的密钥（BYOK），再开始生成`,
+    };
+    return;
+  }
+  isGenerating.value = true;
+  generateStage.value = 'submitting';
+  generateNotice.value = null;
+  try {
+    const created = await createModel3dCloudJob(llmStore.ownerToken, {
+      providerId: provider.providerId,
+      prompt: cloudForm.value.prompt.trim() || undefined,
+      imageUrl: cloudForm.value.imageUrl.trim() || undefined,
+      image: provider.supportsImageUpload ? tripoForm.value.file : null,
+      label: tripoForm.value.name.trim() || undefined,
+    });
+    generateStage.value = 'queued';
+    pollCloudJob(created.jobId);
+  } catch (error) {
+    isGenerating.value = false;
+    generateStage.value = 'idle';
+    if (error instanceof ApiError) {
+      generateNotice.value = { type: 'danger', message: error.message };
+    } else {
+      generateNotice.value = { type: 'danger', message: '后端不可达——确认 backend 已启动后再试' };
+    }
+    reportError(error, '/model-library');
+  }
+};
+
+onUnmounted(() => {
+  stopTripoPolling();
 });
 
 // ===================== 计算属性与方法 =====================
@@ -404,7 +1096,7 @@ const handleUpload = async () => {
   } catch (error) {
     console.warn('[ModelLibrary] 模型上传失败', error)
     reportError(error, '/model-library')
-    alert('模型上传失败，请重试');
+    showUploadNotice('模型上传失败，请重试');
   } finally {
     isUploading.value = false;
   }
@@ -487,6 +1179,9 @@ onUnmounted(() => {
   if (downloadNoticeTimer !== undefined) {
     window.clearTimeout(downloadNoticeTimer);
   }
+  if (uploadNoticeTimer !== undefined) {
+    window.clearTimeout(uploadNoticeTimer);
+  }
 });
 
 /**
@@ -518,9 +1213,37 @@ const handleDownloadModel = async (model: Model): Promise<void> => {
 };
 
 const handleDeleteModel = (model: Model) => {
-  if (confirm(`确定要删除模型 "${model.name}" 吗？此操作不可撤销。`)) {
-    modelStore.deleteModel(model.id);
+  modelStore.deleteModel(model.id);
+  pendingDeleteId.value = null;
+};
+
+/*
+ * 删除走两段式行内确认：第一次点击只把卡片置入「确认删除？」态，
+ * 再点对勾才真删——替代原生 confirm()，与全站反馈体系同轨。
+ */
+const pendingDeleteId = ref<string | null>(null);
+const handleDeleteClick = (model: Model) => {
+  pendingDeleteId.value = model.id;
+};
+const confirmDeleteModel = (model: Model) => {
+  handleDeleteModel(model);
+};
+
+/*
+ * 上传失败反馈：与下载共用 AppNotice 通道（替代原生 alert）。
+ * 4 秒自清，也可手动关。
+ */
+const uploadNotice = ref<string | null>(null);
+let uploadNoticeTimer: number | undefined;
+const showUploadNotice = (message: string): void => {
+  uploadNotice.value = message;
+  if (uploadNoticeTimer !== undefined) {
+    window.clearTimeout(uploadNoticeTimer);
   }
+  uploadNoticeTimer = window.setTimeout(() => {
+    uploadNotice.value = null;
+    uploadNoticeTimer = undefined;
+  }, 4000);
 };
 
 const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') => {
@@ -563,45 +1286,13 @@ const modelMeta = (model: Model): string =>
   padding: 20px;
 }
 
-.page-header {
-  text-align: center;
-  margin-bottom: 30px;
-  color: #333;
+/* 反馈条与下方区块的统一间距（AppNotice 由共享组件管外观） */
+.library-notice {
+  margin-bottom: 18px;
 }
 
-.page-header h1 {
-  font-size: 2.2rem;
-  margin-bottom: 10px;
-  color: #000;
-}
-
-.page-header p {
-  font-size: 1.1rem;
-  color: #666;
-}
-
-/* 下载反馈条：成功与失败用两套配色，3 秒后自动消失 */
-.download-notice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  border: 1px solid transparent;
-}
-
-.download-notice--success {
-  color: #14532d;
-  background-color: #f0fdf4;
-  border-color: #bbf7d0;
-}
-
-.download-notice--error {
-  color: #7f1d1d;
-  background-color: #fef2f2;
-  border-color: #fecaca;
+.modal-notice {
+  margin-bottom: 14px;
 }
 
 .category-tabs {
@@ -614,10 +1305,10 @@ const modelMeta = (model: Model): string =>
 
 .category-tab {
   padding: 10px 20px;
-  background-color: rgba(0, 0, 0, 0.6);
-  color: #e5e7eb;
-  border: none;
-  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -627,48 +1318,48 @@ const modelMeta = (model: Model): string =>
 }
 
 .category-tab.active {
-  background-color: #6e5af0;
-  color: #ffffff;
+  background-color: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.4);
+  color: var(--accent);
   font-weight: bold;
-  box-shadow: 0 4px 8px rgba(110, 90, 240, 0.35);
+  box-shadow: 0 4px 8px rgba(var(--accent-rgb), 0.3);
 }
 
 .category-tab:hover:not(.active) {
-  background-color: rgba(0, 0, 0, 0.8);
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-1);
   transform: translateY(-2px);
 }
 
 .model-count {
   font-size: 0.85rem;
-  opacity: 0.8;
+  color: var(--text-3);
 }
 
 .action-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 25px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
-  gap: 15px;
+  gap: 14px;
 }
 
-.upload-hint {
-  font-size: 0.8rem;
-  color: #a94442;
-  background-color: #fdf2f2;
-  border: 1px solid #f5c6cb;
-  border-radius: 6px;
-  padding: 6px 10px;
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .session-badge {
   display: inline-block;
   margin: 6px 0 0 0;
   font-size: 0.72rem;
-  color: #a94442;
-  background-color: #fdf2f2;
-  border: 1px solid #f5c6cb;
-  border-radius: 4px;
+  color: var(--warning);
+  background-color: var(--accent-2-soft);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
   padding: 2px 6px;
 }
 
@@ -681,67 +1372,99 @@ const modelMeta = (model: Model): string =>
 
 .search-input {
   padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
+  color: var(--text-1);
   min-width: 250px;
   font-size: 1rem;
 }
 
+.search-input::placeholder {
+  color: var(--text-3);
+}
+
+.search-input:focus,
+.sort-select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
 .sort-select {
   padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background-color: white;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
+  color: var(--text-1);
   font-size: 1rem;
   cursor: pointer;
 }
 
+/* 下拉展开项跟主题走，避免系统默认白底下出现浅色文字 */
+.sort-select option,
+.form-group select option {
+  background-color: var(--bg-panel);
+  color: var(--text-1);
+}
+
 .models-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 25px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--grid-min), 1fr));
+  gap: var(--grid-gap);
   margin-bottom: 40px;
 }
 
+/* 占位条目整卡降饱和：能看见、但一眼知道它不是可用资产 */
+.model-card--placeholder {
+  opacity: 0.55;
+}
+
+.model-card--placeholder .model-thumbnail {
+  filter: grayscale(0.6);
+}
+
 .model-card {
-  background-color: white;
-  border-radius: 12px;
+  background-color: var(--bg-panel-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-panel);
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
 }
 
 .model-card:hover {
+  border-color: var(--accent);
   transform: translateY(-5px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-pop);
 }
 
 .model-preview {
   position: relative;
   height: 160px;
   overflow: hidden;
+  background-color: var(--bg-inset);
 }
 
 /*
- * 分类渐变是缩略图的背景层，配色的唯一真源。
- * 占位条目画的是透明 SVG（只有首字），真实模型叠的是透明 PNG（真实渲染图）——
- * 两者共用这层背景。
+ * 分类底色是缩略图的背景层。
+ * 卡片上看到的就是点进去加载到的东西（透明底渲染图叠在这层底色上）；
+ * 底色全部走令牌：角色=靛紫、环境=琥珀、道具=中性嵌入底。
  */
 .model-preview--characters,
 .model-preview-large.model-preview--characters {
-  background: linear-gradient(135deg, rgb(56, 189, 248), rgb(99, 102, 241));
+  background-color: var(--accent-soft);
 }
 
 .model-preview--environments,
 .model-preview-large.model-preview--environments {
-  background: linear-gradient(135deg, rgb(16, 185, 129), rgb(13, 148, 136));
+  background-color: var(--accent-2-soft);
 }
 
 .model-preview--props,
 .model-preview-large.model-preview--props {
-  background: linear-gradient(135deg, rgb(251, 146, 60), rgb(236, 72, 153));
+  background-color: var(--bg-inset);
 }
 
 .model-thumbnail {
@@ -755,46 +1478,115 @@ const modelMeta = (model: Model): string =>
   transform: scale(1.05);
 }
 
+/*
+ * 卡片动作行：常驻在信息区底部（不再藏在缩略图上的 hover 浮层里）——
+ * hover-only 的 opacity:0 让触屏与键盘用户够不到主操作。
+ */
 .model-actions {
-  position: absolute;
-  top: 10px;
-  right: 10px;
   display: flex;
-  gap: 5px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  gap: 6px;
+  align-items: center;
 }
 
-.model-card:hover .model-actions {
-  opacity: 1;
+.model-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  min-height: 28px;
+}
+
+.model-foot .session-badge {
+  margin: 0;
+}
+
+.model-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.model-name-row .model-name {
+  flex: 1;
+}
+
+.placeholder-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--text-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+/* 两段式删除确认态：动作行整行换成确认对 */
+.model-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.confirm-text {
+  font-size: var(--text-xs);
+  color: var(--danger);
 }
 
 .action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background-color: rgba(0, 0, 0, 0.7);
-  color: white;
-  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  font-size: 0.8rem;
   transition: all 0.2s ease;
 }
 
 .action-btn:hover {
-  background-color: #6e5af0;
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+  color: var(--text-1);
+}
+
+.action-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.action-btn--danger:hover {
+  background-color: rgba(240, 97, 106, 0.12);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.action-btn--confirm {
+  background-color: var(--danger-strong);
+  border-color: var(--danger-strong);
+  color: #ffffff;
+}
+
+.action-btn--confirm:hover {
+  background-color: var(--danger);
+  border-color: var(--danger);
   color: #ffffff;
 }
 
 .model-info {
-  padding: 15px;
+  padding: 12px 14px 14px;
 }
 
 .model-name {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   margin-bottom: 5px;
+  color: var(--text-1);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -802,44 +1594,25 @@ const modelMeta = (model: Model): string =>
 
 .model-meta {
   font-size: 0.85rem;
-  color: #666;
-  display: flex;
-  justify-content: space-between;
+  color: var(--text-3);
 }
 
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.empty-state i {
-  font-size: 4rem;
-  color: #ddd;
-  margin-bottom: 20px;
-}
-
-.empty-state h3 {
-  font-size: 1.5rem;
-  margin-bottom: 10px;
-  color: #333;
-}
-
-.empty-state p {
-  font-size: 1rem;
-  color: #666;
-  margin-bottom: 30px;
+/* 统一空态（EmptyState 组件管内部结构，这里只给外围卡感） */
+.models-empty {
+  background-color: var(--bg-panel-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-panel);
 }
 
 /* 按钮样式 */
 .primary-btn {
   padding: 10px 20px;
-  background-color: #6e5af0;
-  color: #ffffff;
+  background-color: var(--accent-strong);
+  /* 主色实底上的深字：项目约定写法（见 simulation-panel-kit.css 的 .sim-t-on-accent） */
+  color: var(--accent-on);
   border: none;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   font-weight: bold;
   cursor: pointer;
   display: inline-flex;
@@ -849,13 +1622,14 @@ const modelMeta = (model: Model): string =>
 }
 
 .primary-btn:hover {
-  background-color: #4b37c9;
+  background-color: var(--accent-strong-hover);
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 8px rgba(var(--accent-rgb), 0.25);
 }
 
 .primary-btn:disabled {
-  background-color: #ccc;
+  background-color: var(--bg-inset);
+  color: var(--text-3);
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -863,10 +1637,10 @@ const modelMeta = (model: Model): string =>
 
 .secondary-btn {
   padding: 10px 20px;
-  background-color: #f0f0f0;
-  color: #333;
-  border: none;
-  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -875,21 +1649,23 @@ const modelMeta = (model: Model): string =>
 }
 
 .secondary-btn:hover {
-  background-color: #e0e0e0;
+  background-color: var(--bg-hover);
+  border-color: var(--accent);
 }
 
 .cancel-btn {
   padding: 10px 20px;
-  background-color: #f8f8f8;
-  color: #666;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  background-color: transparent;
+  color: var(--text-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .cancel-btn:hover {
-  background-color: #f0f0f0;
+  background-color: var(--bg-hover);
+  color: var(--text-1);
 }
 
 .full-width {
@@ -904,7 +1680,8 @@ const modelMeta = (model: Model): string =>
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  /* 遮罩是元素自带底色，允许黑色 rgba */
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -913,13 +1690,14 @@ const modelMeta = (model: Model): string =>
 }
 
 .modal-content {
-  background-color: white;
-  border-radius: 12px;
+  background-color: var(--bg-panel-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-panel);
 }
 
 .model-detail-modal {
@@ -928,7 +1706,7 @@ const modelMeta = (model: Model): string =>
 
 .modal-header {
   padding: 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--border-subtle);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -937,6 +1715,7 @@ const modelMeta = (model: Model): string =>
 .modal-header h2 {
   margin: 0;
   font-size: 1.5rem;
+  color: var(--text-1);
 }
 
 .close-btn {
@@ -944,12 +1723,12 @@ const modelMeta = (model: Model): string =>
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #666;
+  color: var(--text-2);
   transition: color 0.2s ease;
 }
 
 .close-btn:hover {
-  color: #000;
+  color: var(--text-1);
 }
 
 .modal-body {
@@ -965,21 +1744,34 @@ const modelMeta = (model: Model): string =>
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-1);
 }
 
 .form-group input,
 .form-group select {
   width: 100%;
   padding: 12px 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
+  color: var(--text-1);
   font-size: 1rem;
 }
 
+.form-group input:focus,
+.form-group select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.form-group input::placeholder {
+  color: var(--text-3);
+}
+
 .file-upload-area {
-  border: 2px dashed #ddd;
-  border-radius: 8px;
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-inset);
   padding: 30px;
   text-align: center;
   cursor: pointer;
@@ -987,8 +1779,8 @@ const modelMeta = (model: Model): string =>
 }
 
 .file-upload-area:hover {
-  border-color: #6e5af0;
-  background-color: #f0effc;
+  border-color: var(--accent);
+  background-color: var(--accent-soft);
 }
 
 .file-upload-area input {
@@ -997,18 +1789,18 @@ const modelMeta = (model: Model): string =>
 
 .upload-placeholder i {
   font-size: 2.5rem;
-  color: #ccc;
+  color: var(--text-3);
   margin-bottom: 15px;
 }
 
 .upload-placeholder p {
   margin: 0 0 5px 0;
-  color: #666;
+  color: var(--text-2);
 }
 
 .file-formats {
   font-size: 0.85rem;
-  color: #999;
+  color: var(--text-3);
 }
 
 .file-selected {
@@ -1016,19 +1808,20 @@ const modelMeta = (model: Model): string =>
   align-items: center;
   justify-content: space-between;
   padding: 10px;
-  background-color: #f5f5f5;
-  border-radius: 8px;
+  background-color: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 
 .file-selected i {
-  color: #666;
+  color: var(--text-2);
   margin-right: 10px;
 }
 
 .remove-file {
   background: none;
   border: none;
-  color: #e74c3c;
+  color: var(--danger);
   cursor: pointer;
   padding: 5px;
 }
@@ -1040,10 +1833,10 @@ const modelMeta = (model: Model): string =>
   margin-top: 30px;
 }
 
-/* 模型详情样式 */
+/* 模型详情样式：预览略收、属性与动作略放——右半不再空旷 */
 .model-detail-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   gap: 25px;
 }
 
@@ -1072,13 +1865,14 @@ const modelMeta = (model: Model): string =>
 .model-properties td {
   padding: 12px 15px;
   text-align: left;
-  border-bottom: 1px solid #eee;
+  color: var(--text-1);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .model-properties th {
   width: 35%;
   font-weight: 600;
-  color: #666;
+  color: var(--text-3);
 }
 
 .detail-actions {
@@ -1113,5 +1907,25 @@ const modelMeta = (model: Model): string =>
   .form-actions button {
     width: 100%;
   }
+}
+
+/* AI 生成（TripoSR）：后台进度态 */
+.generate-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+.generate-progress i {
+  font-size: 28px;
+}
+
+.generate-hint {
+  font-size: 12px;
+  opacity: 0.7;
+  max-width: 320px;
 }
 </style>

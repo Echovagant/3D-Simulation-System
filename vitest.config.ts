@@ -1,18 +1,17 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
-import wasm from 'vite-plugin-wasm'
-import topLevelAwait from 'vite-plugin-top-level-await'
 
 /**
  * 测试环境配置。
  *
- * 插件与 `vite.config.ts` 保持一致（wasm / topLevelAwait / vue），
+ * 插件与 `vite.config.ts` 保持一致（wasm / vue），
  * 但**故意不带 `vite-plugin-vue-devtools`**——它会往页面里注入浏览器端调试客户端，
  * 在测试里没有意义且会拖慢/干扰用例。dev server 仍然由 `vite.config.ts` 负责。
  */
 export default defineConfig({
-  plugins: [wasm(), topLevelAwait(), vue()],
+  // wasm 插件已移除：测试环境用 compat 包（wasm 内联），rolldown 原生处理真 .wasm
+  plugins: [vue()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
