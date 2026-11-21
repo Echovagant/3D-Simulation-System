@@ -53,8 +53,10 @@ class GymSession:
     """一个 Gym 会话：一个活着的物理世界 + 任务定义 + 步数账。"""
 
     session_id: str
-    # 场景与参数留档：reset 要按它们重建世界
+    owner_token: str
+    # 场景与参数留档：reset 要按它们重建世界并重解析
     scene: Mapping[str, Any]
+    params_raw: Mapping[str, Any]
     params: SimulationParams
     sim: SimulationWorld
     agent_uuid: str
@@ -62,6 +64,7 @@ class GymSession:
     target_z: float
     max_steps: int
     step_count: int = 0
+    round_index: int = 0
     terminated: bool = False
     truncated: bool = False
 
@@ -145,6 +148,7 @@ def create_session(
     scene: Mapping[str, Any],
     params_raw: Mapping[str, Any] | None,
     *,
+    owner_token: str,
     agent_uuid: str | None,
     target_x: float,
     target_z: float,
@@ -167,7 +171,9 @@ def create_session(
 
     session = GymSession(
         session_id=uuid.uuid4().hex,
+        owner_token=owner_token,
         scene=dict(scene),
+        params_raw=dict(params_raw or {}),
         params=params,
         sim=sim,
         agent_uuid=picked,
@@ -179,9 +185,10 @@ def create_session(
     return session
 
 
-def _get(session_id: str) -> GymSession:
+def _get(session_id: str, owner_token: str) -> GymSession:
     session = _sessions.get(session_id)
-    if session is None:
+    # 不属于该 owner 与不存在返回同一个码：不泄露会话存在性
+    if session is None or session.owner_token != owner_token:
         raise ApiError(
             status_code=404,
             code="gym_session_not_found",
@@ -190,10 +197,10 @@ def _get(session_id: str) -> GymSession:
     return session
 
 
-async def step(session_id: str, force_x: float, force_z: float) -> dict[str, Any]:
+async def step(session_id: str, force_x: float, force_z: float, owner_token: str) -> dict[str, Any]:
     """施加一次水平冲量（力 × dt）并推进一步。"""
     async with _lock:
-        session = _get(session_id)
+        session = _get(session_id, owner_token)
         if session.terminated or session.truncated:
             # Farama 规范：done 之后继续 step 是未定义行为——这里如实拒绝
             raise ApiError(
@@ -239,10 +246,10 @@ async def step(session_id: str, force_x: float, force_z: float) -> dict[str, Any
         }
 
 
-async def reset_session(session_id: str) -> dict[str, Any]:
+async def reset_session(session_id: str, owner_token: str) -> dict[str, Any]:
     """按留档的场景与参数重建世界——观测回到初始状态。"""
     async with _lock:
-        session = _get(session_id)
+        session = _get(session_id, owner_token)
         sim = simulator.build_world(session.scene, session.params)
         # 同一个 agentUuid 必须还能找到：场景没变，找不到就是内部错误
         if _pick_agent(sim, session.agent_uuid) != session.agent_uuid:
@@ -261,7 +268,7 @@ async def reset_session(session_id: str) -> dict[str, Any]:
         }
 
 
-def list_sessions() -> list[dict[str, Any]]:
+def list_sessions(owner_token: str) -> list[dict[str, Any]]:
     return [
         {
             "sessionId": session.session_id,
@@ -272,14 +279,12 @@ def list_sessions() -> list[dict[str, Any]]:
             "truncated": session.truncated,
         }
         for session in _sessions.values()
+        if session.owner_token == owner_token
     ]
 
 
-async def delete_session(session_id: str) -> None:
+async def delete_session(session_id: str, owner_token: str) -> None:
     async with _lock:
-        if _sessions.pop(session_id, None) is None:
-            raise ApiError(
-                status_code=404,
-                code="gym_session_not_found",
-                message=f"Gym 会话不存在：{session_id}",
-            )
+        # 归属校验只走 _get 这一处：越权与不存在同样回 404
+        _get(session_id, owner_token)
+        _sessions.pop(session_id)
