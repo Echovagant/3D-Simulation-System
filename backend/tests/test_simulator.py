@@ -315,6 +315,64 @@ def test_resolve_empty_returns_defaults():
     assert defaulted == []
 
 
+def test_resolve_all_known_keys_leave_nothing_dropped():
+    """全部 7 个合法键一起给：不丢键、不回落，逐字段生效。
+
+    钉住 _KNOWN_PARAM_KEYS 与 _parse 里 take() 的双枚举——
+    一侧加了键另一侧没加，这里先红。
+    """
+    raw = {
+        "gravityY": -9.81,
+        "friction": 0.3,
+        "restitution": 0.2,
+        "dt": 0.02,
+        "steps": 100,
+        "trace": True,
+        "initialVelocityY": -1.5,
+    }
+    params, dropped, defaulted = simulator.SimulationParams.resolve(raw)
+    assert dropped == []
+    assert defaulted == []
+    assert params.gravity_y == -9.81
+    assert params.friction == 0.3
+    assert params.restitution == 0.2
+    assert params.dt == 0.02
+    assert params.steps == 100
+    assert params.trace is True
+    assert params.initial_velocity_y == -1.5
+
+
+def test_resolve_empty_mapping_returns_defaults():
+    """resolve({}) 与 resolve(None) 同走默认值，三个报告都是空。"""
+    params, dropped, defaulted = simulator.SimulationParams.resolve({})
+    assert params == simulator.SimulationParams()
+    assert dropped == []
+    assert defaulted == []
+
+
+def test_resolve_explicit_null_falls_back():
+    """friction/restitution/initialVelocityY 显式给 null：回落且如实上报。
+
+    friction/restitution 的回落值是 None（不下发，用 Rapier 默认），
+    initialVelocityY 回落 0.0；键在请求里出现过，所以要进 defaulted。
+    """
+    params, dropped, defaulted = simulator.SimulationParams.resolve(
+        {"friction": None, "restitution": None, "initialVelocityY": None}
+    )
+    assert params.friction is None
+    assert params.restitution is None
+    assert params.initial_velocity_y == 0.0
+    assert defaulted == ["friction", "initialVelocityY", "restitution"]
+    assert dropped == []
+
+
+def test_resolve_multiple_unknown_keys_sorted():
+    """多个未知键按升序如实上报。"""
+    _, dropped, defaulted = simulator.SimulationParams.resolve({"zeta": 1, "alpha": 2, "mid": 3})
+    assert dropped == ["alpha", "mid", "zeta"]
+    assert defaulted == []
+
+
 def test_from_mapping_behavior_unchanged():
     """既有批量仿真调用方不能受影响：非法值仍静默回落。"""
     assert simulator.SimulationParams.from_mapping({"dt": "abc"}).dt == simulator.DEFAULT_DT

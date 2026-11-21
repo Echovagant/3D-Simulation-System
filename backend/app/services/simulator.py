@@ -202,14 +202,6 @@ def _as_float(value: Any, fallback: float) -> float:
     return _coerce(value, float, fallback)[0]
 
 
-def _as_optional_float(value: Any) -> float | None:
-    return _coerce(value, float, None)[0]
-
-
-def _as_int(value: Any, fallback: int) -> int:
-    return _coerce(value, int, fallback)[0]
-
-
 def _vector(raw: Any, fallback: tuple[float, float, float]) -> tuple[float, float, float]:
     """读 ``{x, y, z}``，缺字段就用兜底值。"""
     if not isinstance(raw, Mapping):
