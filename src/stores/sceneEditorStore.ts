@@ -917,6 +917,12 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     initialTransforms.clear()
     selectedObjectUuid.value = null
     simulationState.isPlaying = false
+
+    // 核心 three 对象引用随清理一并置空：组合式侧会 dispose 掉自己的 renderer，
+    // 这里若继续持有旧引用，Viewport 的「三者非空即重建」守卫会拿死 context
+    // 渲染——表现为画布黑屏且不恢复（快速路由切换的已知症状）。
+    // 下次进入编辑器时 initEditor 会重建并 setRenderer，watch 自动接管。
+    renderer.value = null
   }
 
   // 监听模拟状态变化

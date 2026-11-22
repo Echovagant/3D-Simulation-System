@@ -79,6 +79,18 @@ const initRenderer = () => {
 
   // 检查props有效性
   if (!props.scene || !props.camera || !props.renderer) {
+    // renderer 可能在异步初始化链（initPhysicsWorld 等）尚未产出的窗口期缺席：
+    // 与容器尺寸重试同机制等待，而不是静默放弃（静默放弃 = 画布永久黑屏）。
+    initRetryCount++
+    if (initRetryCount < MAX_INIT_RETRIES) {
+      setTimeout(() => {
+        if (!isUnmounted.value) {
+          initRenderer()
+        }
+      }, 200)
+    } else {
+      console.warn('[Viewport] 渲染器初始化重试耗尽——检查场景编辑器的初始化链路')
+    }
     return
   }
 
