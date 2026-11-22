@@ -274,7 +274,7 @@ Redis 连不上时 `POST /api/simulations` 直接返回 503 `simulation_queue_un
 ```bash
 cd clients/gym-client
 uv sync
-uv run pytest    # 7 个用例（MockTransport，不需要真后端）
+uv run pytest    # 9 个用例（MockTransport，不需要真后端）
 ```
 
 ```python
@@ -289,7 +289,7 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 
 ```bash
 cd backend
-uv run pytest        # 172 个用例
+uv run pytest        # 242 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
@@ -386,7 +386,7 @@ flowchart LR
 渲染器一律显式请求高性能 GPU（`powerPreference: 'high-performance'`）——**双显卡笔记本**上
 浏览器默认可能把 WebGL 上下文交给核显，帧率直接掉一半；显式请求能显著提高拿到独显的概率。
 
-后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（172 个用例）。
+后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（242 个用例）。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 
