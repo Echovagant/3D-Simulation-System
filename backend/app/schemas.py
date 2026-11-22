@@ -648,3 +648,66 @@ class ModelUploadList(ApiModel):
     """当前 owner 的上传列表（按 created_at 倒序）。"""
 
     items: list[ModelUploadItem]
+
+
+# --------------------------------------------------------------------------
+# 智能体记忆
+# --------------------------------------------------------------------------
+
+
+class MemoryCreateRequest(ApiModel):
+    """写一条记忆。
+
+    ``kind`` / ``source`` 的取值在服务层校验（报 memory_invalid_request），
+    不走 Pydantic——请求形状的问题归到同一个错误码，前端只要认一种
+    （与 LLM 托管同一约定）。
+    """
+
+    kind: str = Field(min_length=1, max_length=32)
+    content: str = Field(min_length=1, max_length=4000)
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+    source: str = Field(default="manual", min_length=1, max_length=32)
+
+
+class MemoryItem(ApiModel):
+    """一条记忆。``dedupeKey`` 只在审计提炼的记忆上有值，手动写入为 None。"""
+
+    id: int
+    kind: str
+    content: str
+    source: str
+    importance: float
+    dedupe_key: str | None = None
+    created_at: datetime
+    last_accessed_at: datetime
+
+
+class MemoryCreated(MemoryItem):
+    """写入成功（201）的应答：与列表条目同一形状。"""
+
+
+class MemoryList(ApiModel):
+    """当前 owner 的记忆列表（无 query 按最近访问倒序，有 query 按相关度降序）。"""
+
+    items: list[MemoryItem]
+
+
+class ConsolidatePattern(ApiModel):
+    """提炼出的一条失败模式（同一会话内重复出现的失败）。"""
+
+    session_id: str
+    error_code: str
+    occurrences: int
+    memory_id: int
+    # "created"（新提炼）/ "updated"（已有同源记忆被更新）
+    action: str
+
+
+class ConsolidateResult(ApiModel):
+    """一次审计提炼的结果。"""
+
+    # 本次扫过的审计行数
+    scanned_logs: int
+    created: int
+    updated: int
+    patterns: list[ConsolidatePattern] = Field(default_factory=list)

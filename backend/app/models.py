@@ -315,6 +315,45 @@ class ModelUpload(Base):
     )
 
 
+class AgentMemory(Base):
+    """一条智能体记忆。
+
+    ``owner_hash`` 沿用 model_uploads 的口径（sha256 前 16 位，不存 token 原文）；
+    ``kind`` 存字符串（episodic / semantic / procedural），枚举语义由服务层校验，
+    不上 DB 约束——加一种 kind 不用动迁移。
+
+    ``dedupe_key`` 只给审计提炼的记忆用（``{session_id}:{error_code}``），
+    与 ``owner_hash`` 组成唯一索引：同一 (owner, 错误码, 会话) 组合重跑提炼
+    是更新而不是重复插入。手动写入的记忆为 NULL——SQLite 与 Postgres 的
+    唯一索引都把 NULL 当互不相同的值，多条手动记忆互不干扰。
+    """
+
+    __tablename__ = "agent_memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    owner_hash: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # manual（用户手写）/ audit_distilled（从 gym 审计提炼）
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    # 0~1，默认 0.5
+    importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    dedupe_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    # 检索命中时刷新；「最近优先」与时间衰减打分都按它算
+    last_accessed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_agent_memories_owner_kind", "owner_hash", "kind"),
+        Index("ix_agent_memories_owner_importance", "owner_hash", "importance"),
+        Index("ix_agent_memories_owner_dedupe", "owner_hash", "dedupe_key", unique=True),
+    )
+
+
 class GymStepLog(Base):
     """gym 的一步动作留档。
 
