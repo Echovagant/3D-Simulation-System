@@ -1383,6 +1383,9 @@ const handleResize = () => {
   camera.aspect = width / height
   camera.updateProjectionMatrix()
   renderer.setSize(width, height, false)
+  // 本页渲染循环仅在仿真运行时跑：resize 清空 drawing buffer 后，
+  // 静态状态必须立即补一帧渲染，否则画布黑屏直到下次仿真启动。
+  sceneEditorStore.renderState.needsUpdate = true
 }
 
 // resize 监听注册在 setup 顶层（不是 onMounted 里），卸载时在 onUnmounted 里成对摘除
@@ -1391,10 +1394,22 @@ window.addEventListener('resize', handleResize)
 // 容器级尺寸变化同样要重排：导航轨 hover 展开只改容器宽度、不触发 window resize，
 // 只听 window 会让画布停在旧尺寸（表现为「画布没占满区域」）。
 // ResizeObserver 观察视口容器本身；jsdom 无此 API，守卫跳过。
+// ⚠️ 回调防抖：侧边栏 hover 展开是 CSS 过渡，宽度每帧都在变——每帧
+// setSize 反复重置 drawing buffer（清空画布）→ 肉眼可见闪烁。防抖到
+// 过渡结束后一次性精确对齐；过渡期间 canvas 由 CSS 平滑拉伸显示。
+// 且本页渲染循环仅在仿真运行时跑：setSize 清空 buffer 后必须补一帧渲染
+// （handleResize 尾部 renderState.needsUpdate = true），否则静态页黑屏。
 let viewportResizeObserver: ResizeObserver | null = null
+let viewportResizeDebounce: number | null = null
 onMounted(() => {
   if (!viewportRef.value || typeof ResizeObserver === 'undefined') return
-  viewportResizeObserver = new ResizeObserver(handleResize)
+  viewportResizeObserver = new ResizeObserver(() => {
+    if (viewportResizeDebounce !== null) window.clearTimeout(viewportResizeDebounce)
+    viewportResizeDebounce = window.setTimeout(() => {
+      viewportResizeDebounce = null
+      handleResize()
+    }, 220)
+  })
   viewportResizeObserver.observe(viewportRef.value)
 })
 </script>

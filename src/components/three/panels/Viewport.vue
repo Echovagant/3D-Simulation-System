@@ -66,6 +66,8 @@ const sceneEditorStore = useSceneEditorStore()
 let resizeObserver: ResizeObserver | null = null
 let initRetryCount = 0
 const MAX_INIT_RETRIES = 10
+/** ResizeObserver 的防抖句柄：容器宽度过渡期间每帧触发，合帧到过渡结束 */
+let resizeDebounce: number | null = null
 const isUnmounted = ref(false)
 
 // 调试日志已移除
@@ -295,9 +297,17 @@ onMounted(() => {
     // 绑定点击事件
     container.addEventListener('click', handleClick)
 
-    // 监听尺寸变化（使用ResizeObserver替代useThree.size，避免依赖）
-    resizeObserver = new ResizeObserver((entries) => {
-      if (entries.length > 0) handleResize()
+    // 监听尺寸变化（使用ResizeObserver替代useThree.size，避免依赖）。
+    // ⚠️ 回调防抖：侧边栏 hover 展开是 CSS 过渡，宽度每帧都在变——
+    // ResizeObserver 每帧触发 setSize 会反复重置 drawing buffer（清空画布）
+    // → 肉眼可见的闪烁。防抖到过渡结束后一次性精确对齐；过渡期间 canvas
+    // 由 CSS width/height 100% 平滑拉伸显示，无跳变。
+    resizeObserver = new ResizeObserver(() => {
+      if (resizeDebounce !== null) window.clearTimeout(resizeDebounce)
+      resizeDebounce = window.setTimeout(() => {
+        resizeDebounce = null
+        if (!isUnmounted.value) handleResize()
+      }, 220)
     })
     resizeObserver.observe(container)
   })
@@ -309,6 +319,12 @@ onUnmounted(() => {
 
   // 清理渲染循环
   stopRendering()
+
+  // 清理防抖
+  if (resizeDebounce !== null) {
+    window.clearTimeout(resizeDebounce)
+    resizeDebounce = null
+  }
 
   // 移除事件监听
   const container = containerRef.value
