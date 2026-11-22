@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.21.0" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 6.4.6" src="https://img.shields.io/badge/Vite-6.4.6-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="50 test files / 458 cases" src="https://img.shields.io/badge/test-50%20files%20%2F%20458%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="54 test files / 494 cases" src="https://img.shields.io/badge/test-54%20files%20%2F%20494%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="12 build gates" src="https://img.shields.io/badge/build%20gates-12%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-FF6101?logo=apache&logoColor=FF6101"></a>
 </p>
@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>33.05 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>490</b><br><sub>测试用例 · 54 个文件</sub></td>
+    <td align="center"><b>494</b><br><sub>测试用例 · 54 个文件</sub></td>
     <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -198,7 +198,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（54 个测试文件 / 490 个用例） |
+| `npm test` | Vitest 全量用例（54 个测试文件 / 494 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -293,7 +293,7 @@ uv run pytest        # 242 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
-后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（38 个端点）是**生成物**：
+后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（42 个端点）是**生成物**：
 它由后端代码生成，改了接口却没重新生成，CI 会直接红。
 
 </details>
