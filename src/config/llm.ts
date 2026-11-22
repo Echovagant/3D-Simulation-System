@@ -25,6 +25,14 @@ export interface LlmConfig {
   minIntervalMs: number
   /** 失败后的冷却时间（毫秒）：这段时间内不再重试 */
   cooldownMs: number
+  /**
+   * 场景生成的单次超时（毫秒）。
+   *
+   * ⚠️ 场景生成要的是一整份 JSON 文档，输出量远超聊天——推理型模型
+   * （M3.1-Flash）先思考再吐完整 schema，15 秒的通用超时不够用，
+   * 会把「还在好好生成」误判成失败进冷却。
+   */
+  sceneGenTimeoutMs: number
 }
 
 export const llmConfig: LlmConfig = {
@@ -34,4 +42,5 @@ export const llmConfig: LlmConfig = {
   maxCallsPerSession: 60,
   minIntervalMs: 1500,
   cooldownMs: 5000,
+  sceneGenTimeoutMs: 60000,
 }

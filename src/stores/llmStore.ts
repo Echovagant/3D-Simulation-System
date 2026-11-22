@@ -6,7 +6,7 @@
  * key 本体不在这里：直连在 `services/llm/secret.ts` 的内存槽位，托管在后端密钥库。
  */
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { llmConfig } from '@/config/llm'
 import { findProvider, llmProviders, type LlmProvider } from '@/config/llmProviders'
 import { ApiError, isApiUnavailable } from '@/services/api/client'
@@ -113,6 +113,14 @@ export const useLlmStore = defineStore('llm', () => {
   const explaining = ref(false)
   /** 最近一次错误（已脱敏） */
   const lastError = ref('')
+  /**
+   * 最近一次**真实失败**的原因（已脱敏）。
+   *
+   * 冷却期拦截会覆盖 lastError——只报「冷却中」会把根因盖掉，
+   * 用户只能看到「稍后再试」，看不到第一次到底为什么挂（实测踩过）。
+   * 失败原因单独存一份，冷却文案里带上。
+   */
+  const lastFailure = ref('')
   /** LLM 控制器是否已降级回规则式 */
   const degraded = ref(false)
   /** 本次会话已发出的 LLM 调用次数 */
@@ -141,6 +149,60 @@ export const useLlmStore = defineStore('llm', () => {
    * 不用用户重新提交一遍 key。
    */
   const hostedPassphrase = ref('')
+
+  // ------------------------------------------------------------------------
+  // 提供商选择持久化（**不含 key**——key 仍然只在内存里）
+  //
+  // 不持久化的代价：刷新会把「MiniMax（国内版 · 订阅）」这类选择静默重置回
+  // 清单第一项，用户以为 key 还配着，实际连线路都换了（实测踩过的坑）。
+  // 持久化的只有：选中哪条线、托管/直连、模型与 base_url 覆盖。
+  // ------------------------------------------------------------------------
+  const LLM_PREFS_KEY = 'llm-prefs'
+
+  const restorePrefs = (): void => {
+    try {
+      const raw = globalThis.localStorage?.getItem(LLM_PREFS_KEY)
+      if (!raw) return
+      const prefs = JSON.parse(raw) as {
+        providerId?: string
+        hostingMode?: 'hosted' | 'direct'
+        modelOverrides?: Record<string, string>
+        baseUrlOverrides?: Record<string, string>
+      }
+      if (prefs.providerId && llmProviders.some((item) => item.id === prefs.providerId)) {
+        providerId.value = prefs.providerId
+      }
+      if (prefs.hostingMode === 'hosted' || prefs.hostingMode === 'direct') {
+        hostingMode.value = prefs.hostingMode
+      }
+      if (prefs.modelOverrides) modelOverrides.value = { ...prefs.modelOverrides }
+      if (prefs.baseUrlOverrides) baseUrlOverrides.value = { ...prefs.baseUrlOverrides }
+    } catch {
+      // 坏数据不响应用户：按默认值走
+    }
+  }
+
+  restorePrefs()
+
+  watch(
+    [providerId, hostingMode, modelOverrides, baseUrlOverrides],
+    () => {
+      try {
+        globalThis.localStorage?.setItem(
+          LLM_PREFS_KEY,
+          JSON.stringify({
+            providerId: providerId.value,
+            hostingMode: hostingMode.value,
+            modelOverrides: modelOverrides.value,
+            baseUrlOverrides: baseUrlOverrides.value,
+          }),
+        )
+      } catch {
+        // 隐私模式下写不进 localStorage：跳过，本次会话内选择仍有效
+      }
+    },
+    { deep: true },
+  )
 
   /** 冷却截止时间戳：失败后这段时间内不再重试 */
   let cooldownUntil = 0
@@ -172,6 +234,18 @@ export const useLlmStore = defineStore('llm', () => {
   /** 当前模式生效的冷却截止时间：两种模式各算各的 */
   const currentCooldownUntil = (): number =>
     hostingMode.value === 'hosted' ? hostedCooldownUntil : cooldownUntil
+
+  /**
+   * 冷却期拦截文案：**必须带上一次失败的真实原因**。
+   * 只报「冷却中」等于把根因藏起来——用户重试一次看到的还是同一句话，
+   * 却永远不知道第一次为什么挂（密钥被拒？超时？模型没订阅？）。
+   */
+  const cooldownBlockError = (): string => {
+    const remain = Math.max(0, Math.ceil((currentCooldownUntil() - Date.now()) / 1000))
+    return lastFailure.value
+      ? `上一次调用失败后仍在冷却期（还需 ${remain} 秒）· 失败原因：${lastFailure.value}`
+      : `上一次调用失败后仍在冷却期（还需 ${remain} 秒）`
+  }
 
   const syncConfigured = (): void => {
     configured.value =
@@ -415,8 +489,7 @@ export const useLlmStore = defineStore('llm', () => {
     }
     // 冷却期：失败后这段时间内一律不再出网（被拦下的请求也不计数）
     if (Date.now() < hostedCooldownUntil) {
-      const remain = Math.ceil((hostedCooldownUntil - Date.now()) / 1000)
-      const error = `上一次调用失败后仍在冷却期（还需 ${remain} 秒）`
+      const error = cooldownBlockError()
       if (isCurrent()) lastError.value = error
       return { ok: false as const, content: '', error }
     }
@@ -454,6 +527,7 @@ export const useLlmStore = defineStore('llm', () => {
       hostedError.value = message
       if (isCurrent()) {
         lastError.value = message
+        lastFailure.value = message
         hostedCooldownUntil = Date.now() + llmConfig.cooldownMs
       }
       return { ok: false as const, content: '', error: message }
@@ -473,6 +547,8 @@ export const useLlmStore = defineStore('llm', () => {
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>,
     maxCompletionTokens: number,
     isCurrent: () => boolean = () => true,
+    /** 单次调用可覆盖的超时：场景生成这类大 JSON 输出比聊天慢得多 */
+    timeoutMs?: number,
   ) => {
     // 托管模式改走后端；自带 Key 那条路（下面这段）一个字都不动
     if (hostingMode.value === 'hosted') {
@@ -488,8 +564,7 @@ export const useLlmStore = defineStore('llm', () => {
     }
     // 冷却期：失败后这段时间内一律不再出网（被拦下的请求也不计数）
     if (Date.now() < cooldownUntil) {
-      const remain = Math.ceil((cooldownUntil - Date.now()) / 1000)
-      const error = `上一次调用失败后仍在冷却期（还需 ${remain} 秒）`
+      const error = cooldownBlockError()
       if (isCurrent()) lastError.value = error
       return { ok: false as const, content: '', error }
     }
@@ -503,11 +578,13 @@ export const useLlmStore = defineStore('llm', () => {
       baseUrl: baseUrl.value,
       messages,
       maxCompletionTokens,
+      ...(timeoutMs ? { timeoutMs } : {}),
     })
     if (!result.ok) {
       const error = result.error ?? '调用失败'
       if (isCurrent()) {
         lastError.value = error
+        lastFailure.value = error
         cooldownUntil = Date.now() + llmConfig.cooldownMs
       }
       return { ok: false as const, content: '', error }
@@ -642,8 +719,7 @@ export const useLlmStore = defineStore('llm', () => {
       if (callCount.value >= llmConfig.maxCallsPerSession) {
         lastError.value = `已达本次会话的调用上限（${llmConfig.maxCallsPerSession} 次），控制器已回落到规则式`
       } else if (Date.now() < currentCooldownUntil()) {
-        const remain = Math.ceil((currentCooldownUntil() - Date.now()) / 1000)
-        lastError.value = `上一次调用失败后仍在冷却期（还需 ${remain} 秒），控制器已回落到规则式`
+        lastError.value = `${cooldownBlockError()}，控制器已回落到规则式`
       }
       return null
     }
@@ -688,12 +764,16 @@ export const useLlmStore = defineStore('llm', () => {
       const reason =
         callCount.value >= llmConfig.maxCallsPerSession
           ? `已达本次会话的调用上限（${llmConfig.maxCallsPerSession} 次）`
-          : '上一次调用失败后仍在冷却期，稍后再试'
+          : Date.now() < currentCooldownUntil()
+            ? cooldownBlockError()
+            : `未配置 ${provider.value.name} 的 API Key`
       return { ok: false, error: reason }
     }
     const result = await invoke(
       buildSceneGenerationMessages(userPrompt),
       llmConfig.controllerMaxTokens * 2,
+      () => true,
+      llmConfig.sceneGenTimeoutMs,
     )
     if (!result.ok) {
       return { ok: false, error: lastError.value || 'LLM 调用失败' }
