@@ -53,6 +53,8 @@ export interface SimulationJobRequest {
 /** 提交成功（202）的应答 */
 export interface SimulationJobCreated {
   jobId: string
+  /** 请求体里被忽略的未知参数键（顶层与 params 两层）；无未知键时缺省 */
+  ignoredKeys?: string[]
 }
 
 /** 任务摘要：列表与详情共用的字段 */

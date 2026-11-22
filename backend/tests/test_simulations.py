@@ -144,6 +144,53 @@ def test_failed_enqueue_marks_the_job_failed(client: TestClient, monkeypatch: py
     assert rows[0].error
 
 
+def test_unknown_keys_are_reported_from_both_levels(client: TestClient, fake_queue: FakePool):
+    """顶层与 params 里的未知键都进 ignoredKeys——宽容接收，但必须看得见。
+
+    ``steps`` 放到顶层是典型的手误：仿真器永远读不到它，调用方不该毫无感知。
+    """
+    response = client.post(
+        "/api/simulations",
+        json={
+            "label": "未知键上报",
+            "scene": SCENE,
+            "params": {"steps": 60, "gravityy": -5, "bogus": 1},
+            "steps": 120,
+            "unknownTop": True,
+        },
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["jobId"]
+    assert body["ignoredKeys"] == ["bogus", "gravityy", "steps", "unknownTop"]
+
+
+def test_clean_request_omits_ignored_keys(client: TestClient, fake_queue: FakePool):
+    """干净请求不含 ignoredKeys 字段——不打扰正常调用方。"""
+    response = client.post("/api/simulations", json={"scene": SCENE, "params": {"steps": 60}})
+
+    assert response.status_code == 202
+    assert "ignoredKeys" not in response.json()
+
+
+def test_effective_snake_case_params_are_not_reported(client: TestClient, fake_queue: FakePool):
+    """snake_case 拼写能落进 schema（populate_by_name）并真实生效，不算被忽略。"""
+    response = client.post("/api/simulations", json={"scene": SCENE, "params": {"gravity_y": -5}})
+
+    assert response.status_code == 202
+    body = response.json()
+    assert "ignoredKeys" not in body
+
+    job_id = body["jobId"]
+    asyncio.run(run_simulation({}, job_id))
+
+    results = client.get(f"/api/simulations/{job_id}/results")
+    assert results.status_code == 200
+    # snake_case 的 gravity_y 被别名导出成 gravityY，真的参与了仿真
+    assert results.json()["runs"][0]["params"]["gravityY"] == -5.0
+
+
 # --------------------------------------------------------------------------
 # 列表与查询
 # --------------------------------------------------------------------------

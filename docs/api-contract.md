@@ -4,7 +4,7 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：38
+后端版本：0.1.0　端点总数：42
 
 ## 端点
 
@@ -30,6 +30,10 @@
 | `POST` | `/api/model3d/keys` | `upsert_key_api_model3d_keys_post` | 托管一把云端 3D 密钥 |
 | `DELETE` | `/api/model3d/keys/{providerId}` | `delete_key_api_model3d_keys__providerId__delete` | 删掉一把托管密钥 |
 | `GET` | `/api/model3d/providers` | `list_providers_api_model3d_providers_get` | 云端 3D 供应商目录（计费 / 授权 / 限制如实标注） |
+| `GET` | `/api/models` | `list_models_api_models_get` | 列出当前 owner 的上传模型（created_at 倒序） |
+| `DELETE` | `/api/models/{publicId}` | `delete_model_api_models__publicId__delete` | 删除一个上传模型（记录与文件一起删） |
+| `GET` | `/api/models/{publicId}/file` | `get_model_file_api_models__publicId__file_get` | 下载上传的模型文件 |
+| `POST` | `/api/models/upload` | `upload_model_api_models_upload_post` | 上传一个模型文件（multipart） |
 | `GET` | `/api/render` | `list_renders_api_render_get` | 列出最近的服务端渲染 |
 | `POST` | `/api/render` | `create_render_api_render_post` | 提交一次服务端渲染 |
 | `GET` | `/api/render/{jobId}` | `get_render_api_render__jobId__get` | 读取一个渲染任务的状态 |

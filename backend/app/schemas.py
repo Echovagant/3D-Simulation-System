@@ -224,6 +224,10 @@ class SimulationJobAccepted(ApiModel):
     """排队成功。"""
 
     job_id: str
+    # 请求体里被静默忽略的未知键（顶层 + params 两层，去重排序）。
+    # **宽容接收 + 如实上报**：未知键不拒绝请求（不 422），但必须看得见；
+    # 无未知键时省略该字段，不打扰正常调用方。
+    ignored_keys: list[str] | None = None
 
 
 class SimulationJobStatus(ApiModel):
