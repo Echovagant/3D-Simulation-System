@@ -1,12 +1,14 @@
 /**
- * Agent 工作台 · Gym 会话状态。
+ * Agent 工作台 · Gym 会话状态 + 智能体记忆状态。
  *
- * 会话列表 / 当前会话 / 执行结果 / 审计条目的唯一真源。
+ * 会话列表 / 当前会话 / 执行结果 / 审计条目的唯一真源；
+ * 记忆列表（owner 维度，与会话无关）与写入/删除/审计提炼也在这里。
  * 后端是可选增强：所有动作都不抛异常，失败写进对应的错误位，
  * 界面层按「后端不在」还是业务错误分流展示。
  *
  * 审计流轮询用 setInterval（默认 3s），组件卸载时要调 `dispose()`
  * 收掉定时器——store 不随组件销毁，不收会一直打后端。
+ * 记忆列表不轮询：它不随动作执行变化，手动刷新/检索即可。
  */
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -26,6 +28,16 @@ import {
   type GymStepLogItem,
   type GymStepResponse,
 } from '@/services/api/gymWorkbench'
+import {
+  consolidateMemory as consolidateMemoryApi,
+  createMemory as createMemoryApi,
+  deleteMemory as deleteMemoryApi,
+  listMemories as listMemoriesApi,
+  searchMemories as searchMemoriesApi,
+  type ConsolidateResult,
+  type MemoryCreateInput,
+  type MemoryItem,
+} from '@/services/api/memory'
 import { useLlmStore } from './llmStore'
 
 /** 审计流轮询间隔（毫秒） */
@@ -76,6 +88,22 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   let auditTimer: ReturnType<typeof setInterval> | null = null
   /** 轮询是否在跑：单独一个 ref——定时器句柄本身不需要响应式 */
   const auditPollingActive = ref(false)
+
+  // ---- 记忆状态（owner 维度，与会话无关，不随选会话切换清空） ----
+  /** 当前 owner 的记忆列表（最近访问优先；检索时为命中结果） */
+  const memories = ref<MemoryItem[]>([])
+  /** 记忆列表/检索失败的原因 */
+  const memoriesError = ref('')
+  /** 记忆写入/删除/提炼失败的原因（与列表失败分开，避免互相盖文案） */
+  const memoryActionError = ref('')
+  /** 正在写入一条记忆 */
+  const memoryWriting = ref(false)
+  /** 正在被删除的记忆 id（删完摘除；多条同时删时各自独立） */
+  const memoryDeletingIds = ref<number[]>([])
+  /** 正在跑审计提炼 */
+  const consolidating = ref(false)
+  /** 最近一次提炼的结果（面板行内展示；null = 还没跑过） */
+  const consolidateResult = ref<ConsolidateResult | null>(null)
 
   // ---- 派生 ----
   /** 当前会话的摘要（列表里找得到才给） */
@@ -281,6 +309,83 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     void fetchLogs()
   }
 
+  // ---- 记忆动作 ----
+  /**
+   * 拉记忆列表（owner 维度）；有关键词走检索（后端按衰减打分），否则最近优先。
+   * 返回是否成功；失败不清空已有列表——界面还能看旧数据。
+   */
+  const fetchMemories = async (query?: string): Promise<boolean> => {
+    const keyword = (query ?? '').trim()
+    try {
+      const result = keyword
+        ? await searchMemoriesApi(llmStore.ownerToken, keyword)
+        : await listMemoriesApi(llmStore.ownerToken)
+      memories.value = result.items
+      memoriesError.value = ''
+      return true
+    } catch (error) {
+      memoriesError.value = describeError(error, '后端不可达，记忆列表暂时拉不到')
+      return false
+    }
+  }
+
+  /** 写一条记忆；成功后把新条目插到列表最前（后端列表本来就是最近优先） */
+  const createMemory = async (input: MemoryCreateInput): Promise<boolean> => {
+    memoryWriting.value = true
+    memoryActionError.value = ''
+    try {
+      const created = await createMemoryApi(llmStore.ownerToken, input)
+      memories.value = [created, ...memories.value.filter((item) => item.id !== created.id)]
+      return true
+    } catch (error) {
+      memoryActionError.value = describeError(error, '后端不可达，记忆没写进去')
+      return false
+    } finally {
+      memoryWriting.value = false
+    }
+  }
+
+  /** 删除一条记忆；后端成功才动本地列表（404 也算删成了——目标已经不在） */
+  const deleteMemory = async (id: number): Promise<boolean> => {
+    memoryActionError.value = ''
+    memoryDeletingIds.value = [...memoryDeletingIds.value, id]
+    try {
+      await deleteMemoryApi(llmStore.ownerToken, id)
+      memories.value = memories.value.filter((item) => item.id !== id)
+      return true
+    } catch (error) {
+      // 越权/不存在统一 404：条目已经不在了，本地同步摘掉，不算失败
+      if (error instanceof ApiError && error.status === 404) {
+        memories.value = memories.value.filter((item) => item.id !== id)
+        return true
+      }
+      memoryActionError.value = describeError(error, '后端不可达，记忆没删掉')
+      return false
+    } finally {
+      memoryDeletingIds.value = memoryDeletingIds.value.filter((busyId) => busyId !== id)
+    }
+  }
+
+  /**
+   * 从当前 owner 的 gym 审计提炼失败模式为程序性记忆。
+   * 成功后**等列表刷新完**再返回（提炼会新建/更新记忆，调用方拿到结果时
+   * 列表已是最新，不用自己再刷一次），结果留在 consolidateResult 供面板展示。
+   */
+  const consolidate = async (): Promise<boolean> => {
+    consolidating.value = true
+    memoryActionError.value = ''
+    try {
+      consolidateResult.value = await consolidateMemoryApi(llmStore.ownerToken)
+      await fetchMemories()
+      return true
+    } catch (error) {
+      memoryActionError.value = describeError(error, '后端不可达，审计提炼没跑成')
+      return false
+    } finally {
+      consolidating.value = false
+    }
+  }
+
   /** 启动审计流轮询；已有定时器先收掉，避免叠着多个 */
   const startAuditPolling = (intervalMs: number = AUDIT_POLL_INTERVAL_MS): void => {
     stopAuditPolling()
@@ -322,6 +427,13 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     stepping,
     creating,
     auditPollingActive,
+    memories,
+    memoriesError,
+    memoryActionError,
+    memoryWriting,
+    memoryDeletingIds,
+    consolidating,
+    consolidateResult,
     // 动作
     refreshSessions,
     createSession,
@@ -330,6 +442,10 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     resetCurrent,
     deleteCurrent,
     setLogRoundFilter,
+    fetchMemories,
+    createMemory,
+    deleteMemory,
+    consolidate,
     startAuditPolling,
     stopAuditPolling,
     dispose,

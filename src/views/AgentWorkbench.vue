@@ -4,7 +4,7 @@
     <div class="workbench-toolbar">
       <div class="toolbar-title">Agent 工作台</div>
       <span class="toolbar-hint">
-        Gym 会话式环境：建会话 → 发动作 → 看审计流。会话是内存态，后端重启即清空。
+        Gym 会话式环境：建会话 → 发动作 → 看审计流。会话是内存态，后端重启即清空；记忆按 owner 分区，可从审计提炼失败模式。
       </span>
       <span v-if="backendOffline" class="toolbar-status offline">后端不在，功能暂不可用</span>
       <span v-else-if="sessionsLoaded" class="toolbar-status online">
@@ -12,7 +12,7 @@
       </span>
     </div>
 
-    <!-- 三栏分区：左会话 / 中执行 / 右审计流 -->
+    <!-- 三栏分区：左会话 / 中执行 / 右审计流+记忆 -->
     <div class="workbench-container">
       <div class="pane pane-left">
         <WorkbenchSessionPanel />
@@ -21,7 +21,9 @@
         <WorkbenchExecutePanel />
       </div>
       <div class="pane pane-right">
-        <WorkbenchAuditPanel />
+        <!-- 右栏纵向分两块：审计流在上（轮询主视觉），记忆在下；各自内部滚动 -->
+        <WorkbenchAuditPanel class="pane-right-block audit" />
+        <MemoryPanel class="pane-right-block memory" />
       </div>
     </div>
   </div>
@@ -32,6 +34,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import WorkbenchSessionPanel from '@/components/workbench/WorkbenchSessionPanel.vue'
 import WorkbenchExecutePanel from '@/components/workbench/WorkbenchExecutePanel.vue'
 import WorkbenchAuditPanel from '@/components/workbench/WorkbenchAuditPanel.vue'
+import MemoryPanel from '@/components/workbench/MemoryPanel.vue'
 import { useGymWorkbenchStore } from '@/stores/gymWorkbenchStore'
 
 const store = useGymWorkbenchStore()
@@ -128,6 +131,22 @@ onUnmounted(() => {
   width: 360px;
   flex-shrink: 0;
   border-left: 1px solid var(--border-subtle);
+  /* 右栏纵向分两块：审计流占大头，记忆面板贴在下部，各自内部滚动 */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pane-right-block {
+  min-height: 0;
+}
+
+.pane-right-block.audit {
+  flex: 1 1 52%;
+}
+
+.pane-right-block.memory {
+  flex: 1 1 48%;
 }
 
 @media (max-width: 900px) {
@@ -145,6 +164,13 @@ onUnmounted(() => {
 
   .pane {
     overflow: visible;
+  }
+
+  /* 竖排流式布局里不再按比例切高度，交给页面滚动 */
+  .pane-right-block.audit,
+  .pane-right-block.memory {
+    flex: none;
+    height: auto;
   }
 }
 </style>
