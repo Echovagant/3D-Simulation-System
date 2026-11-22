@@ -4,7 +4,7 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：42
+后端版本：0.1.0　端点总数：46
 
 ## 端点
 
@@ -22,6 +22,10 @@
 | `POST` | `/api/llm/keys` | `upsert_key_api_llm_keys_post` | 托管一把厂商密钥 |
 | `DELETE` | `/api/llm/keys/{providerId}` | `delete_key_api_llm_keys__providerId__delete` | 删掉一把托管密钥 |
 | `GET` | `/api/llm/quota` | `quota_api_llm_quota_get` | 查今天的托管额度 |
+| `GET` | `/api/memory` | `list_memories_api_memory_get` | 检索记忆（无 query 最近优先，有 query 走衰减打分） |
+| `POST` | `/api/memory` | `create_memory_api_memory_post` | 写一条记忆 |
+| `DELETE` | `/api/memory/{memoryId}` | `delete_memory_api_memory__memoryId__delete` | 删除一条记忆 |
+| `POST` | `/api/memory/consolidate` | `consolidate_memories_api_memory_consolidate_post` | 把 gym 审计中重复出现的失败模式提炼为程序性记忆 |
 | `GET` | `/api/model3d/cloud/jobs` | `list_cloud_jobs_api_model3d_cloud_jobs_get` | 列出自己最近的云端生成任务 |
 | `POST` | `/api/model3d/cloud/jobs` | `create_cloud_job_api_model3d_cloud_jobs_post` | 提交一次云端生成 3D（混元 / 百炼） |
 | `GET` | `/api/model3d/cloud/jobs/{jobId}` | `get_cloud_job_api_model3d_cloud_jobs__jobId__get` | 读取一个云端生成任务的状态 |
