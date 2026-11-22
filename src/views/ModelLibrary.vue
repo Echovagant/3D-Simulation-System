@@ -63,7 +63,7 @@
 
     <AppNotice
       type="warning"
-      message="上传的模型使用浏览器对象 URL，仅在当前会话有效：刷新页面后失效。"
+      message="接入后端时上传的模型自动持久化（刷新后仍在）；后端不可达时回退为会话内对象 URL，仅在当前会话有效、刷新后失效。"
       class="library-notice"
     />
 
@@ -92,6 +92,7 @@
           <p class="model-meta">{{ modelMeta(model) }}</p>
           <div class="model-foot">
             <p v-if="model.sessionOnly" class="session-badge">仅本次会话有效</p>
+            <p v-else-if="model.persisted" class="session-badge persisted-badge">已持久化</p>
             <!-- 删除走两段式行内确认，替代原生 confirm() -->
             <div v-if="pendingDeleteId === model.id" class="model-confirm">
               <span class="confirm-text">确认删除？</span>
@@ -542,6 +543,8 @@ interface Model {
   description?: string; // 可选描述
   /** 本次会话上传的模型（对象 URL，刷新即失效） */
   sessionOnly?: boolean;
+  /** 服务端已持久化的模型（落盘 + DB，刷新后仍在） */
+  persisted?: boolean;
 }
 
 // 上传参数接口 - 明确file可以为null
@@ -1257,8 +1260,8 @@ const getCategoryName = (categoryId: 'characters' | 'environments' | 'props') =>
  */
 const isPlaceholder = isPlaceholderModel;
 
-/** 会话上传的模型没有做几何分析，面数/材质/动画是未知的 */
-const statsPending = (model: Model): boolean => model.sessionOnly === true;
+/** 会话上传与持久化条目都没做几何分析，面数/材质/动画是未知的 */
+const statsPending = (model: Model): boolean => model.sessionOnly === true || model.persisted === true;
 
 /**
  * 面数 / 材质数 / 动画的显示值。
@@ -1361,6 +1364,12 @@ const modelMeta = (model: Model): string =>
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   padding: 2px 6px;
+}
+
+/* 已持久化：与「仅本次会话有效」同一形状，用强调色而非警告色 */
+.persisted-badge {
+  color: var(--accent);
+  background-color: var(--accent-soft);
 }
 
 .search-filter {

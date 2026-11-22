@@ -67,10 +67,49 @@ export const handleLoaderError = (error: unknown, url: string): Error => {
 
 
 /**
+ * 加载选项（可选）：
+ * - headers：随请求发送的头。服务端持久化的模型文件端点按 owner 隔离，
+ *   请求要带 `X-Owner-Token`——three.js 的 loader 自己不发头，只能在这里给。
+ * - format：格式提示（glb / gltf / fbx / obj，大小写不敏感）。给定时跳过
+ *   URL 后缀判型——文件端点的 URL 形如 /api/models/{id}/file，不带扩展名，
+ *   getModelType 认不出来。
+ */
+export interface LoadModelOptions {
+  headers?: Record<string, string>;
+  format?: string;
+}
+
+/**
+ * 格式提示 → loader 类型。认不出返回 null（调用方当格式错误处理）。
+ */
+const normalizeFormatHint = (format: string): 'gltf' | 'fbx' | 'obj' | null => {
+  const lower = format.toLowerCase();
+  if (lower === 'glb' || lower === 'gltf') return 'gltf';
+  if (lower === 'fbx') return 'fbx';
+  if (lower === 'obj') return 'obj';
+  return null;
+};
+
+/**
+ * 设置（或清掉）loader 单例上的请求头。
+ *
+ * loader 是模块级单例：本次设的头会留在实例上，**必须**在下一次加载前
+ * 显式清空（传 undefined 就清），否则上一次的 owner 头会泄漏给内置模型
+ * 的静态资源请求。
+ */
+const applyLoaderHeaders = (loader: THREE.Loader, headers?: Record<string, string>): void => {
+  loader.setRequestHeader(headers ? { ...headers } : {});
+};
+
+/**
  * 加载3D模型文件，返回Three.js对象
  * @param url 模型文件路径
+ * @param options 可选的请求头与格式提示（见 LoadModelOptions）
  */
-export const loadModel = async (url: string): Promise<THREE.Object3D> => {
+export const loadModel = async (
+  url: string,
+  options?: LoadModelOptions
+): Promise<THREE.Object3D> => {
   // 验证URL有效性
   if (!url || url === '#' || url.trim() === '') {
     throw new Error('无效的模型URL');
@@ -80,11 +119,12 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
   const resolvedUrl = resolveModelUrl(url);
 
   try {
-    // 确定模型类型并使用相应的加载器
-    const modelType = getModelType(resolvedUrl);
+    // 确定模型类型并使用相应的加载器：格式提示优先，其次按 URL 后缀
+    const modelType = options?.format ? normalizeFormatHint(options.format) : getModelType(resolvedUrl);
 
     switch (modelType) {
       case 'gltf':
+        applyLoaderHeaders(gltfLoader, options?.headers);
         return new Promise((resolve, reject) => {
           gltfLoader.load(
             resolvedUrl,
@@ -101,6 +141,7 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
         });
 
       case 'fbx':
+        applyLoaderHeaders(fbxLoader, options?.headers);
         return new Promise((resolve, reject) => {
           fbxLoader.load(
             resolvedUrl,
@@ -111,6 +152,7 @@ export const loadModel = async (url: string): Promise<THREE.Object3D> => {
         });
 
       case 'obj':
+        applyLoaderHeaders(objLoader, options?.headers);
         return new Promise((resolve, reject) => {
           objLoader.load(
             resolvedUrl,
