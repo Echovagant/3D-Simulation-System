@@ -746,8 +746,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       }
     }
 
-    // 清空现有场景（连带通知物理引擎销掉旧刚体）
-    cleanup()
+    // 清空现有场景内容（物体 + 刚体），**渲染器保留**——页面还在渲染
+    clearScene()
 
     let restored = 0
     const total = doc.objects?.length ?? 0
@@ -963,7 +963,15 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   // 清理函数（保持原有）
-  const cleanup = () => {
+  /**
+   * 清空场景内容（物体、刚体、选择、仿真状态），**保留渲染器**。
+   *
+   * 「加载另一个场景」用的是它：页面还活着、渲染循环还要继续画，
+   * 把 renderer 一起清掉等于当场拆掉画布——Viewport 只剩一张
+   * 旧渲染器的遗照 canvas，物体加载得再多也永远画不出来
+   * （「已加载场景但画面空」的最终根因，实测复现）。
+   */
+  const clearScene = () => {
     stopSimulation()
     if (scene.value) {
       objects.value.forEach((obj) => {
@@ -988,11 +996,18 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     initialTransforms.clear()
     selectedObjectUuid.value = null
     simulationState.isPlaying = false
+  }
 
-    // 核心 three 对象引用随清理一并置空：组合式侧会 dispose 掉自己的 renderer，
-    // 这里若继续持有旧引用，Viewport 的「三者非空即重建」守卫会拿死 context
-    // 渲染——表现为画布黑屏且不恢复（快速路由切换的已知症状）。
-    // 下次进入编辑器时 initEditor 会重建并 setRenderer，watch 自动接管。
+  /**
+   * 完整清理：清场 + 核心 three 引用一并置空。
+   *
+   * 只给**路由卸载**用：组合式侧会 dispose 掉自己的 renderer，
+   * 这里若继续持有旧引用，Viewport 的「三者非空即重建」守卫会拿死 context
+   * 渲染——表现为画布黑屏且不恢复（快速路由切换的已知症状）。
+   * 下次进入编辑器时 initEditor 会重建并 initializeScene，watch 自动接管。
+   */
+  const cleanup = () => {
+    clearScene()
     renderer.value = null
   }
 
