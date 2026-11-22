@@ -76,6 +76,17 @@
                 <div class="text">AI演武场</div>
               </RouterLink>
             </li>
+
+            <li
+              class="nav-item"
+              :class="{ active: activeNavKey === 'agent-workbench' }"
+              @click="setActiveNav('agent-workbench')"
+            >
+              <RouterLink to="/agent-workbench" class="nav-link" title="Gym会话式Agent执行面">
+                <div class="icon"><i class="fa-solid fa-terminal"></i></div>
+                <div class="text">Agent工作台</div>
+              </RouterLink>
+            </li>
           </ul>
         </div>
       </aside>
@@ -132,7 +143,7 @@ const showNavigate = () => {
  * 在 1600px 的屏上，演武场的 3D 视口被压到 754px 宽、上下还各空一截。
  * 这些页面要让 3D 场景占满可用区域——**不论父容器怎么限制**。
  */
-const FULL_BLEED_ROUTES = ['/ai-playground', '/simulation-lab', '/scene-editor']
+const FULL_BLEED_ROUTES = ['/ai-playground', '/simulation-lab', '/scene-editor', '/agent-workbench']
 const isFullBleed = computed(() => FULL_BLEED_ROUTES.includes($route.path))
 
 // 设置导航激活状态
@@ -179,6 +190,7 @@ watch(
       '/simulation-lab': 'simulation-lab',
       '/model-library': 'model-library',
       '/ai-playground': 'ai-playground',
+      '/agent-workbench': 'agent-workbench',
     }
     activeNavKey.value = keyMap[newPath] || 'overview' // 默认值避免空值
 

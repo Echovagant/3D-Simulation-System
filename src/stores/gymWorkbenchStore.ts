@@ -1,0 +1,337 @@
+/**
+ * Agent 工作台 · Gym 会话状态。
+ *
+ * 会话列表 / 当前会话 / 执行结果 / 审计条目的唯一真源。
+ * 后端是可选增强：所有动作都不抛异常，失败写进对应的错误位，
+ * 界面层按「后端不在」还是业务错误分流展示。
+ *
+ * 审计流轮询用 setInterval（默认 3s），组件卸载时要调 `dispose()`
+ * 收掉定时器——store 不随组件销毁，不收会一直打后端。
+ */
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import { ApiError, isApiUnavailable } from '@/services/api/client'
+import {
+  createGymSession,
+  deleteGymSession,
+  listGymLogs,
+  listGymSessions,
+  resetGymSession,
+  stepGymSession,
+  type GymLogQuery,
+  type GymObservation,
+  type GymParamEcho,
+  type GymSessionCreateInput,
+  type GymSessionSummary,
+  type GymStepLogItem,
+  type GymStepResponse,
+} from '@/services/api/gymWorkbench'
+import { useLlmStore } from './llmStore'
+
+/** 审计流轮询间隔（毫秒） */
+export const AUDIT_POLL_INTERVAL_MS = 3000
+
+/**
+ * 把异常翻译成一句能直接显示的话。
+ * 「后端不在」与业务错误是两回事：前者要提示部署状态，后者原样透出。
+ */
+const describeError = (error: unknown, fallback: string): string => {
+  if (isApiUnavailable(error)) return fallback
+  if (error instanceof ApiError) return error.message || fallback
+  if (error instanceof Error && error.message) return error.message
+  return fallback
+}
+
+export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
+  const llmStore = useLlmStore()
+
+  // ---- 状态 ----
+  /** 本 owner 在场的会话摘要（列表面板用） */
+  const sessions = ref<GymSessionSummary[]>([])
+  /** 当前会话 id（空串 = 未选中） */
+  const currentSessionId = ref('')
+  /** 当前会话的参数回显（生效参数 / 丢键 / 回落键 / 力上限），来自 create/reset 响应 */
+  const currentParams = ref<GymParamEcho | null>(null)
+  /** 最近一次观测（建会话 / reset / step 之后都会更新） */
+  const lastObservation = ref<GymObservation | null>(null)
+  /** 最近一次 step 的结果（不含观测，观测在 lastObservation 里） */
+  const lastStep = ref<Omit<GymStepResponse, 'observation'> | null>(null)
+  /** 最近一次动作执行失败的原因（所有失败共用一个位） */
+  const stepError = ref('')
+  /** 422 越界力的修复指令原文（核心卖点，单独一位好做醒目展示） */
+  const repairHint = ref<{ code: string; message: string } | null>(null)
+  /** 会话/列表级错误（创建、删除、列表刷新） */
+  const listError = ref('')
+  /** 审计日志条目（按 ts 升序，与后端一致） */
+  const logs = ref<GymStepLogItem[]>([])
+  /** 审计流拉取失败的原因 */
+  const logsError = ref('')
+  /** 审计日志的回合过滤（undefined = 全部回合） */
+  const logRoundFilter = ref<number | undefined>(undefined)
+  /** 正在提交动作 */
+  const stepping = ref(false)
+  /** 正在创建会话 */
+  const creating = ref(false)
+  /** 审计轮询定时器句柄（组件卸载必须收掉） */
+  let auditTimer: ReturnType<typeof setInterval> | null = null
+  /** 轮询是否在跑：单独一个 ref——定时器句柄本身不需要响应式 */
+  const auditPollingActive = ref(false)
+
+  // ---- 派生 ----
+  /** 当前会话的摘要（列表里找得到才给） */
+  const currentSession = computed<GymSessionSummary | null>(
+    () => sessions.value.find((item) => item.sessionId === currentSessionId.value) ?? null,
+  )
+  /** 轮询是否在跑（组件冒烟测试用它断言卸载清理） */
+  // ---- 内部 ----
+  /** 拉一次审计日志（当前会话）；失败不中断轮询，错误写进 logsError */
+  const fetchLogs = async (): Promise<void> => {
+    const sessionId = currentSessionId.value
+    if (!sessionId) return
+    const query: GymLogQuery = { limit: 200 }
+    if (logRoundFilter.value !== undefined) query.round = logRoundFilter.value
+    try {
+      logs.value = await listGymLogs(llmStore.ownerToken, sessionId, query)
+      logsError.value = ''
+    } catch (error) {
+      logsError.value = describeError(error, '后端不可达，审计流暂时拉不到')
+    }
+  }
+
+  // ---- 动作 ----
+  /** 刷新会话列表；后端缺席时只记错误，不清空已有列表 */
+  const refreshSessions = async (): Promise<boolean> => {
+    try {
+      sessions.value = await listGymSessions(llmStore.ownerToken)
+      listError.value = ''
+      // 当前会话可能已被别人销毁（后端进程重启会清空全部会话）：如实摘除
+      if (
+        currentSessionId.value &&
+        !sessions.value.some((item) => item.sessionId === currentSessionId.value)
+      ) {
+        clearCurrent()
+      }
+      return true
+    } catch (error) {
+      listError.value = describeError(error, '后端不可达，会话列表暂时刷新不了')
+      return false
+    }
+  }
+
+  /** 清掉当前会话的所有痕迹（销毁 / 后端重启清空时用） */
+  const clearCurrent = (): void => {
+    stopAuditPolling()
+    currentSessionId.value = ''
+    currentParams.value = null
+    lastObservation.value = null
+    lastStep.value = null
+    stepError.value = ''
+    repairHint.value = null
+    logs.value = []
+    logsError.value = ''
+  }
+
+  /** 选中一个会话：清掉上一场的执行痕迹，立刻拉一次审计流并开始轮询 */
+  const selectSession = (sessionId: string): void => {
+    stopAuditPolling()
+    currentSessionId.value = sessionId
+    // 参数回显来自 create/reset 响应，列表里没有——切会话（含取消选中）时
+    // 把旧回显摘掉，等下一次 create/reset 再补上，不拿旧会话的口径冒充当前会话的
+    currentParams.value = null
+    lastStep.value = null
+    stepError.value = ''
+    repairHint.value = null
+    logs.value = []
+    logsError.value = ''
+    if (!sessionId) return
+    void fetchLogs()
+    startAuditPolling()
+  }
+
+  /**
+   * 创建会话。成功后自动选中新会话（含审计轮询）并刷新列表。
+   * 返回是否成功；失败原因在 listError。
+   */
+  const createSession = async (input: GymSessionCreateInput): Promise<boolean> => {
+    creating.value = true
+    listError.value = ''
+    try {
+      const created = await createGymSession(llmStore.ownerToken, input)
+      selectSession(created.sessionId)
+      currentParams.value = {
+        effectiveParams: created.effectiveParams,
+        droppedParamKeys: created.droppedParamKeys,
+        defaultedParamKeys: created.defaultedParamKeys,
+        forceLimit: created.forceLimit,
+      }
+      lastObservation.value = created.observation
+      lastStep.value = {
+        reward: created.reward,
+        terminated: created.terminated,
+        truncated: created.truncated,
+        info: {},
+      }
+      void refreshSessions()
+      return true
+    } catch (error) {
+      listError.value = describeError(error, '后端不可达，会话没建起来')
+      return false
+    } finally {
+      creating.value = false
+    }
+  }
+
+  /**
+   * 对当前会话推进一步。
+   *
+   * 422 越界力单独拆成 repairHint（修复指令原文），其余失败进 stepError；
+   * 两种失败都不清掉上一次成功的执行结果——界面能对照着看。
+   */
+  const stepCurrent = async (forceX: number, forceZ: number): Promise<boolean> => {
+    const sessionId = currentSessionId.value
+    if (!sessionId) {
+      stepError.value = '还没有选中会话——先在会话面板建一个或选一个'
+      return false
+    }
+    stepping.value = true
+    stepError.value = ''
+    repairHint.value = null
+    try {
+      const result = await stepGymSession(llmStore.ownerToken, sessionId, { forceX, forceZ })
+      lastStep.value = {
+        reward: result.reward,
+        terminated: result.terminated,
+        truncated: result.truncated,
+        info: result.info,
+      }
+      lastObservation.value = result.observation
+      // 审计流不等下一次轮询：step 完立刻刷新，动作与日志的因果关系不脱节
+      void fetchLogs()
+      return true
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.status === 422 &&
+        (error.code === 'gym_force_out_of_range' || error.code === 'gym_agent_invalid_mass')
+      ) {
+        repairHint.value = { code: error.code, message: error.message }
+        stepError.value = error.message
+      } else {
+        stepError.value = describeError(error, '后端不可达，这一步没送出去')
+      }
+      return false
+    } finally {
+      stepping.value = false
+    }
+  }
+
+  /**
+   * 重建世界回到初始状态。成功后刷新参数回显与观测，清掉上一步的结果。
+   */
+  const resetCurrent = async (): Promise<boolean> => {
+    const sessionId = currentSessionId.value
+    if (!sessionId) {
+      stepError.value = '还没有选中会话——先在会话面板建一个或选一个'
+      return false
+    }
+    stepError.value = ''
+    repairHint.value = null
+    try {
+      const result = await resetGymSession(llmStore.ownerToken, sessionId)
+      currentParams.value = {
+        effectiveParams: result.effectiveParams,
+        droppedParamKeys: result.droppedParamKeys,
+        defaultedParamKeys: result.defaultedParamKeys,
+        forceLimit: result.forceLimit,
+      }
+      lastObservation.value = result.observation
+      lastStep.value = {
+        reward: result.reward,
+        terminated: result.terminated,
+        truncated: result.truncated,
+        info: {},
+      }
+      void fetchLogs()
+      return true
+    } catch (error) {
+      stepError.value = describeError(error, '后端不可达，回合没重置成')
+      return false
+    }
+  }
+
+  /** 删除当前会话（没有选中时不动）；成功后清掉当前状态并刷新列表 */
+  const deleteCurrent = async (): Promise<boolean> => {
+    const sessionId = currentSessionId.value
+    if (!sessionId) return false
+    listError.value = ''
+    try {
+      await deleteGymSession(llmStore.ownerToken, sessionId)
+      clearCurrent()
+      await refreshSessions()
+      return true
+    } catch (error) {
+      listError.value = describeError(error, '后端不可达，会话没删掉')
+      return false
+    }
+  }
+
+  /** 改回合过滤并立刻按新过滤拉一次（轮询继续按新过滤跑） */
+  const setLogRoundFilter = (round: number | undefined): void => {
+    logRoundFilter.value = round
+    void fetchLogs()
+  }
+
+  /** 启动审计流轮询；已有定时器先收掉，避免叠着多个 */
+  const startAuditPolling = (intervalMs: number = AUDIT_POLL_INTERVAL_MS): void => {
+    stopAuditPolling()
+    if (!currentSessionId.value) return
+    auditTimer = setInterval(() => {
+      void fetchLogs()
+    }, intervalMs)
+    auditPollingActive.value = true
+  }
+
+  /** 收掉审计流轮询 */
+  const stopAuditPolling = (): void => {
+    if (auditTimer !== null) {
+      clearInterval(auditTimer)
+      auditTimer = null
+    }
+    auditPollingActive.value = false
+  }
+
+  /** 组件卸载时的统一清理入口：目前只有轮询定时器 */
+  const dispose = (): void => {
+    stopAuditPolling()
+  }
+
+  return {
+    // 状态
+    sessions,
+    currentSessionId,
+    currentSession,
+    currentParams,
+    lastObservation,
+    lastStep,
+    stepError,
+    repairHint,
+    listError,
+    logs,
+    logsError,
+    logRoundFilter,
+    stepping,
+    creating,
+    auditPollingActive,
+    // 动作
+    refreshSessions,
+    createSession,
+    selectSession,
+    stepCurrent,
+    resetCurrent,
+    deleteCurrent,
+    setLogRoundFilter,
+    startAuditPolling,
+    stopAuditPolling,
+    dispose,
+  }
+})
