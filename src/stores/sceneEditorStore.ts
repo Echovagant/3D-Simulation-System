@@ -381,6 +381,17 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       scene.value = markRaw(newScene)
       camera.value = markRaw(newCamera)
       renderer.value = markRaw(newRenderer)
+
+      // scene 实例被换新时（reinit、HMR 重挂载组件树），store 里现存的物体
+      // 记录还挂在**旧实例**上——渲染管线只画新 scene，这些物体就永远
+      // 隐身（「已加载但画面空」的实测根因之二）。把 mesh 归位到新 scene。
+      for (const obj of objects.value) {
+        const mesh = obj.threeObject
+        if (mesh && mesh.parent !== newScene) {
+          mesh.parent?.remove(mesh)
+          newScene.add(mesh)
+        }
+      }
     } catch (error) {
       // 初始化失败不能把异常抛给界面（界面会显示成白屏），但必须留下现场
       console.warn('[sceneEditorStore] 场景核心对象初始化失败', error)
