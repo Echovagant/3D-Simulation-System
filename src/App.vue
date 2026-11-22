@@ -1,7 +1,9 @@
 <template>
   <div class="app">
-    <!-- 背景：CSS 缎面静场（.app-background，见 style 段） -->
-    <div class="app-background"></div>
+    <!-- 背景：几何空间（函数曲面线框 + 立方体阵列，见 style 段与 geometry-background.ts） -->
+    <div class="app-background">
+      <canvas ref="bgCanvas" class="bg-webgl" aria-hidden="true"></canvas>
+    </div>
     <div class="app-container">
       <!-- 侧边导航 -->
       <aside class="shell" v-show="showNavigate()" :class="{ show: sidebarShow }">
@@ -95,7 +97,15 @@
 <script lang="ts" setup name="App">
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import {
+  mountGeometryBackground,
+  type GeometryBackgroundHandle,
+} from '@/background/geometry-background'
 import '@/assets/styles/app-global.css'
+
+// 「几何空间」背景：函数曲面线框 + 立方体阵列 + 坐标网格（黑金镜像空间）
+const bgCanvas = ref<HTMLCanvasElement | null>(null)
+let bgHandle: GeometryBackgroundHandle | null = null
 
 const isMobile = ref(false)
 // 监听窗口大小变化，更新设备类型
@@ -185,6 +195,10 @@ onMounted(() => {
   window.addEventListener('resize', checkIsMobile)
   // 添加点击事件监听，用于关闭侧边栏
   document.addEventListener('click', handleOutsideClick)
+  // 「几何空间」背景：函数曲面线框 + 立方体阵列（30fps 节流、隐藏暂停、reduced-motion 静帧）
+  if (bgCanvas.value) {
+    bgHandle = mountGeometryBackground(bgCanvas.value)
+  }
   // 空闲预热 Rapier wasm：仿真实验室/场景编辑器首开免等引擎下载。
   // 动态 import 发生在浏览器空闲时，不占首屏带宽与 LCP。
   const warmRapier = () => {
@@ -202,6 +216,8 @@ onMounted(() => {
 // 组件卸载时移除监听，避免内存泄漏
 onUnmounted(() => {
   window.removeEventListener('resize', checkIsMobile)
+  bgHandle?.dispose()
+  bgHandle = null
   // 移除点击事件监听
   document.removeEventListener('click', handleOutsideClick)
 })
@@ -243,5 +259,14 @@ onUnmounted(() => {
   opacity: 0.04;
   mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* 几何空间的 WebGL 层：透明底（让缎面渐变透出），线框元素由 shader 内上色 */
+.bg-webgl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 </style>
