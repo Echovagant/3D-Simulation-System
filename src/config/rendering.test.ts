@@ -9,6 +9,10 @@
  *
  * 所以这里扫的是 `src/` 下的源码文件（跳过测试文件），
  * 找出每一处渲染器创建，断言它带了 `powerPreference`。
+ *
+ * 一条例外：`src/background/` 下的装饰性背景层显式写 `'low-power'`——
+ * 背景是 30fps 节流的装饰画布，留在核显跑，独显整块让给主视口。
+ * 它仍然必须**显式**写（漏写照样算违规），只是取值不同。
  */
 import { describe, it, expect } from 'vitest'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -138,14 +142,24 @@ const findRendererSites = (): RendererSite[] => {
 const hasPowerPreference = (args: string): boolean =>
   /powerPreference\s*:\s*RENDER_POWER_PREFERENCE/.test(args)
 
+/** 背景层（src/background/）：必须显式写低功耗字面量，省得漏写后悄悄漂到默认值 */
+const isBackgroundSite = (file: string): boolean => file.startsWith('background/')
+
+const hasLowPowerPreference = (args: string): boolean =>
+  /powerPreference\s*:\s*'low-power'/.test(args)
+
 describe('渲染器的 GPU 偏好', () => {
   it('常量取 high-performance', () => {
     expect(RENDER_POWER_PREFERENCE).toBe('high-performance')
   })
 
-  it('src/ 下每一处渲染器创建都请求了高性能 GPU', () => {
+  it('src/ 下每一处渲染器创建都显式请求了 GPU 偏好（主视口高性能 / 背景层低功耗）', () => {
     const offenders = findRendererSites()
-      .filter((site) => !hasPowerPreference(site.args))
+      .filter((site) =>
+        isBackgroundSite(site.file)
+          ? !hasLowPowerPreference(site.args)
+          : !hasPowerPreference(site.args),
+      )
       .map((site) => `${site.file}:${site.line}`)
 
     expect(offenders).toEqual([])
@@ -161,6 +175,7 @@ describe('渲染器的 GPU 偏好', () => {
         'composables/useSceneEditor.ts',
         'render/main.ts',
         'views/SimulationLab.vue',
+        'background/geometry-background.ts',
       ]),
     )
   })
