@@ -78,7 +78,7 @@ describe('SceneEditor · 深链加载场景', () => {
     // loadScene 换成只记录不真加载的桩：这里盯的是「什么时候请求加载」
     vi.spyOn(useSceneEditorStore(), 'loadScene').mockImplementation(async (id: string) => {
       loadSceneCalls.push(id)
-      return true
+      return { ok: true, restored: 2, total: 2 }
     })
   })
 
@@ -107,7 +107,7 @@ describe('SceneEditor · 深链加载场景', () => {
     vi.spyOn(useSceneEditorStore(), 'loadScene').mockImplementation(async (id: string) => {
       order.push(`load:${methodsExposed ? 'after' : 'before'}`)
       loadSceneCalls.push(id)
-      return true
+      return { ok: true, restored: 2, total: 2 }
     })
 
     mount(SceneEditor, { global: { plugins: [pinia] } })

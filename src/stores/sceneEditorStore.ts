@@ -90,6 +90,17 @@ export type PrimitiveFactory = {
   createRamp: () => boolean
 }
 
+/** loadScene 的结构化结果：界面据此说清「成功到什么程度」，不再假成功 */
+export type SceneLoadResult = {
+  ok: boolean
+  /** 成功重建的物体数 */
+  restored: number
+  /** 文档里的物体总数 */
+  total: number
+  /** ok=false 或部分恢复时的原因（已脱敏，可直接展示） */
+  reason?: string
+}
+
 export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   // three 核心对象：由 useSceneEditor.initializeScene 注入，markRaw 防深度代理
   const scene = ref<THREE.Scene | null>(null)
@@ -682,24 +693,73 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     return true
   }
 
+  /**
+   * 等编辑器世界就绪（scene 注入 + 基本体工厂注册）。
+   *
+   * 初始化是异步的：Rapier 下载完才有 scene——loadScene 若不等这一步，
+   * 会在「工厂注入值还是空函数」的窗口里把每个物体静默丢掉。
+   * initializeScene 对 scene/camera/renderer 是原子注入，scene 到位即全部到位。
+   */
+  const waitForEditorReady = async (timeoutMs = 15000): Promise<boolean> => {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      if (scene.value && primitiveFactory.value) return true
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    return Boolean(scene.value && primitiveFactory.value)
+  }
+
   // 新增：加载场景
-  const loadScene = async (sceneId: string): Promise<boolean> => {
+  //
+  // 返回结构化结果而不是裸 boolean：加载「成功」却一个物体都没重建出来，
+  // 比失败更误导——界面打出「已加载」，画面却空着（实测踩过的假成功）。
+  const loadScene = async (sceneId: string): Promise<SceneLoadResult> => {
     const doc = getSceneDocument(sceneId)
-    if (!doc) return false
+    if (!doc) {
+      return { ok: false, restored: 0, total: 0, reason: '场景文档不存在或已损坏' }
+    }
+
+    // 编辑器世界必须就绪——但只在「编辑器动线」里等。
+    // 工厂已注册说明这是编辑器页面：此刻 scene/renderer 还缺就是初始化没
+    // 完成，等它，别把每个物体静默丢掉。没有工厂的无界面场景（测试、
+    // 外部调用）保持旧的 mesh 兜底行为，不引入 15 秒空等。
+    if (primitiveFactory.value) {
+      const ready = await waitForEditorReady()
+      if (!ready) {
+        return {
+          ok: false,
+          restored: 0,
+          total: doc.objects?.length ?? 0,
+          reason: '编辑器仍在初始化（物理引擎未就绪），请稍后重试',
+        }
+      }
+    }
 
     // 清空现有场景（连带通知物理引擎销掉旧刚体）
     cleanup()
 
+    let restored = 0
+    const total = doc.objects?.length ?? 0
     for (const objData of doc.objects ?? []) {
       if (objData.type === 'model') {
-        await restoreModel(objData)
+        if (await restoreModel(objData)) restored += 1
         continue
       }
 
-      restorePrimitive(objData)
+      if (restorePrimitive(objData)) restored += 1
     }
 
-    return true
+    // 假成功防线：文档里有物体却一个都没重建出来，如实报失败
+    if (total > 0 && restored === 0) {
+      return {
+        ok: false,
+        restored,
+        total,
+        reason: `文档里的 ${total} 个物体一个都没能重建（类型不被识别或工厂不可用）`,
+      }
+    }
+
+    return { ok: true, restored, total }
   }
 
   // 添加物体（保留原有并扩展，支持模型库对象）

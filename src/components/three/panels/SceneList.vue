@@ -96,15 +96,19 @@ const openScene = async (sceneId: string) => {
   statusMessage.value = ''
 
   try {
-    const loaded = await store.loadScene(sceneId)
+    const result = await store.loadScene(sceneId)
     const scene = scenes.value.find((item) => item.id === sceneId)
+    const name = scene?.name ?? sceneId
 
-    if (!loaded) {
-      statusMessage.value = `场景不存在或已损坏：${sceneId}`
+    if (!result.ok) {
+      statusMessage.value = `加载失败：${result.reason ?? '场景不存在或已损坏'}`
       return
     }
 
-    statusMessage.value = `已加载场景：${scene?.name ?? sceneId}`
+    statusMessage.value =
+      result.restored < result.total
+        ? `已加载场景：${name}（恢复了 ${result.restored}/${result.total} 个物体）`
+        : `已加载场景：${name}`
   } catch (error) {
     console.warn('[SceneList] 加载场景失败', error)
     reportError(error, '/scene-editor')
@@ -144,10 +148,12 @@ const openRemoteScene = async (scene: SceneSummary) => {
   try {
     const detail = await getScene(scene.id)
     store.importSceneDocument(detail.document)
-    const loaded = await store.loadScene(scene.id)
-    statusMessage.value = loaded
-      ? `已从云端加载场景：${detail.document.name}`
-      : `云端场景加载失败：${scene.id}`
+    const result = await store.loadScene(scene.id)
+    statusMessage.value = result.ok
+      ? result.restored < result.total
+        ? `已从云端加载场景：${detail.document.name}（恢复了 ${result.restored}/${result.total} 个物体）`
+        : `已从云端加载场景：${detail.document.name}`
+      : `云端场景加载失败：${result.reason ?? scene.id}`
   } catch (error) {
     console.warn('[SceneList] 云端场景加载失败', error)
     reportError(error, '/scene-editor')

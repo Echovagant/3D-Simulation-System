@@ -117,7 +117,7 @@ describe('场景文档的加载', () => {
     const id = await store.saveScene('基本体')
     const loaded = await store.loadScene(id)
 
-    expect(loaded).toBe(true)
+    expect(loaded.ok).toBe(true)
     expect(store.objects).toHaveLength(1)
     expect(store.objects[0].type).toBe('cube')
     expect(store.objects[0].position).toEqual({ x: 1, y: 2, z: 3 })
@@ -151,7 +151,7 @@ describe('场景文档的加载', () => {
 
     const loaded = await store.loadScene('nope')
 
-    expect(loaded).toBe(false)
+    expect(loaded.ok).toBe(false)
     expect(store.objects).toHaveLength(1)
   })
 
@@ -167,12 +167,19 @@ describe('场景文档的加载', () => {
 
     const loaded = await store.loadScene(id)
 
-    expect(loaded).toBe(true)
+    expect(loaded.ok).toBe(true)
     expect(store.objects).toHaveLength(1)
   })
 
   it('注册基本体工厂后，加载场景走工厂（基本体因此带得动物理）', async () => {
     const store = useSceneEditorStore()
+    // 工厂已注册 = 编辑器动线：loadScene 会先等世界就绪（scene 注入），
+    // 这里把 scene 装上，模拟「初始化已完成」的编辑器。
+    store.initializeScene(
+      new THREE.Scene(),
+      new THREE.PerspectiveCamera(),
+      {} as unknown as THREE.WebGLRenderer,
+    )
     store.addObject(newObject('u1'))
     const saved = await store.saveScene('有物体')
 
@@ -211,7 +218,7 @@ describe('场景文档的加载', () => {
     const id = await store.saveScene('无工厂')
     const loaded = await store.loadScene(id)
 
-    expect(loaded).toBe(true)
+    expect(loaded.ok).toBe(true)
     expect(store.objects).toHaveLength(1)
     expect(store.objects[0].threeObject?.position.x).toBe(5)
     expect(store.objects[0].threeObject?.position.y).toBe(6)
