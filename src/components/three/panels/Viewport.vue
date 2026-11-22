@@ -114,7 +114,7 @@ const initRenderer = () => {
       }, 200)
     } else {
       // 使用备用尺寸
-      props.renderer.setSize(800, 600)
+      props.renderer.setSize(800, 600, false)
       if (!container.contains(props.renderer.domElement)) {
         container.appendChild(props.renderer.domElement)
       }
@@ -256,7 +256,7 @@ const handleResize = () => {
   // 尺寸为 0 时算出来的比例是 NaN，会让整个投影矩阵失效
   if (clientWidth <= 0 || clientHeight <= 0) return
 
-  props.renderer.setSize(clientWidth, clientHeight)
+  props.renderer.setSize(clientWidth, clientHeight, false)
 
   // 发送事件让父组件更新相机，而不是直接修改props
   // 仅对透视相机/正交相机处理aspect（解决"updateProjectionMatrix不存在"的问题）

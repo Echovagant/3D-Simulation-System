@@ -71,7 +71,7 @@ const initRenderer = (
     powerPreference: RENDER_POWER_PREFERENCE,
   })
   next.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  next.setSize(resolvedWidth, resolvedHeight)
+  next.setSize(resolvedWidth, resolvedHeight, false)
   renderer.value = next
   return next
 }

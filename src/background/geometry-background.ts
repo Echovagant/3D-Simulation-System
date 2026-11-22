@@ -43,7 +43,7 @@ export function mountGeometryBackground(canvas: HTMLCanvasElement): GeometryBack
     powerPreference: 'low-power', // 背景层用核显，独显留给主视口
   })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setSize(window.innerWidth, window.innerHeight, false)
 
   const scene = new THREE.Scene()
   scene.background = null // 透明：缎面渐变（含顶部暖金微光）从 CSS 透出打底
@@ -214,7 +214,7 @@ export function mountGeometryBackground(canvas: HTMLCanvasElement): GeometryBack
 
   function onResize(): void {
     if (disposed) return
-    renderer.setSize(window.innerWidth, window.innerHeight)
+    renderer.setSize(window.innerWidth, window.innerHeight, false)
     camera.aspect = window.innerWidth / window.innerHeight
     camera.updateProjectionMatrix()
   }

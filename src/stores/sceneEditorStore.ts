@@ -870,7 +870,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   /** 渲染器尺寸与相机比例随视口更新（Viewport 组件挂载与 resize 时调用） */
   const updateRendererSize = (width: number, height: number): void => {
     if (renderer.value && camera.value) {
-      renderer.value.setSize(width, height)
+      renderer.value.setSize(width, height, false)
 
       if (camera.value instanceof THREE.PerspectiveCamera) {
         camera.value.aspect = width / height

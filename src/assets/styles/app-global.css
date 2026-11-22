@@ -329,3 +329,13 @@
     font-size: var(--text-md);
   }
 }
+
+/* WebGL 画布的显示尺寸交给容器 CSS（renderer.setSize(.., false) 不再写 style）：
+   侧边栏 hover 展开等容器宽度过渡期间，canvas 显示被 CSS 平滑拉伸而非
+   px style 跳变——消除「容器 resize → 画布闪烁 1-2 次」的根因。 */
+.viewport-container canvas,
+.ai-viewport canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

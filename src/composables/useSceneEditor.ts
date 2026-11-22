@@ -191,7 +191,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         // 双显卡笔记本上不让浏览器默认挑核显（见 src/config/rendering.ts）
         powerPreference: RENDER_POWER_PREFERENCE,
       })
-      renderer.setSize(defaultWidth, defaultHeight)
+      renderer.setSize(defaultWidth, defaultHeight, false)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
       renderer.shadowMap.enabled = true // 启用阴影
       // 不在这里添加renderer到DOM，让Viewport组件负责
@@ -888,7 +888,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
     camera.aspect = width / height
     camera.updateProjectionMatrix()
-    renderer.setSize(width, height)
+    renderer.setSize(width, height, false)
     store.updateRendererSize(width, height)
   }
 

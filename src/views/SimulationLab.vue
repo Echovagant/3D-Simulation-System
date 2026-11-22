@@ -540,7 +540,7 @@ const initThree = () => {
     // 双显卡笔记本上不让浏览器默认挑核显（见 src/config/rendering.ts）
     powerPreference: RENDER_POWER_PREFERENCE,
   })
-  renderer.setSize(viewportRef.value.clientWidth, viewportRef.value.clientHeight)
+  renderer.setSize(viewportRef.value.clientWidth, viewportRef.value.clientHeight, false)
   renderer.setPixelRatio(window.devicePixelRatio)
   viewportRef.value.appendChild(renderer.domElement)
 
@@ -1382,7 +1382,7 @@ const handleResize = () => {
   const height = viewportRef.value.clientHeight
   camera.aspect = width / height
   camera.updateProjectionMatrix()
-  renderer.setSize(width, height)
+  renderer.setSize(width, height, false)
 }
 
 // resize 监听注册在 setup 顶层（不是 onMounted 里），卸载时在 onUnmounted 里成对摘除

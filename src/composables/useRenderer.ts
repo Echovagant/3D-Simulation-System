@@ -39,7 +39,7 @@ export function useRenderer(): RendererInstance {
     const parent = current.domElement.parentElement
     const width = parent?.clientWidth || window.innerWidth
     const height = parent?.clientHeight || window.innerHeight
-    current.setSize(width, height)
+    current.setSize(width, height, false)
     if (camera.value) {
       camera.value.aspect = width / Math.max(height, 1)
       camera.value.updateProjectionMatrix()
