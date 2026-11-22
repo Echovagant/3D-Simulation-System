@@ -203,10 +203,10 @@ onMounted(() => {
   window.addEventListener('resize', checkIsMobile)
   // 添加点击事件监听，用于关闭侧边栏
   document.addEventListener('click', handleOutsideClick)
-  // WebGL 背景：reduced-motion 时模块内部只画一帧静态氛围
-  if (bgCanvas.value) {
-    bgHandle = mountWebGLBackground(bgCanvas.value, 'blackgold')
-  }
+  // WebGL 背景（方案 A「缎面静场」后暂停挂载，恢复时取消注释这一段即可）：
+  // if (bgCanvas.value) {
+  //   bgHandle = mountWebGLBackground(bgCanvas.value, 'blackgold')
+  // }
   // 空闲预热 Rapier wasm：仿真实验室/场景编辑器首开免等引擎下载。
   // 动态 import 发生在浏览器空闲时，不占首屏带宽与 LCP。
   const warmRapier = () => {
@@ -236,18 +236,34 @@ onUnmounted(() => {
  * 背景：WebGL 动态背景（黑金体系：白灰波浪 + 漂浮金点）。
  *
  * 分层（自底向上）：
- *   .app-background —— 纯 --bg-canvas 底（WebGL 不可用时的回退底色）；
- *   .bg-webgl       —— 全屏 canvas，动态背景 shader（见
- *                      src/background/webgl-background.ts）。
- *                      模式 uniform 切换：blackgold 为默认，
- *                      AI 演武场路由切冻结流体模式。
+ *   .app-background —— 「缎面静场」背景（方案 A）：项目 ink 深灰系的多值
+ *                      缎面渐变（顶部微光 → 底部沉底）+ 4% grain 防条带，
+ *                      纯 CSS 零 GPU；WebGL 花瓣层暂停挂载（mount 调用
+ *                      注释保留，随时可回退）。
+ *   .bg-webgl       —— 全屏 canvas（现透明，不再挂 shader）。
  */
 .app-background {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background-color: var(--bg-canvas);
+  /* 缎面渐变：单色系（ink 暖灰）三个值，顶部大面积微光、底部沉底。
+     最亮 stop 远低于中灰——「该被注意到的是它的缺席」。 */
+  background:
+    radial-gradient(120% 80% at 50% 0%, var(--ink-850) 0%, var(--ink-900) 42%, var(--ink-950) 100%);
   overflow: hidden;
+}
+
+/* 4% grain：防长渐变在 8bit 屏幕上的条带，加一层缎面质感。
+   SVG data URI 零请求；soft-light 在近黑表面上双向调制，不压暗阴影层。 */
+.app-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 .bg-webgl {
