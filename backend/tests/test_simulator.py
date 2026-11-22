@@ -4,8 +4,16 @@
 """
 
 import pytest
+import rapier3d as rp
 
 from app.services import simulator
+
+# Rapier 绑定层的默认线速度封顶（m/s）：``IntegrationParameters.normalized_max_linear_velocity``
+# 的出厂默认（Rapier 0.35 起每个 substep 后封顶线速度）。simulator 不覆盖它，
+# 极端场景（重力/初速拉满、步数极多）的终速封顶就来自这里。
+# 对账登记在 docs/simulation-spec.md 的 SIM_BACKEND_MAX_LINEAR_VELOCITY，
+# 机器对账读的就是这个钉值；升级 rapier3d 若改了默认，下面的测试当场报警。
+RAPIER_MAX_LINEAR_VELOCITY = 400.0
 
 
 def _obj(
@@ -279,6 +287,42 @@ def test_sweeping_gravity_changes_the_outcome():
 def test_max_acceleration_matches_frontend():
     """与 src/composables/useAI.ts:47 同口径，改一侧必须改另一侧。"""
     assert simulator.MAX_ACCELERATION == 30.0
+
+
+def test_rapier_default_max_linear_velocity_is_pinned():
+    """400 m/s 封顶来自 Rapier 绑定层的出厂默认，仓库代码里没有这个常数。
+
+    simulator 只改 dt，不覆盖 ``normalized_max_linear_velocity``；升级 rapier3d
+    若改了默认值，这里当场报警——对账表与行为都靠它钉住。
+    """
+    assert rp.IntegrationParameters().normalized_max_linear_velocity == pytest.approx(
+        RAPIER_MAX_LINEAR_VELOCITY
+    )
+    world = simulator.build_world(_scene(_obj()), simulator.SimulationParams())
+    assert world.world.integration_parameters.normalized_max_linear_velocity == pytest.approx(
+        RAPIER_MAX_LINEAR_VELOCITY
+    )
+
+
+def test_extreme_gravity_hits_velocity_cap():
+    """gravity=+50 跑 520 步：前 480 步匀加速到 400 封顶，之后匀速。
+
+    批量仿真极端测试实测的「finalVel 恰为 400 整」就是它——
+    与裸物理理论（一直匀加速）的偏离来自 Rapier 绑定层默认，
+    见 docs/simulation-spec.md 对账表的 SIM_BACKEND_MAX_LINEAR_VELOCITY。
+    """
+    sim = simulator.build_world(_scene(_obj()), simulator.SimulationParams(gravity_y=50.0))
+    body = sim.simulated[0].body
+
+    # 前 470 步还在匀加速段：50 m/s² × 470/60 s ≈ 391.7 m/s，够不着封顶
+    for _ in range(470):
+        sim.world.step()
+        assert body.linvel.y < RAPIER_MAX_LINEAR_VELOCITY
+
+    # 到第 480 步正好撞线（50 × 480/60 = 400），再跑 40 步保持匀速
+    for _ in range(50):
+        sim.world.step()
+    assert body.linvel.y == pytest.approx(RAPIER_MAX_LINEAR_VELOCITY)
 
 
 def test_resolve_reports_unknown_keys():

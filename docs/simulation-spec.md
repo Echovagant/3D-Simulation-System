@@ -447,8 +447,11 @@ AI 在这个系统里是**意图层**，不是物理层。
 | `AI_WALL_OPACITY` | `0.6` | — | `src/composables/useAI.ts` |
 | `AI_MAX_ACCELERATION` | `30` | m/s² | `src/composables/useAI.ts` |
 | `SIM_BACKEND_MAX_ACCELERATION` | `30.0` | m/s² | `backend/app/services/simulator.py` |
+| `SIM_BACKEND_MAX_LINEAR_VELOCITY` | `400` | m/s | `backend/tests/test_simulator.py` |
 
 `AI_MAX_ACCELERATION`（前端）与 `SIM_BACKEND_MAX_ACCELERATION`（后端）登记同一个物理量：水平加速度上限，gym 力上限 = 30 × 质量，两侧必须同步。两行各按自己的单源参与机器对账；后端值另由 `backend/tests/test_simulator.py` 的 `test_max_acceleration_matches_frontend` 钉住。
+
+`SIM_BACKEND_MAX_LINEAR_VELOCITY` 不是仓库代码里的常数：它是 Rapier 绑定层 `IntegrationParameters.normalized_max_linear_velocity` 的出厂默认（Rapier 0.35 起每个 substep 后把线速度封顶，f32 稳定性守卫），`simulator.build_world` 只改 `dt`，不覆盖它。真值在编译层（`rapier3d._rapier3d`）里，仓库内由 `backend/tests/test_simulator.py` 的钉值与极端场景测试守住：pytest 探运行时默认，这张表读钉值，升级 rapier3d 改了默认 pytest 会当场报警。极端场景（`gravityY = +50` 跑 5000 步）实测终速恰为 400、第 480 步到达——「匀加速到 400 后匀速」，批量仿真结果与裸物理理论的偏离即源于此。
 
 ### 6.1 接入线明细
 
@@ -744,6 +747,7 @@ AI 在这个系统里是**意图层**，不是物理层。
 - **仿真实验室与 AI 演武场的物体默认弹性不是 Rapier 默认值**（分别为 `0.2` 与按角色区分的 `0.15` / `0.25` / `0.2`），其余路径是 `0`。这几条路径在弹性行为上不等价。
 - **仿真实验室无法把摩擦或弹性设成 `0`**——那里的兜底写法会把 `0` 当成「没填」。
 - **批量仿真只支持位置与旋转**，不还原模型、不还原材质。
+- **线速度封顶只在后端生效。** 后端 Rapier 绑定（`rapier3d` 0.36）自带每个 substep 400 m/s 的线速度封顶（Rapier 0.35 引入的默认值，见[参数与常量表](#6-参数与常量表)的 `SIM_BACKEND_MAX_LINEAR_VELOCITY`）；浏览器用的 `@dimforge/rapier3d-compat` 0.19 还没有它。常规场景远够不着这条线，但极端参数（重力/初速拉满、步数极多）下批量仿真会在 400 m/s 处封顶，交互式不会。
 - **一致性基准只覆盖立方体自由落体**这一条轨迹。它证明的是「参数没漂」，不是「所有场景都一致」。
 - **AI 侧的全部逻辑由替身模型测试**；真实厂商的返回格式只有 `verify:llm-live` 脚本覆盖，它**不在构建链里**，要手动跑。
 - **厂商会退役模型。** MiniMax 的 M2.5 / M2.7 已在退役流程中（官方公告 2026-11-18 退役）。清单里的默认模型是当前有效的，但**厂商改版时清单会过期**——面板上的「拉取可用模型」能看出这把 key 实际还能调什么。

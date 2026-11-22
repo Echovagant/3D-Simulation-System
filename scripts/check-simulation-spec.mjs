@@ -142,6 +142,7 @@ const PROVIDERS = 'src/config/llmProviders.ts'
 const ACC = 'src/utils/fixedStepAccumulator.ts'
 const BASELINE = 'backend/tests/fixtures/browser_baseline.json'
 const SIMPY = 'backend/app/services/simulator.py'
+const SIMTEST = 'backend/tests/test_simulator.py'
 const CFG = 'backend/app/config.py'
 const RENDER = 'src/render/renderPage.ts'
 const RENDERING = 'src/config/rendering.ts'
@@ -832,6 +833,22 @@ const CONTRACT = [
     kind: 'number',
     read: () =>
       capture(readText(SIMPY), new RegExp(`^MAX_ACCELERATION\\s*=\\s*(${NUM})`, 'm'), 'MAX_ACCELERATION'),
+  },
+  {
+    // 线速度封顶：Rapier 绑定层 IntegrationParameters.normalized_max_linear_velocity 的
+    // 出厂默认（Rapier 0.35 起每个 substep 后封顶），simulator 不覆盖它。
+    // 真值在编译层（_rapier3d.pyd）里，.pyi 只有字段名没有默认值，只有 pytest 能探到；
+    // 而 verify:spec 在没有 venv 的前端 CI 里也要能跑，所以这里读测试文件里的钉值，
+    // 钉值与真值一致由 backend/tests/test_simulator.py 的测试保证。
+    key: 'SIM_BACKEND_MAX_LINEAR_VELOCITY',
+    source: SIMTEST,
+    kind: 'number',
+    read: () =>
+      capture(
+        readText(SIMTEST),
+        new RegExp(`^RAPIER_MAX_LINEAR_VELOCITY\\s*=\\s*(${NUM})`, 'm'),
+        'RAPIER_MAX_LINEAR_VELOCITY',
+      ),
   },
   {
     key: 'SIM_GROUND_HALF_X',
