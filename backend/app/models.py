@@ -283,6 +283,38 @@ class Model3dCloudJob(Base):
     )
 
 
+class ModelUpload(Base):
+    """一次用户上传的模型文件。
+
+    文件本体落盘（``backend_data/models/{owner_hash}/{public_id}.{ext}``），
+    库里只存元数据与归属——与 TripoSR / 渲染任务的产物同一口径。
+
+    ``public_id`` 是对外唯一标识（uuid4.hex）：文件端点的 URL 用它拼，
+    文件名里不出现原始文件名，避免把用户本地路径带进存储布局。
+
+    ``owner_hash`` 只存 sha256 前 16 位，**不存 owner_token 原文**——
+    落盘目录与列表过滤都按它分区，泄露面比原文小得多。
+    """
+
+    __tablename__ = "model_uploads"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    public_id: Mapped[str] = mapped_column(String(64), nullable=False, unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # characters / environments / props
+    category: Mapped[str] = mapped_column(String(32), nullable=False)
+    # glb / gltf / obj / fbx（小写）
+    format: Mapped[str] = mapped_column(String(16), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    poly_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    material_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    has_animation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    owner_hash: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
 class GymStepLog(Base):
     """gym 的一步动作留档。
 

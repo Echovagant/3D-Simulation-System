@@ -607,3 +607,40 @@ class Model3dJobDetail(ApiModel):
     artifact_url: str | None = None
     duration_ms: int | None = None
     created_at: datetime
+
+
+# --------------------------------------------------------------------------
+# 用户上传的模型库（服务端持久化）
+# --------------------------------------------------------------------------
+
+
+class ModelUploadItem(ApiModel):
+    """一个上传模型条目。
+
+    ``model_url`` 指向按 owner 隔离的文件端点（相对路径，前端自己拼 API_BASE）；
+    ``persisted`` 恒为 True——前端靠它区分「已落库」与「会话内 blob」。
+    """
+
+    id: str
+    name: str
+    category: str
+    # glb / gltf / obj / fbx（小写）
+    format: str
+    size: int
+    model_url: str
+    created_at: datetime
+    # 服务端不解析模型内容，几何信息如实为 0 / False，不编造
+    poly_count: int = 0
+    material_count: int = 0
+    has_animation: bool = False
+    persisted: bool = True
+
+
+class ModelUploadCreated(ModelUploadItem):
+    """上传成功（201）的应答：与列表条目同一形状。"""
+
+
+class ModelUploadList(ApiModel):
+    """当前 owner 的上传列表（按 created_at 倒序）。"""
+
+    items: list[ModelUploadItem]

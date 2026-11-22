@@ -164,6 +164,11 @@ class Settings(BaseSettings):
     # 输入图与产物的落盘目录。留空 = <backend>/backend_data/model3d
     model3d_cloud_output_dir: str = ""
 
+    # ---- 用户上传的模型库 ----
+
+    # 上传模型的落盘根目录。留空 = <backend>/backend_data/models
+    model_uploads_output_dir: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

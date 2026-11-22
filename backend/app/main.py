@@ -11,6 +11,7 @@ from app.routers import (
     health,
     llm,
     model3d,
+    models,
     render,
     scenes,
     simulations,
@@ -61,6 +62,7 @@ def create_app() -> FastAPI:
     app.include_router(render.router, prefix="/api")
     app.include_router(triposr.router, prefix="/api")
     app.include_router(model3d.router, prefix="/api")
+    app.include_router(models.router, prefix="/api")
     app.include_router(gym.router, prefix="/api")
     return app
 
