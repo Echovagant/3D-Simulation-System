@@ -219,9 +219,9 @@ export const useLlmStore = defineStore('llm', () => {
   const model = computed<string>(
     () => modelOverrides.value[providerId.value] ?? provider.value.model,
   )
-  /** 当前使用的 base_url */
+  /** 当前使用的 base_url（覆盖值为空串时回退清单默认——?? 放行空串是坑） */
   const baseUrl = computed<string>(
-    () => baseUrlOverrides.value[providerId.value] ?? provider.value.baseUrl,
+    () => baseUrlOverrides.value[providerId.value] || provider.value.baseUrl,
   )
   /** 服务端是否至少有一家配了 key（托管通道能不能用） */
   const hostedAnyConfigured = computed<boolean>(() =>
@@ -267,12 +267,13 @@ export const useLlmStore = defineStore('llm', () => {
     modelOverrides.value = { ...modelOverrides.value, [providerId.value]: value.trim() }
   }
 
-  /** 改 base_url（换代理网关、自建服务时用得到） */
+  /** 改 base_url（换代理网关、自建服务时用得到）；空串 = 删掉覆盖、回到清单默认 */
   const setBaseUrl = (value: string): void => {
-    baseUrlOverrides.value = {
-      ...baseUrlOverrides.value,
-      [providerId.value]: value.trim().replace(/\/+$/, ''),
-    }
+    const next = { ...baseUrlOverrides.value }
+    const trimmed = value.trim().replace(/\/+$/, '')
+    if (trimmed) next[providerId.value] = trimmed
+    else delete next[providerId.value]
+    baseUrlOverrides.value = next
   }
 
   /** 写入 key（只进内存，按提供商分槽） */
