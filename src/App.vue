@@ -1,9 +1,7 @@
 <template>
   <div class="app">
-    <!-- 背景单层：WebGL 动态背景（黑金波浪/漂浮点，AI 页路由切冻结流体） -->
-    <div class="app-background">
-      <canvas ref="bgCanvas" class="bg-webgl" aria-hidden="true"></canvas>
-    </div>
+    <!-- 背景：CSS 缎面静场（.app-background，见 style 段） -->
+    <div class="app-background"></div>
     <div class="app-container">
       <!-- 侧边导航 -->
       <aside class="shell" v-show="showNavigate()" :class="{ show: sidebarShow }">
@@ -97,19 +95,7 @@
 <script lang="ts" setup name="App">
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import {
-  mountWebGLBackground,
-  type BackgroundMode,
-  type WebGLBackgroundHandle,
-} from '@/background/webgl-background'
 import '@/assets/styles/app-global.css'
-
-/*
- * 背景单层 .bg-webgl：WebGL 动态背景（blackgold：白灰波浪 + 漂浮金点；
- * AI 演武场路由切 frozen 冻结流体，保证该页观感整体不变）。
- */
-const bgCanvas = ref<HTMLCanvasElement | null>(null)
-let bgHandle: WebGLBackgroundHandle | null = null
 
 const isMobile = ref(false)
 // 监听窗口大小变化，更新设备类型
@@ -186,10 +172,6 @@ watch(
     }
     activeNavKey.value = keyMap[newPath] || 'overview' // 默认值避免空值
 
-    // AI 演武场路由：背景切冻结模式；其余页面走黑金缎面
-    const bgMode: BackgroundMode = newPath === '/ai-playground' ? 'frozen' : 'blackgold'
-    bgHandle?.setMode(bgMode)
-
     // 路由跳转后关闭侧边栏
     if (sidebarShow.value) {
       sidebarShow.value = false
@@ -203,10 +185,6 @@ onMounted(() => {
   window.addEventListener('resize', checkIsMobile)
   // 添加点击事件监听，用于关闭侧边栏
   document.addEventListener('click', handleOutsideClick)
-  // WebGL 背景（方案 A「缎面静场」后暂停挂载，恢复时取消注释这一段即可）：
-  // if (bgCanvas.value) {
-  //   bgHandle = mountWebGLBackground(bgCanvas.value, 'blackgold')
-  // }
   // 空闲预热 Rapier wasm：仿真实验室/场景编辑器首开免等引擎下载。
   // 动态 import 发生在浏览器空闲时，不占首屏带宽与 LCP。
   const warmRapier = () => {
@@ -226,30 +204,33 @@ onUnmounted(() => {
   window.removeEventListener('resize', checkIsMobile)
   // 移除点击事件监听
   document.removeEventListener('click', handleOutsideClick)
-  bgHandle?.dispose()
-  bgHandle = null
 })
 </script>
 
 <style scoped>
 /*
- * 背景：WebGL 动态背景（黑金体系：白灰波浪 + 漂浮金点）。
- *
- * 分层（自底向上）：
- *   .app-background —— 「缎面静场」背景（方案 A）：项目 ink 深灰系的多值
- *                      缎面渐变（顶部微光 → 底部沉底）+ 4% grain 防条带，
- *                      纯 CSS 零 GPU；WebGL 花瓣层暂停挂载（mount 调用
- *                      注释保留，随时可回退）。
- *   .bg-webgl       —— 全屏 canvas（现透明，不再挂 shader）。
+ * 背景：「缎面静场」（方案 A）——项目 ink 深灰系的多值缎面渐变
+ * （顶部暖金微光 → 中部灰缎 → 底部沉底）+ 4% grain 防条带。
+ * 纯 CSS 零 GPU，无 WebGL 依赖；reduced-motion 天然满足（全静态）。
  */
 .app-background {
   position: fixed;
   inset: 0;
   z-index: 0;
-  /* 缎面渐变：单色系（ink 暖灰）三个值，顶部大面积微光、底部沉底。
-     最亮 stop 远低于中灰——「该被注意到的是它的缺席」。 */
+  /* 缎面渐变（大屏可见版）：
+     - 金光用**固定像素**光晕（1200×520）：百分比光晕在 2K+ 屏上被拉薄
+       到不可感知，px 尺寸保证任何屏幕上密度一致；
+     - 灰缎面亮部提到 #3d3d46、光心下移到 30% 高度——全屏都有缎面层次，
+       不再「上亮下黑」；
+     - 金光 16%：宁亮勿黑，用户可再调低。 */
   background:
-    radial-gradient(120% 80% at 50% 0%, var(--ink-850) 0%, var(--ink-900) 42%, var(--ink-950) 100%);
+    radial-gradient(
+      1200px 520px at 50% 0%,
+      rgba(255, 199, 0, 0.16) 0%,
+      rgba(255, 199, 0, 0.05) 48%,
+      transparent 72%
+    ),
+    radial-gradient(110% 70% at 50% 30%, #3d3d46 0%, #2a2a30 52%, #151518 100%);
   overflow: hidden;
 }
 
@@ -264,13 +245,5 @@ onUnmounted(() => {
   opacity: 0.04;
   mix-blend-mode: soft-light;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-.bg-webgl {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
 }
 </style>
