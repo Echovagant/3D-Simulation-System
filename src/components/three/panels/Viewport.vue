@@ -277,6 +277,14 @@ const handleResize = () => {
       bottom: -clientHeight / 2,
     })
   }
+
+  // ⚠️ 同步补一帧渲染：setSize 重置 drawing buffer（清空画布），渲染循环的
+  // 下一帧在下一个 rAF 才到——清空帧会被合成器采样输出成黑闪（侧边栏
+  // hover 展开每次交互闪 1-2 次的最终根因）。同一回调内立即 render，
+  // 清空帧被新内容覆盖，合成器无空帧可采。
+  if (props.scene) {
+    props.renderer.render(props.scene, props.camera)
+  }
 }
 
 // 生命周期
