@@ -220,4 +220,46 @@ describe('AiDebugPanel —— 日志面板', () => {
     URL.createObjectURL = originalCreate
     URL.revokeObjectURL = originalRevoke
   })
+
+  it('日志导出旁边提供「导出运行记录」按钮', () => {
+    const store = useAiStore()
+    store.createAgent('导航机器人', 'basic')
+
+    const wrapper = mount(AiDebugPanel)
+    const button = wrapper
+      .findAll('button')
+      .find((item) => item.text().includes('导出运行记录'))
+
+    expect(button).toBeTruthy()
+  })
+
+  it('导出运行记录：下载 JSON 并给出成功提示，不碰日志导出', async () => {
+    const store = useAiStore()
+    const agent = store.createAgent('导航机器人', 'basic')
+    store.addAgentLog(agent.id, '出发', 'info')
+
+    const created: Blob[] = []
+    const originalCreate = URL.createObjectURL
+    const originalRevoke = URL.revokeObjectURL
+    URL.createObjectURL = ((blob: Blob) => {
+      created.push(blob)
+      return 'blob:mock'
+    }) as typeof URL.createObjectURL
+    URL.revokeObjectURL = (() => {}) as typeof URL.revokeObjectURL
+
+    const wrapper = mount(AiDebugPanel)
+    await wrapper
+      .findAll('button')
+      .find((item) => item.text().includes('导出运行记录'))
+      ?.trigger('click')
+
+    expect(created).toHaveLength(1)
+    expect(created[0].type).toContain('application/json')
+    expect(wrapper.text()).toContain('已导出运行记录')
+    // 「导出日志」仍只导出 .jsonl——两个入口互不替代
+    expect(created[0].type).not.toContain('application/x-ndjson')
+
+    URL.createObjectURL = originalCreate
+    URL.revokeObjectURL = originalRevoke
+  })
 })

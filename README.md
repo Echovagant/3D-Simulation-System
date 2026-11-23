@@ -10,21 +10,21 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.21.0" src="https://img.shields.io/badge/Rapier3D-0.21.0-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 8.3.8" src="https://img.shields.io/badge/Vite-8.3.8-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="72 test files / 638 cases" src="https://img.shields.io/badge/test-72%20files%20%2F%20638%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="76 test files / 684 cases" src="https://img.shields.io/badge/test-76%20files%20%2F%20684%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="15 build gates" src="https://img.shields.io/badge/build%20gates-15%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-FF6101?logo=apache&logoColor=FF6101"></a>
 </p>
 
 <div align="center">
-  <img src="docs/screenshots/ai-playground.png" alt="AI 演武场：3 个智能体在 48×48 米场地里读感知自主移动，右侧面板实时显示决策日志" width="880" />
+  <img src="docs/screenshots/ai-playground.png" alt="AI 实验室 · 实时演练：3 个智能体在 48×48 米场地里读感知自主移动，右侧面板实时显示决策日志" width="880" />
   <br>
-  <sub>AI 演武场（生产产物实拍）· 智能体读真实感知自主移动，碰撞与运动由 Rapier 求解，右侧是实时的决策日志</sub>
+  <sub>AI 实验室 · 实时演练（生产产物实拍）· 智能体读真实感知自主移动，碰撞与运动由 Rapier 求解，右侧是实时的决策日志</sub>
 </div>
 
 <table>
   <tr>
-    <td align="center"><b>28.02 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>638</b><br><sub>测试用例 · 72 个文件</sub></td>
+    <td align="center"><b>15.44 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
+    <td align="center"><b>684</b><br><sub>测试用例 · 76 个文件</sub></td>
     <td align="center"><b>15</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -49,7 +49,7 @@
 
 一个 Web3D 场景编辑与物理仿真平台：**左边编辑场景，右边跑物理，中间放智能体**。
 
-6 个页面：首页 / 总览 / 场景编辑器 / 仿真实验室 / 模型资源库 / AI 演武场。
+5 个入口：总览 / 场景编辑器 / 仿真实验室 / 资源中心 / AI 实验室。
 物理由 **Rapier** 承担，它是场景与智能体行为的唯一权威。
 
 三件值得先说的事：
@@ -75,8 +75,8 @@
 <sub>固定步长刚体物理，仿真速度与帧率解耦，预设场景一键切换</sub>
 </td>
 <td width="33%" valign="top" align="center">
-<b>🤖 AI 演武场</b><br><br>
-<sub>智能体读真实感知自主移动；决策日志随时回看、可导出成 .jsonl；可选接入 15 条接入线（9 家厂商）做决策与解释</sub>
+<b>🤖 AI 实验室</b><br><br>
+<sub>实时演练（智能体在 3D 场地里读感知自主移动）与评测审计（后端 Gym 会话、动作审计、记忆/资料）两个页签</sub>
 </td>
 </tr>
 <tr>
@@ -89,8 +89,8 @@
 <sub>提交场景，服务端逐帧推进物理产出 MP4；同一场景重跑帧数完全一致</sub>
 </td>
 <td width="33%" valign="top" align="center">
-<b>📦 模型资源库</b><br><br>
-<sub>24 个内置模型全部可加载：9 个程序化生成 + 15 个 CC0 开源资产</sub>
+<b>📦 资源中心</b><br><br>
+<sub>模型、场景模板与材质统一入口：24 个内置模型全部可加载；上传/生成模型可持久化；场景模板一键在编辑器中打开</sub>
 </td>
 </tr>
 <tr>
@@ -104,7 +104,7 @@
 </td>
 <td width="33%" valign="top" align="center">
 <b>🧬 单图生成 3D</b><br><br>
-<sub>模型库上传一张图片，本机 TripoSR 推理出带纹理的 GLB 自动入库；图片不出本机（可选，需配好推理环境）</sub>
+<sub>资源中心 · 模型页签上传一张图片，本机 TripoSR 推理出带纹理的 GLB 自动入库；图片不出本机（可选，需配好推理环境）</sub>
 </td>
 </tr>
 </table>
@@ -113,9 +113,9 @@
 ## 界面
 
 <div align="center">
-  <img src="docs/assets/demo.gif" alt="录屏：前段是仿真实验室的刚体仿真与批量仿真面板，后段是 AI 演武场的智能体自主移动" width="880" />
+  <img src="docs/assets/demo.gif" alt="录屏：前段是仿真实验室的刚体仿真与批量仿真面板，后段是 AI 实验室的智能体自主移动" width="880" />
   <br>
-  <sub>录屏（生产产物实拍）· 前段是仿真实验室的刚体仿真，后段是 AI 演武场的智能体自主移动 —— <a href="docs/assets/demo.mp4">MP4 版</a></sub>
+  <sub>录屏（生产产物实拍）· 前段是仿真实验室的刚体仿真，后段是 AI 实验室的智能体自主移动 —— <a href="docs/assets/demo.mp4">MP4 版</a></sub>
 </div>
 
 <div align="center">
@@ -123,10 +123,10 @@
 <tr>
   <td width="33%" align="center"><img src="docs/screenshots/scene-editor.png" alt="场景编辑器" width="100%"><br><sub>场景编辑器 · 摆放物体，属性面板改完立刻写回刚体</sub></td>
   <td width="33%" align="center"><img src="docs/screenshots/simulation-lab.png" alt="仿真实验室" width="100%"><br><sub>仿真实验室 · 固定步长物理 + 批量仿真 + 服务端渲染</sub></td>
-  <td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="模型资源库" width="100%"><br><sub>模型资源库 · 24 个模型全部可加载</sub></td>
+  <td width="33%" align="center"><img src="docs/screenshots/model-library.png" alt="资源中心 · 模型" width="100%"><br><sub>资源中心 · 模型 · 24 个模型全部可加载</sub></td>
 </tr>
 <tr>
-  <td width="50%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 演武场" width="100%"><br><sub>AI 演武场 · 智能体自主移动，决策日志随时回看</sub></td>
+  <td width="50%" align="center"><img src="docs/screenshots/ai-playground.png" alt="AI 实验室 · 实时演练" width="100%"><br><sub>AI 实验室 · 实时演练 · 智能体自主移动，决策日志随时回看</sub></td>
   <td width="50%" align="center"><img src="docs/screenshots/overview.png" alt="系统总览" width="100%"><br><sub>系统总览 · 每个模块是什么、数据存在哪</sub></td>
 </tr>
 </table>
@@ -134,8 +134,8 @@
 
 ## 模型
 
-模型库里的 24 个条目全部可加载，卡片上显示的就是这些文件本身的渲染。
-**它们全部由本仓库的几何配方生成**（`npm run gen:models`），没有任何第三方素材。
+资源中心里的 24 个模型全部可加载，卡片上显示的就是这些文件本身的渲染。
+其中 9 个由本仓库的几何配方程序化生成（Apache-2.0），15 个为 CC0 开源资产（来源见 NOTICE）。
 
 <details>
 <summary><b>展开 24 个模型</b></summary>
@@ -154,7 +154,7 @@
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/energy-blaster.png" alt="科幻武器" width="100%"><br><sub>科幻武器</sub></td>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/arcane-book.png" alt="魔法书" width="100%"><br><sub>魔法书</sub></td>
 <td width="16%" align="center"><img src="public/assets/models/thumbnails/terminal-console.png" alt="控制台" width="100%"><br><sub>控制台</sub></td>
-<td colspan="3" align="center"><sub>—— 全部程序化生成，随 Apache-2.0 发布</sub></td>
+<td colspan="3" align="center"><sub>—— 9 个程序化生成模型随 Apache-2.0 发布；另有 15 个 CC0 模型见 NOTICE</sub></td>
 </tr>
 </table>
 </div>
@@ -198,7 +198,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 15 道闸门 |
-| `npm test` | Vitest 全量用例（72 个测试文件 / 638 个用例） |
+| `npm test` | Vitest 全量用例（76 个测试文件 / 684 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -222,7 +222,7 @@ npm run preview    # 预览生产产物
 | LLM 托管 | Key 交给服务端加密保管；后端做**配额、调用审计与故障转移**（一家不通会自动换下一家，但**各家的 key 互不通用**） |
 | 批量仿真 | 同一场景按参数网格批量跑；用**与前端同一个物理引擎**，结果与浏览器逐位对得上 |
 | 服务端渲染 | 提交场景，服务端产出 MP4；同一场景重跑两次的帧数完全一致 |
-| 单图生成 3D | 模型库上传图片，本机 TripoSR 推理出 GLB 自动入库；图片不出本机 |
+| 单图生成 3D | 资源中心 · 模型页签上传图片，本机 TripoSR 推理出 GLB 自动入库；图片不出本机 |
 | Gymnasium 会话 API | `POST /api/gym/sessions` 起 RL 会话，step/reset/observe 与 Farama 规范对齐；`clients/gym-client` 提供 `ArenaEnv`（gymnasium.Env） |
 | 错误上报 | 前端的错误现场收进后端，不只是控制台里滚过去就没了 |
 
@@ -329,7 +329,7 @@ authorized_error（同体）；kit（自 cartouche 抽出）2026-10-21 用真 ke
 <details>
 <summary><b>用真 key 验证 LLM 控制器</b>（可选）</summary>
 
-AI 演武场的 LLM 逻辑全部由替身模型测试，**没有一条用例跑过真实厂商**。
+AI 实验室的 LLM 逻辑全部由替身模型测试，**没有一条用例跑过真实厂商**。
 真实厂商返回的格式只要对不上，整套逻辑会「看起来完全正常」——仿真照跑、
 智能体照动，只是每一次决策都悄悄回落到了规则式控制器。
 
@@ -377,7 +377,7 @@ flowchart LR
 
 | 指标 | 数值 |
 | --- | --- |
-| 产物体积 | 12.33 MB |
+| 产物体积 | 12.50 MB |
 | 运行时依赖 | 6 个 |
 | 可加载模型 | 24 个（9 个程序化生成 + 15 个 CC0 开源资产） |
 | 类型检查 | 0 错误 |

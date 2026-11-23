@@ -40,6 +40,14 @@ export interface Model {
   polyCount: number // 多边形数量
   materialCount: number // 材质数量
   hasAnimation: boolean // 是否包含动画
+  /** 资产许可证（SPDX 标识，如 Apache-2.0 / CC0-1.0）；缺失表示未记录 */
+  license?: string
+  /** 资产官方来源页；缺失表示来源未记录，界面不得编造 */
+  sourceUrl?: string
+  /** 资产作者 / 维护方；缺失表示未记录 */
+  author?: string
+  /** 是否由 AI 生成（TripoSR / 混元 / 百炼等生成通道入库） */
+  aiGenerated?: boolean
   /**
    * 是否是「本次会话上传」的模型（blob: 对象 URL）。
    *
@@ -62,6 +70,8 @@ export interface UploadModelParams {
   name: string
   category: 'characters' | 'environments' | 'props'
   file: File
+  /** 该文件是否由 AI 生成通道产出（生成后走同一条上传链路） */
+  aiGenerated?: boolean
 }
 
 /**
@@ -207,6 +217,8 @@ export const useModelStore = defineStore('model', () => {
       const { ownerToken } = useLlmStore()
       const created = await uploadModelFile(ownerToken, params.file, params.name, params.category)
       const entry = toModelEntry(created)
+      // 服务端不记录 AI 生成标记：本次上传的元信息只在当前条目上带一份。
+      if (params.aiGenerated) entry.aiGenerated = true
       // 去重：同 id 已在列表（如初始化同步刚拉到同一条）就不插第二份
       models.value = [entry, ...models.value.filter((model) => model.id !== entry.id)]
       return entry
@@ -242,6 +254,7 @@ export const useModelStore = defineStore('model', () => {
       polyCount: 0,
       materialCount: 0,
       hasAnimation: false,
+      ...(params.aiGenerated ? { aiGenerated: true } : {}),
       sessionOnly: true,
     }
 

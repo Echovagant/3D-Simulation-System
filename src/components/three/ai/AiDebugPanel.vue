@@ -82,8 +82,24 @@
           >
             导出
           </button>
+          <button
+            @click="exportRunRecord"
+            class="ai-bg-chip ai-r-sm ai-px-2 ai-py-05 ai-log-export ai-run-export-btn"
+            title="把环境设置、智能体、指标与最近日志导出为 agent-run-<runId>.json"
+          >
+            导出运行记录
+          </button>
         </div>
       </div>
+
+      <!-- 运行记录导出结果：成功/失败都明确说出来，不静默 -->
+      <p
+        v-if="runExportMessage"
+        class="ai-run-export-status"
+        :class="{ 'ai-run-export-error': runExportError }"
+      >
+        {{ runExportMessage }}
+      </p>
 
       <!--
         日志条数说明：现在**全部**日志都在列表里，可以往上翻回看。
@@ -140,6 +156,7 @@ import { useAiStore } from '@/stores/aiStore'
 import { useAI } from '@/composables/useAI'
 import { serializeAgentLogs, exportFileStamp } from '@/utils/agentLogExport'
 import { computeAgentMetrics, formatMetricsSummary, type AgentMetrics } from '@/utils/agentMetrics'
+import { buildAgentRunRecord } from '@/utils/agentRunRecord'
 
 const aiStore = useAiStore()
 const ai = useAI()
@@ -265,6 +282,10 @@ onBeforeUnmount(() => {
   resizeObserver = null
 })
 
+onBeforeUnmount(() => {
+  if (runExportTimer !== undefined) window.clearTimeout(runExportTimer)
+})
+
 /** 最后一条可见日志的序号——新日志到了它就变 */
 const lastVisibleSeq = computed(() => {
   const list = filteredLogs.value
@@ -338,6 +359,67 @@ const exportLogs = (): void => {
   document.body.removeChild(link)
   // 立刻 revoke 会把还没开始的下载掐掉——延后一点再释放
   window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+/**
+ * 导出运行记录：环境设置 + 智能体与参数 + 指标 + 最近日志，附当前场地快照。
+ *
+ * 和「导出日志」的分工：日志文件是逐行 .jsonl，适合 grep；运行记录是一份
+ * 完整的 JSON 快照，适合归档或喂给别的工具。会话起点没有单独记录，
+ * 用最早一条日志的时间当起点（没有日志就用导出时刻）。
+ */
+const RUN_EXPORT_FEEDBACK_MS = 4000
+const runExportMessage = ref('')
+const runExportError = ref(false)
+let runExportTimer: number | undefined
+
+const showRunExportMessage = (message: string, isError = false): void => {
+  runExportMessage.value = message
+  runExportError.value = isError
+  if (runExportTimer !== undefined) window.clearTimeout(runExportTimer)
+  runExportTimer = window.setTimeout(() => {
+    runExportMessage.value = ''
+    runExportError.value = false
+    runExportTimer = undefined
+  }, RUN_EXPORT_FEEDBACK_MS)
+}
+
+const exportRunRecord = (): void => {
+  try {
+    const now = Date.now()
+    const firstLogAt = aiStore.logs.length > 0 ? aiStore.logs[0].timestamp : now
+    const record = buildAgentRunRecord({
+      environment: aiStore.environmentSettings,
+      agents: aiStore.agents,
+      metrics: computeAgentMetrics(ai.getMetricsSnapshot()),
+      logs: aiStore.logs,
+      startedAt: firstLogAt,
+      endedAt: now,
+      sceneDocument: ai.exportArenaSceneDocument(),
+    })
+
+    const blob = new Blob([JSON.stringify(record, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `agent-run-${record.runId}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    // 立刻 revoke 会把还没开始的下载掐掉——延后一点再释放
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+
+    showRunExportMessage(
+      `已导出运行记录：${record.agents.length} 个智能体，${record.logs.length} / ${record.logCount} 条日志`,
+    )
+  } catch (error) {
+    showRunExportMessage(
+      `导出运行记录失败：${error instanceof Error ? error.message : '未知错误'}`,
+      true,
+    )
+  }
 }
 
 // 格式化辅助函数
@@ -451,5 +533,21 @@ const formatDifficulty = (difficulty: string) => {
   cursor: pointer;
   font-size: 0.6875rem;
   line-height: 1.25rem;
+}
+
+.ai-run-export-btn:hover {
+  background-color: var(--bg-hover);
+}
+
+/* 运行记录导出结果：默认低对比度提示，失败时用危险色 */
+.ai-run-export-status {
+  margin: 0 0 0.25rem;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+
+.ai-run-export-error {
+  color: var(--danger);
 }
 </style>

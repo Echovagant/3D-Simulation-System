@@ -2,7 +2,7 @@
   <div class="agent-workbench">
     <!-- 顶部工具条：full-bleed 工作台没有全局顶栏，标题与状态自己扛 -->
     <div class="workbench-toolbar">
-      <div class="toolbar-title">Agent 工作台</div>
+      <div class="toolbar-title">Agent 评测台</div>
       <span class="toolbar-hint">
         Gym 会话式环境：建会话 → 发动作 → 看审计流。会话是内存态，后端重启即清空；记忆按 owner 分区，可从审计提炼失败模式。
       </span>

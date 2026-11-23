@@ -57,34 +57,23 @@
 
             <li
               class="nav-item"
-              :class="{ active: activeNavKey === 'model-library' }"
-              @click="setActiveNav('model-library')"
+              :class="{ active: activeNavKey === 'resource-center' }"
+              @click="setActiveNav('resource-center')"
             >
-              <RouterLink to="/model-library" class="nav-link" title="管理3D资产">
-                <div class="icon"><i class="fa-solid fa-box-open"></i></div>
-                <div class="text">模型库</div>
+              <RouterLink to="/resource-center" class="nav-link" title="模型、场景模板与材质">
+                <div class="icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+                <div class="text">资源中心</div>
               </RouterLink>
             </li>
 
             <li
               class="nav-item"
-              :class="{ active: activeNavKey === 'ai-playground' }"
-              @click="setActiveNav('ai-playground')"
+              :class="{ active: activeNavKey === 'ai-lab' }"
+              @click="setActiveNav('ai-lab')"
             >
-              <RouterLink to="/ai-playground" class="nav-link" title="AI与3D环境交互">
+              <RouterLink to="/ai-lab" class="nav-link" title="实时演练与评测审计">
                 <div class="icon"><i class="fa-solid fa-robot"></i></div>
-                <div class="text">AI演武场</div>
-              </RouterLink>
-            </li>
-
-            <li
-              class="nav-item"
-              :class="{ active: activeNavKey === 'agent-workbench' }"
-              @click="setActiveNav('agent-workbench')"
-            >
-              <RouterLink to="/agent-workbench" class="nav-link" title="Gym会话式Agent执行面">
-                <div class="icon"><i class="fa-solid fa-terminal"></i></div>
-                <div class="text">Agent工作台</div>
+                <div class="text">AI 实验室</div>
               </RouterLink>
             </li>
           </ul>
@@ -142,9 +131,25 @@ const showNavigate = () => {
  * 页面容器默认有 `max-width: 1400px` + 居中留白 + 30px 内边距，
  * 在 1600px 的屏上，演武场的 3D 视口被压到 754px 宽、上下还各空一截。
  * 这些页面要让 3D 场景占满可用区域——**不论父容器怎么限制**。
+ * 按前缀匹配：`/ai-lab` 的两个子页签、编辑器的高级入口都算铺满页面。
  */
-const FULL_BLEED_ROUTES = ['/ai-playground', '/simulation-lab', '/scene-editor', '/agent-workbench']
-const isFullBleed = computed(() => FULL_BLEED_ROUTES.includes($route.path))
+const FULL_BLEED_ROUTES = ['/ai-lab', '/simulation-lab', '/scene-editor']
+const isFullBleed = computed(() =>
+  FULL_BLEED_ROUTES.some(
+    (prefix) => $route.path === prefix || $route.path.startsWith(`${prefix}/`),
+  ),
+)
+
+// 导航高亮：按路径前缀归并到五个入口。
+// 旧地址（/model-library、/ai-playground 等）重定向后路径已变成新地址，
+// 因此这里只需认新路径，高亮不会丢。
+const navKeyForPath = (path: string): string => {
+  if (path === '/resource-center' || path.startsWith('/resource-center/')) return 'resource-center'
+  if (path === '/ai-lab' || path.startsWith('/ai-lab/')) return 'ai-lab'
+  if (path === '/scene-editor' || path.startsWith('/scene-editor/')) return 'scene-editor'
+  if (path === '/simulation-lab' || path.startsWith('/simulation-lab/')) return 'simulation-lab'
+  return 'overview'
+}
 
 // 设置导航激活状态
 const setActiveNav = (key: string) => {
@@ -182,17 +187,8 @@ const handleOutsideClick = (event: MouseEvent) => {
 watch(
   () => $route.path, // 监听路由路径变化
   (newPath) => {
-    // 根据新路由路径设置激活状态
-    const keyMap: Record<string, string> = {
-      '/': 'overview',
-      '/overview': 'overview',
-      '/scene-editor': 'scene-editor',
-      '/simulation-lab': 'simulation-lab',
-      '/model-library': 'model-library',
-      '/ai-playground': 'ai-playground',
-      '/agent-workbench': 'agent-workbench',
-    }
-    activeNavKey.value = keyMap[newPath] || 'overview' // 默认值避免空值
+    // 根据新路由路径设置激活状态（子路由 / 旧地址重定向后都归到同一个入口）
+    activeNavKey.value = navKeyForPath(newPath)
 
     // 路由跳转后关闭侧边栏
     if (sidebarShow.value) {

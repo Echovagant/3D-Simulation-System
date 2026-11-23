@@ -19,7 +19,12 @@ import type { AgentMetricInput } from '@/utils/agentMetrics'
 import { simulationConfig } from '@/config/simulation'
 import { llmConfig } from '@/config/llm'
 import type { AgentSnapshot, LlmAction } from '@/services/llm/prompts'
-import type { AiDecision, AiAgentState } from '@/types'
+import type {
+  AiDecision,
+  AiAgentState,
+  SceneDocument,
+  SceneDocumentObject,
+} from '@/types'
 
 /** 场地半边长（米）——智能体被限制在这个范围内（由四面墙挡住） */
 const ARENA_HALF_SIZE = 24
@@ -1114,6 +1119,68 @@ export function useAI() {
   onMounted(() => initializeAiSystem())
   onUnmounted(() => cleanup())
 
+  /**
+   * 把当前场地导出成一份场景文档（障碍物 + 智能体）。
+   *
+   * 只做**低成本快照**：位置、旋转、尺寸都从场景对象与物理描述里读，
+   * 不重新求解、不改动任何运行时状态。用途是给运行记录留一份可读的场地，
+   * 不是评测台的一键互通——评测台仍要求显式提供场景 JSON。
+   */
+  const exportArenaSceneDocument = (): SceneDocument => {
+    const now = new Date().toISOString()
+    const objects: SceneDocumentObject[] = []
+
+    arenaObstacles.forEach((obstacle, index) => {
+      const mesh = obstacle.mesh
+      const half = mesh.userData.physics?.halfExtents as
+        | { x: number; y: number; z: number }
+        | undefined
+      // 障碍物的几何体本身就是 size×size×size，缩放为 1；文档里用 scale 表达尺寸
+      const size = half
+        ? { x: half.x * 2, y: half.y * 2, z: half.z * 2 }
+        : { x: 1, y: 1, z: 1 }
+      objects.push({
+        uuid: `arena-obstacle-${index}`,
+        type: 'cube',
+        name: mesh.name || `障碍物 ${index + 1}`,
+        position: { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z },
+        rotation: { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z },
+        scale: size,
+        visible: true,
+        color: 0x475569,
+        physics: { type: 'static', shape: 'box', mass: 1 },
+      })
+    })
+
+    for (const [agentId, runtime] of agentRuntimes) {
+      const agent = aiStore.agents.find((item) => item.id === agentId)
+      const type = agent?.type ?? 'basic'
+      objects.push({
+        uuid: `arena-agent-${agentId}`,
+        type: 'cube',
+        name: agent?.name ?? agentId,
+        // 用出生点而不是当前位置：记录的是这一轮实验的初始布局
+        position: { x: runtime.spawn.x, y: runtime.spawn.y, z: runtime.spawn.z },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: AGENT_SIZE, y: AGENT_SIZE, z: AGENT_SIZE },
+        visible: true,
+        color: AGENT_COLORS[type],
+        physics: { type: 'dynamic', shape: 'box', mass: AGENT_MASS },
+      })
+    }
+
+    return {
+      id: `ai-arena-${Date.now().toString(36)}`,
+      name: 'AI 实验室 · 实时演练场地',
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      gravity: { ...simulationConfig.physics.defaultGravity },
+      worldSize: ARENA_GROUND_HALF * 2,
+      objects,
+    }
+  }
+
   /** 指标快照：UI 指标条与日志导出都用它。纯数据，聚合在 agentMetrics.ts */
   const getMetricsSnapshot = (): AgentMetricInput[] =>
     Array.from(agentRuntimes.entries()).map(([agentId, runtime]) => {
@@ -1141,6 +1208,8 @@ export function useAI() {
     /** 智能体当前状态快照——LLM 解释层用它当输入 */
     buildSnapshot,
     getMetricsSnapshot,
+    /** 当前场地的场景文档快照——导出运行记录时顺带留档 */
+    exportArenaSceneDocument,
     cleanup,
   }
 }

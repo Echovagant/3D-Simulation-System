@@ -20,51 +20,21 @@
 
     <p v-if="statusMessage" class="scene-status">{{ statusMessage }}</p>
 
-    <!-- 精选场景：不依赖后端，随时可载入；后端在线时可一键同步到后端 -->
-    <div class="scene-showcase">
-      <div class="scene-remote-head">
-        <h4>精选场景</h4>
-        <button
-          v-if="sync.state === 'online'"
-          class="scene-refresh"
-          :disabled="syncingShowcases"
-          title="把精选场景写入本机后端数据库，换浏览器也能打开"
-          @click="syncShowcasesToBackend"
-        >
-          {{ syncingShowcases ? '同步中…' : '同步到后端' }}
-        </button>
-      </div>
-      <p class="scene-hint">
-        开箱即用的示例作品：教学实验、具身智能训练场、企业陈列、城市天际线。
-      </p>
-
-      <ul class="scene-items">
-        <li v-for="scene in SHOWCASE_SCENES" :key="scene.id" class="showcase-item">
-          <button
-            class="scene-open"
-            :disabled="isLoading || loadingShowcaseId !== ''"
-            @click="loadShowcase(scene)"
-          >
-            <span class="showcase-head">
-              <span class="scene-name">{{ scene.name }}</span>
-              <span class="scene-badge" v-if="scene.origin !== 'ai'">{{ scene.audience }}</span>
-              <span class="scene-badge scene-badge-ai" v-else>AI 作品</span>
-            </span>
-            <span class="showcase-desc">{{ scene.description }}</span>
-            <span class="scene-meta">{{ scene.document.objects.length }} 个物体 · 精选示例</span>
-          </button>
-        </li>
-      </ul>
+    <!-- 场景模板已迁到资源中心：编辑器只保留入口，不再维护模板列表 -->
+    <div class="scene-template-entry">
+      <button class="scene-template-btn" @click="goToTemplates">
+        从资源中心选模板
+      </button>
     </div>
 
-    <!-- 后端场景：后端在场时才有。换一台设备保存的场景，从这里就能打开。 -->
+    <!-- 后端存档：后端在场时才有。换一台设备保存的场景，从这里就能打开。 -->
     <div v-if="sync.state === 'online'" class="scene-remote">
       <div class="scene-remote-head">
-        <h4>后端场景</h4>
+        <h4>后端存档</h4>
         <button class="scene-refresh" :disabled="isLoading" @click="refreshRemote">刷新</button>
       </div>
       <p class="scene-hint">
-        保存在本机后端数据库，不同浏览器可见；不是云服务。
+        保存在本机后端数据库，不是云服务。
       </p>
 
       <p v-if="sync.remoteScenes.length === 0" class="scene-hint">
@@ -97,6 +67,7 @@
 
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import type { SceneIndexEntry } from '@/types'
 import {
   useSceneEditorStore,
@@ -107,15 +78,13 @@ import { getScene, type SceneSummary } from '@/services/api/scenes'
 import { isApiUnavailable } from '@/services/api/client'
 import { reportError } from '@/services/api/telemetry'
 import { normalizeSceneDocument } from '@/utils/sceneDocument'
-import { SHOWCASE_SCENES, type ShowcaseScene } from '@/data/showcaseScenes'
 
 const store = useSceneEditorStore()
 const sync = useSceneSyncStore()
+const router = useRouter()
 
 const scenes = ref<SceneIndexEntry[]>([])
 const isLoading = ref(false)
-const loadingShowcaseId = ref('')
-const syncingShowcases = ref(false)
 const statusMessage = ref('')
 /** 后端探测过没有——没探测过就别急着说「后端不可用」 */
 const probeDone = ref(false)
@@ -173,49 +142,9 @@ const openScene = async (sceneId: string) => {
   }
 }
 
-/** 载入精选场景：不进「我的场景」索引，想保存再由用户自己点保存 */
-const loadShowcase = async (scene: ShowcaseScene) => {
-  if (loadingShowcaseId.value) return
-  isLoading.value = true
-  loadingShowcaseId.value = scene.id
-  statusMessage.value = ''
-
-  try {
-    // 可撤销：载入前拍快照，误点可以 Ctrl+Z 回去
-    store.pushHistory(`载入精选：${scene.name}`)
-    const result = await store.loadSceneDocument(scene.document)
-    statusMessage.value = result.ok
-      ? `已载入 ${scene.name}（${result.restored}/${result.total} 个物体）`
-      : `载入失败：${result.reason ?? '场景无法重建'}`
-  } catch (error) {
-    console.warn('[SceneList] 载入精选场景失败', error)
-    reportError(error, '/scene-editor')
-    statusMessage.value = '载入精选场景失败'
-  } finally {
-    loadingShowcaseId.value = ''
-    isLoading.value = false
-  }
-}
-
-/** 把精选场景推送（幂等覆盖）到后端 */
-const syncShowcasesToBackend = async () => {
-  if (syncingShowcases.value) return
-  syncingShowcases.value = true
-  statusMessage.value = ''
-
-  let pushed = 0
-  try {
-    for (const scene of SHOWCASE_SCENES) {
-      if (await sync.pushScene(scene.document)) pushed += 1
-    }
-    await sync.refresh()
-    statusMessage.value =
-      pushed === SHOWCASE_SCENES.length
-        ? `已同步 ${pushed} 个精选场景到后端`
-        : `已同步 ${pushed}/${SHOWCASE_SCENES.length} 个（其余失败，后端可能不可用）`
-  } finally {
-    syncingShowcases.value = false
-  }
+/** 去资源中心挑场景模板（模板列表不再放在编辑器里） */
+const goToTemplates = () => {
+  void router.push('/resource-center/templates')
 }
 
 const removeScene = (scene: SceneIndexEntry) => {
@@ -252,7 +181,7 @@ const openRemoteScene = async (scene: SceneSummary) => {
     // 而不是先写进本地缓存、再在重建阶段报一个「恢复了 0/N」。
     const parsed = normalizeSceneDocument(detail.document)
     if (!parsed.ok) {
-      statusMessage.value = `后端场景无法解析：${parsed.error}`
+      statusMessage.value = `后端存档无法解析：${parsed.error}`
       return
     }
 
@@ -268,14 +197,14 @@ const openRemoteScene = async (scene: SceneSummary) => {
           ? `已从后端加载：${parsed.document.name}（恢复了 ${result.restored}/${result.total} 个物体）`
           : `已从后端加载：${parsed.document.name}`
     } else {
-      statusMessage.value = `后端场景加载失败：${result.reason ?? '场景无法重建'}`
+      statusMessage.value = `后端存档加载失败：${result.reason ?? '场景无法重建'}`
     }
   } catch (error) {
     console.warn('[SceneList] 后端场景加载失败', error)
     reportError(error, '/scene-editor')
     statusMessage.value = isApiUnavailable(error)
       ? '后端不可达，请稍后点「刷新」重试'
-      : '后端场景加载失败'
+      : '后端存档加载失败'
   } finally {
     isLoading.value = false
   }
@@ -409,14 +338,27 @@ watch(
   padding: 6px 8px;
 }
 
-.scene-showcase {
+.scene-template-entry {
   margin-top: 14px;
   padding-top: 12px;
   border-top: 1px dashed var(--border-subtle);
 }
 
-.showcase-item {
-  margin-bottom: 6px;
+.scene-template-btn {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--text-1);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s, background-color 0.2s;
+}
+
+.scene-template-btn:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
 }
 
 .showcase-head {
@@ -427,12 +369,6 @@ watch(
   width: 100%;
 }
 
-.showcase-desc {
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--text-2);
-}
-
 .scene-badge {
   flex: 0 0 auto;
   padding: 1px 6px;
@@ -441,12 +377,6 @@ watch(
   color: var(--accent);
   font-size: 10px;
   font-weight: 600;
-}
-
-/* AI 生成后人工筛选入库的作品：与「受众」徽标区分开 */
-.scene-badge-ai {
-  background-color: rgba(171, 123, 214, 0.16);
-  color: #c9a4e8;
 }
 
 .scene-remote {

@@ -53,7 +53,7 @@ describe('AgentWorkbench 页面', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.find('.workbench-toolbar').exists()).toBe(true)
-    expect(wrapper.find('.toolbar-title').text()).toContain('Agent 工作台')
+    expect(wrapper.find('.toolbar-title').text()).toContain('Agent 评测台')
     expect(wrapper.find('.pane-left [aria-label="Gym 会话面板"]').exists()).toBe(true)
     expect(wrapper.find('.pane-center [aria-label="3D 视口"]').exists()).toBe(true)
     expect(wrapper.find('.pane-center [aria-label="动作执行面板"]').exists()).toBe(true)

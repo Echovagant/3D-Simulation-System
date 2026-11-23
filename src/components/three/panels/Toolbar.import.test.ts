@@ -8,6 +8,9 @@ import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 vi.mock('./ImportModelDialog.vue', () => ({ default: { template: '<div />' } }))
 vi.mock('./AiSceneDialog.vue', () => ({ default: { template: '<div />' } }))
 
+const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: pushMock }) }))
+
 /** 一份最小的合法导出文档 */
 const exportDocument = {
   id: 'roundtrip-1',
@@ -64,6 +67,8 @@ describe('工具栏 · 导入场景 JSON', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     localStorage.clear()
+    sessionStorage.clear()
+    pushMock.mockClear()
   })
 
   it('导入导出文档后物体真正被重建，并写入「我的场景」索引', async () => {
@@ -114,5 +119,57 @@ describe('工具栏 · 导入场景 JSON', () => {
     expect(store.objects).toHaveLength(0)
     expect(wrapper.text()).toContain('第 1 个物体')
     expect(wrapper.text()).toContain('cone')
+  })
+})
+
+describe('工具栏 · 送到实验室', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+    sessionStorage.clear()
+    pushMock.mockClear()
+  })
+
+  it('按交接契约写入 sessionStorage，并跳转到仿真实验室', async () => {
+    const store = useSceneEditorStore()
+    store.addObject({
+      uuid: 'handoff-cube',
+      name: '交接立方体',
+      type: 'cube',
+      position: { x: 0, y: 1, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
+
+    const wrapper = mountToolbar()
+    await wrapper.find('button[title^="送到实验室"]').trigger('click')
+
+    const raw = sessionStorage.getItem('lab-handoff-scene')
+    expect(raw).not.toBeNull()
+
+    const handoff = JSON.parse(raw as string) as {
+      document: { objects: unknown[] }
+      source: string
+      at: number
+    }
+    expect(handoff.source).toBe('scene-editor')
+    expect(typeof handoff.at).toBe('number')
+    expect(handoff.document.objects).toHaveLength(1)
+    expect(pushMock).toHaveBeenCalledWith('/simulation-lab?from=editor')
+  })
+
+  it('写入失败时给出可读提示，且不跳转', async () => {
+    const wrapper = mountToolbar()
+    const setItem = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('quota exceeded', 'QuotaExceededError')
+      })
+
+    await wrapper.find('button[title^="送到实验室"]').trigger('click')
+
+    expect(wrapper.text()).toContain('送到实验室失败')
+    expect(pushMock).not.toHaveBeenCalled()
+    setItem.mockRestore()
   })
 })

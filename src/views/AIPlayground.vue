@@ -3,13 +3,21 @@
     <!-- 页头：标题 + 一句话说明；右侧 actions 区放运行状态 chip（原页脚的三态状态上移收敛） -->
     <PageHeader
       title="AI演武场"
-      lead="智能体在真实渲染的 3D 场地里读感知、绕障碍、自主移动"
+      lead="实时演练智能体读感知、绕障碍、自主移动；这不是正式评测——评测台需要场景 JSON，可先在场景编辑器保存场景"
     >
       <template #actions>
         <span class="ai-status-chip">
           <span class="ai-status-dot" :class="footerDotClass"></span>
           {{ footerStatusText }}
         </span>
+        <button
+          type="button"
+          class="ai-workbench-link"
+          title="去评测审计（Agent 评测台）：需要 Gym 场景 JSON；本页场地不会自动转成会话，可先在场景编辑器保存场景"
+          @click="goToWorkbench"
+        >
+          去评测台
+        </button>
       </template>
     </PageHeader>
 
@@ -167,6 +175,7 @@
 
 <script lang="ts" setup>
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import { useThree } from '@/composables/useThree'
 import { useCamera } from '@/composables/useCamera'
@@ -201,6 +210,12 @@ const controls = useControls()
 const ai = useAI()
 const aiStore = useAiStore()
 const llmStore = useLlmStore()
+const router = useRouter()
+
+/** 去评测审计（Agent 评测台）——实时演练只是演练，正式评测在那边 */
+const goToWorkbench = (): void => {
+  void router.push('/ai-lab/workbench')
+}
 
 /** 运行状态 chip（原页脚三态，收敛到页头 actions 区）：LLM 降级红 / 运行中绿 / 暂停琥珀 */
 const footerStatusText = computed(() => {
@@ -440,6 +455,23 @@ onUnmounted(() => {
   height: 0.5rem;
   border-radius: 9999px;
   flex-shrink: 0;
+}
+
+/* 去评测台入口：与状态 chip 同一行，琥珀描边，不抢 3D 视口 */
+.ai-workbench-link {
+  padding: 0.3rem 0.7rem;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--accent-2);
+  background: transparent;
+  border: 1px solid rgba(255, 161, 23, 0.45);
+  border-radius: 9999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ai-workbench-link:hover {
+  background: rgba(255, 161, 23, 0.12);
 }
 
 /* 24 栏主栅格：左 5 / 中 14 / 右 5 —— 3D 视图是主角，宽度优先给它。

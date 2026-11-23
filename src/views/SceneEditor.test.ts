@@ -117,4 +117,36 @@ describe('SceneEditor · 深链加载场景', () => {
     expect(order.length).toBeGreaterThan(0)
     expect(order[0]).toBe('load:after')
   })
+
+  it('路由带 template 时载入对应模板并记入历史', async () => {
+    routeQuery.value = { template: 'showcase-galileo' }
+    const loadDocument = vi
+      .spyOn(useSceneEditorStore(), 'loadSceneDocument')
+      .mockResolvedValue({ ok: true, restored: 20, total: 20 })
+    const pushHistory = vi.spyOn(useSceneEditorStore(), 'pushHistory')
+
+    mount(SceneEditor, { global: { plugins: [pinia] } })
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(loadDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'showcase-galileo' }),
+    )
+    expect(pushHistory).toHaveBeenCalledWith(expect.stringContaining('载入模板'))
+    expect(loadSceneCalls).toHaveLength(0)
+  })
+
+  it('template 与 sceneId 同时出现时只按模板加载一次', async () => {
+    routeQuery.value = { sceneId: 'demo-scene', template: 'showcase-galileo' }
+    const loadDocument = vi
+      .spyOn(useSceneEditorStore(), 'loadSceneDocument')
+      .mockResolvedValue({ ok: true, restored: 20, total: 20 })
+
+    mount(SceneEditor, { global: { plugins: [pinia] } })
+    await nextTick()
+    await new Promise((r) => setTimeout(r, 0))
+
+    expect(loadDocument).toHaveBeenCalledTimes(1)
+    expect(loadSceneCalls).toHaveLength(0)
+  })
 })

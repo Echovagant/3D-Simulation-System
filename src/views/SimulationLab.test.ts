@@ -22,9 +22,16 @@ vi.mock('@/services/api/telemetry', () => ({
   reportError: telemetryMock.reportError,
 }))
 
-// 路由只需要一个空的 params：深链接走的是 props，这里不涉及真实路由表
+// 路由只需要 params / query：深链接走的是 props，这里不涉及真实路由表。
+// 交接场景的用例要能改 query，所以用一份可复位的可变对象。
+const routeMock = vi.hoisted(() => ({
+  params: {} as Record<string, string>,
+  query: {} as Record<string, string>,
+  path: '/simulation-lab',
+}))
+
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: {} as Record<string, string> }),
+  useRoute: () => routeMock,
 }))
 
 vi.mock('three', async (importOriginal) => {
@@ -197,8 +204,30 @@ const seedSavedScene = (id: string, name: string, objects: unknown[]) => {
   )
 }
 
+/** 往 sessionStorage 里写一份场景编辑器的交接场景（「送到实验室」的产物） */
+const seedHandoff = (document: unknown) => {
+  sessionStorage.setItem(
+    'lab-handoff-scene',
+    JSON.stringify({ document, source: 'scene-editor', at: Date.now() }),
+  )
+}
+
+/** 挂载并等到指定物体数量的场景就绪（交接场景会替换掉演示场景） */
+const mountLabExpecting = async (expected: number): Promise<VueWrapper> => {
+  setActivePinia(createPinia())
+  const wrapper = mount(SimulationLab)
+  wrappers.push(wrapper)
+  await waitUntil(() => readObjectCount(wrapper) === expected)
+  await settle()
+  return wrapper
+}
+
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
+  routeMock.params = {}
+  routeMock.query = {}
+  routeMock.path = '/simulation-lab'
   wrappers = []
   frameCallbacks = new Map()
   nextFrameId = 1
@@ -503,5 +532,166 @@ describe('仿真实验室 —— 仿真控制', () => {
 
     await advanceFrames(20)
     expect(readStatusValue(wrapper, 'FPS')).toBe('60')
+  })
+})
+
+describe('仿真实验室 —— 接收场景编辑器的交接场景', () => {
+  const handoffDocument = {
+    id: 'handoff-1',
+    name: '编辑器场景',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    version: 1,
+    objects: [
+      {
+        uuid: 'h1',
+        type: 'cube',
+        name: '方块',
+        position: { x: 0, y: 1, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        visible: true,
+      },
+    ],
+  }
+
+  it('收到交接场景后加载它、给出场景名与物体数，并删除 sessionStorage key', async () => {
+    seedHandoff(handoffDocument)
+
+    const wrapper = await mountLabExpecting(1)
+
+    expect(readObjectCount(wrapper)).toBe(1)
+    expect(wrapper.find('.message-toast').text()).toBe(
+      '已接收编辑器场景：编辑器场景（1 个物体）',
+    )
+    expect(sessionStorage.getItem('lab-handoff-scene')).toBeNull()
+  })
+
+  it('交接数据不是合法 JSON 时给出提示，key 保留', async () => {
+    sessionStorage.setItem('lab-handoff-scene', '{ 坏数据')
+
+    const wrapper = await mountLab()
+
+    await waitUntil(() =>
+      wrapper.find('.message-toast').text().includes('编辑器交接场景解析失败'),
+    )
+    expect(sessionStorage.getItem('lab-handoff-scene')).toBe('{ 坏数据')
+  })
+
+  it('交接场景校验失败时给出具体原因，不静默', async () => {
+    seedHandoff({
+      ...handoffDocument,
+      objects: [{ uuid: 'h1', type: 'banana', position: { x: 0, y: 1, z: 0 } }],
+    })
+
+    const wrapper = await mountLab()
+
+    await waitUntil(() => wrapper.find('.message-toast').text().includes('校验失败'))
+    expect(wrapper.find('.message-toast').text()).toContain('类型不支持')
+    expect(sessionStorage.getItem('lab-handoff-scene')).not.toBeNull()
+  })
+
+  it('带 ?from=editor 进来但没有交接数据时给出重送指引', async () => {
+    routeMock.query = { from: 'editor' }
+
+    const wrapper = await mountLab()
+
+    await waitUntil(() =>
+      wrapper.find('.message-toast').text().includes('没有找到编辑器交接的场景'),
+    )
+    expect(wrapper.find('.message-toast').text()).toContain('送到实验室')
+  })
+})
+
+describe('仿真实验室 —— 运行记录', () => {
+  const historyTab = (wrapper: VueWrapper) =>
+    wrapper.findAll('.side-tab').find((tab) => tab.text() === '运行记录')
+
+  it('「运行记录」页签在没有记录时显示空态', async () => {
+    const wrapper = await mountLab()
+
+    await historyTab(wrapper)?.trigger('click')
+    await nextTick()
+
+    const empty = wrapper.find('.experiment-history .empty-state')
+    expect(empty.exists()).toBe(true)
+    expect(empty.text()).toContain('还没有运行记录')
+  })
+
+  it('记录本次运行会把来源、参数、物体数与帧数写进 localStorage', async () => {
+    const wrapper = await mountLab()
+
+    await wrapper.find('button[title="记录本次运行"]').trigger('click')
+    await nextTick()
+
+    const stored = JSON.parse(localStorage.getItem('experiment-runs') as string)
+    expect(stored).toHaveLength(1)
+    expect(stored[0]).toMatchObject({
+      name: '演示场景',
+      source: { kind: 'scene', id: '', name: '演示场景' },
+      config: { gravity: -9.8, friction: 0.1, restitution: 0.5, simulationSpeed: 1 },
+      objectCount: 2,
+      simulationTime: 0,
+      recordedFrames: 0,
+    })
+    expect(wrapper.find('.message-toast').text()).toBe('已记录本次运行：演示场景')
+
+    await historyTab(wrapper)?.trigger('click')
+    await nextTick()
+    expect(wrapper.find('.experiment-history .run-item').exists()).toBe(true)
+  })
+
+  it('复现预设运行会重新加载预设并回填重力/摩擦/弹性/速度', async () => {
+    const wrapper = await mountLab()
+
+    await setNumberInput(wrapper, 0, '-3.5')
+    await setNumberInput(wrapper, 1, '0.42')
+    await setNumberInput(wrapper, 2, '0.8')
+    await setSimulationSpeed(wrapper, '2.5')
+
+    const presetSelect = wrapper.findAll('.preset-selector select')[0]
+    ;(presetSelect.element as HTMLSelectElement).value = 'newtons-cradle'
+    await presetSelect.trigger('change')
+    await waitUntil(() => readObjectCount(wrapper) === 6)
+
+    await wrapper.find('button[title="记录本次运行"]').trigger('click')
+    await nextTick()
+
+    await historyTab(wrapper)?.trigger('click')
+    await nextTick()
+    expect(wrapper.find('.run-name').text()).toBe('牛顿摆')
+    expect(wrapper.find('.run-config').text()).toContain('重力 -3.50')
+
+    // 把参数改乱，再复现：配置必须回到记录里的值
+    await setNumberInput(wrapper, 0, '0')
+    await setNumberInput(wrapper, 1, '0.9')
+    await setNumberInput(wrapper, 2, '0.1')
+    await setSimulationSpeed(wrapper, '0.5')
+
+    await wrapper.find('.run-replay').trigger('click')
+    await waitUntil(() => wrapper.find('.message-toast').text() === '已复现运行：牛顿摆')
+
+    expect(readObjectCount(wrapper)).toBe(6)
+    expect((numberInputs(wrapper)[0].element as HTMLInputElement).value).toBe('-3.5')
+    expect((numberInputs(wrapper)[1].element as HTMLInputElement).value).toBe('0.42')
+    expect((numberInputs(wrapper)[2].element as HTMLInputElement).value).toBe('0.8')
+    expect((wrapper.find('.speed-control input').element as HTMLInputElement).value).toBe('2.5')
+    expect(readStatusValue(wrapper, '仿真时间')).toBe('0.00s')
+  })
+
+  it('删除一条记录后列表与 localStorage 同步清掉', async () => {
+    const wrapper = await mountLab()
+
+    await wrapper.find('button[title="记录本次运行"]').trigger('click')
+    await nextTick()
+    await historyTab(wrapper)?.trigger('click')
+    await nextTick()
+    expect(wrapper.find('.experiment-history .run-item').exists()).toBe(true)
+
+    await wrapper.find('.run-delete').trigger('click')
+    await nextTick()
+
+    expect(wrapper.find('.experiment-history .run-item').exists()).toBe(false)
+    expect(JSON.parse(localStorage.getItem('experiment-runs') as string)).toEqual([])
   })
 })

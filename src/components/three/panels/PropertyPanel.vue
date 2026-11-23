@@ -165,7 +165,7 @@
         v-if="store.objects.length === 0"
         icon="fa-solid fa-cubes"
         title="场景还是空的"
-        description="用顶部工具栏添加立方体 / 球体 / 斜面，或到「场景」tab 载入精选场景。"
+        description="用顶部工具栏添加立方体 / 球体 / 斜面，或到资源中心挑一个场景模板。"
       />
 
       <div v-else class="object-browser">

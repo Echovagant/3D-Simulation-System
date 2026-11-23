@@ -85,6 +85,7 @@ import SceneList from '@/components/three/panels/SceneList.vue'
 import Viewport from '@/components/three/panels/Viewport.vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import { useModelStore } from '@/stores/modelStore'
+import { SHOWCASE_SCENES } from '@/data/showcaseScenes'
 
 // 组件引用与状态
 const threeScene = ref<InstanceType<typeof ThreeScene> | null>(null)
@@ -254,16 +255,58 @@ const handleUpdateCamera = (data: { type: 'perspective' | 'orthographic'; aspect
 }
 
 /**
- * 加载路由指定的场景。
+ * 加载路由指定的场景或模板。
  *
  * ⚠️ 必须等**物理方法就绪之后**再加载：`loadScene` 靠基本体工厂把物体连同
  * 刚体一起重建，而工厂是「场景列表」组件注册的，它用的 `addCube` 来自
  * `ThreeScene` 暴露的方法——那要等场景初始化完成才拿得到。
  * 早一步调用，工厂建体返回 false，场景看着在列表里、3D 视图却是空的。
+ *
+ * `?template=` 来自资源中心的「在编辑器中打开」；两者同时出现时以模板为准。
  */
+let loadedRouteSceneKey = ''
+
 const loadSceneFromRoute = async () => {
-  const sceneId = router.currentRoute.value.query.sceneId
-  if (!sceneId || typeof sceneId !== 'string') return
+  const query = router.currentRoute.value.query
+  const templateId = typeof query.template === 'string' ? query.template : ''
+  const sceneId = typeof query.sceneId === 'string' ? query.sceneId : ''
+
+  // 同一个路由目标只加载一次：初始化与路由 watcher 都会走到这里
+  const key = templateId ? `template:${templateId}` : sceneId ? `scene:${sceneId}` : ''
+  if (!key) {
+    loadedRouteSceneKey = ''
+    return
+  }
+  if (key === loadedRouteSceneKey) return
+  loadedRouteSceneKey = key
+
+  if (templateId) {
+    const template = SHOWCASE_SCENES.find((item) => item.id === templateId)
+    if (!template) {
+      console.warn(`[SceneEditor] 模板不存在：${templateId}`)
+      return
+    }
+
+    // 可撤销：载入前入历史栈，误点可以 Ctrl+Z 回去
+    sceneStore.pushHistory(`载入模板：${template.name}`)
+    try {
+      const result = await sceneStore.loadSceneDocument(template.document)
+      if (result.ok) {
+        console.info(
+          `[SceneEditor] 已载入模板「${template.name}」（${result.restored}/${result.total} 个物体）`,
+        )
+      } else {
+        console.warn(
+          `[SceneEditor] 载入模板「${template.name}」失败：${result.reason ?? '场景无法重建'}`,
+        )
+      }
+    } catch (err: unknown) {
+      // 加载失败不打断页面，但现场必须留下来
+      console.warn('[SceneEditor] 载入模板失败', err)
+    }
+    return
+  }
+
   try {
     await sceneStore.loadScene(sceneId)
   } catch (err: unknown) {
@@ -272,9 +315,9 @@ const loadSceneFromRoute = async () => {
   }
 }
 
-// 路由里的场景变了就重新加载：物理方法就绪后第一次，之后每次切换都跟。
+// 路由里的场景 / 模板变了就重新加载：物理方法就绪后第一次，之后每次切换都跟。
 watch(
-  () => router.currentRoute.value.query.sceneId,
+  () => [router.currentRoute.value.query.sceneId, router.currentRoute.value.query.template],
   () => {
     void loadSceneFromRoute()
   },

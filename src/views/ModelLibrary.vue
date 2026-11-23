@@ -87,6 +87,7 @@
         <div class="model-info">
           <div class="model-name-row">
             <h3 class="model-name">{{ model.name }}</h3>
+            <span v-if="model.aiGenerated" class="ai-badge">AI 生成</span>
             <span v-if="isPlaceholder(model)" class="placeholder-badge">不可加载</span>
           </div>
           <p class="model-meta">{{ modelMeta(model) }}</p>
@@ -106,6 +107,15 @@
             <div v-else class="model-actions">
               <button class="action-btn" @click.stop="handleAddToScene(model)" title="添加到场景编辑器" aria-label="添加到场景编辑器">
                 <i class="fas fa-plus"></i>
+              </button>
+              <button
+                v-if="!isPlaceholder(model)"
+                class="action-btn"
+                @click.stop="openPreview(model)"
+                title="3D 预览"
+                aria-label="3D 预览"
+              >
+                <i class="fas fa-cube"></i>
               </button>
               <button
                 v-if="!isPlaceholder(model)"
@@ -474,10 +484,45 @@
                   <th>是否包含动画</th>
                   <td>{{ geomStat(selectedModel, selectedModel.hasAnimation ? '是' : '否') }}</td>
                 </tr>
+                <tr>
+                  <th>许可证</th>
+                  <td>{{ selectedModel.license || '许可证未记录' }}</td>
+                </tr>
+                <tr>
+                  <th>来源</th>
+                  <td>
+                    <a
+                      v-if="selectedModel.sourceUrl"
+                      :href="selectedModel.sourceUrl"
+                      class="source-link"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >{{ selectedModel.sourceUrl }}</a>
+                    <span v-else>来源未记录</span>
+                  </td>
+                </tr>
+                <tr>
+                  <th>作者</th>
+                  <td>{{ selectedModel.author || '作者未记录' }}</td>
+                </tr>
+                <tr>
+                  <th>AI 生成</th>
+                  <td>
+                    <span v-if="selectedModel.aiGenerated" class="ai-badge ai-badge--inline">AI 生成</span>
+                    <span v-else>否</span>
+                  </td>
+                </tr>
                 </tbody>
               </table>
 
               <div class="detail-actions">
+                <button
+                  v-if="!isPlaceholder(selectedModel)"
+                  class="secondary-btn full-width"
+                  @click="openPreview(selectedModel)"
+                >
+                  <i class="fas fa-cube"></i> 3D 预览
+                </button>
                 <button
                   class="primary-btn full-width"
                   @click="handleAddToScene(selectedModel); selectedModel = null"
@@ -496,6 +541,13 @@
         </div>
       </div>
     </div>
+
+    <!-- 真 3D 预览：叠在详情弹窗之上，关闭后回到详情 -->
+    <ModelPreviewModal
+      v-if="previewModel"
+      :model="previewModel"
+      @close="previewModel = null"
+    />
   </div>
 </template>
 
@@ -525,6 +577,7 @@ import PageHeader from '@/components/common/PageHeader.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import AppNotice from '@/components/common/AppNotice.vue';
 import InfoTip from '@/components/common/InfoTip.vue';
+import ModelPreviewModal from '@/components/models/ModelPreviewModal.vue';
 
 // ===================== 类型定义 =====================
 interface Model {
@@ -541,6 +594,14 @@ interface Model {
   materialCount: number;
   hasAnimation: boolean;
   description?: string; // 可选描述
+  /** 资产许可证（SPDX 标识）；缺失表示未记录 */
+  license?: string;
+  /** 资产官方来源页；缺失表示来源未记录 */
+  sourceUrl?: string;
+  /** 资产作者 / 维护方；缺失表示未记录 */
+  author?: string;
+  /** 是否由 AI 生成通道入库 */
+  aiGenerated?: boolean;
   /** 本次会话上传的模型（对象 URL，刷新即失效） */
   sessionOnly?: boolean;
   /** 服务端已持久化的模型（落盘 + DB，刷新后仍在） */
@@ -580,6 +641,8 @@ const searchQuery = ref<string>('');
 const sortOption = ref<string>('name');
 const showUploadModal = ref<boolean>(false);
 const selectedModel = ref<Model | null>(null);
+/** 当前打开的 3D 预览模型；null 表示预览弹窗关闭 */
+const previewModel = ref<Model | null>(null);
 const isUploading = ref<boolean>(false);
 const selectedFileName = ref<string>('');
 
@@ -850,6 +913,7 @@ const importGeneratedModel = async (jobId: string): Promise<void> => {
     name: `${baseName}（TripoSR 本地生成）`,
     category: tripoForm.value.category,
     file,
+    aiGenerated: true,
   });
 };
 
@@ -932,6 +996,7 @@ const importGeneratedCloudModel = async (jobId: string): Promise<void> => {
     name: `${baseName}（${providerLabel.value} 云端生成）`,
     category: tripoForm.value.category,
     file,
+    aiGenerated: true,
   });
 };
 
@@ -1057,6 +1122,10 @@ const filteredModels = computed<Model[]>(() => {
 
 const selectModel = (model: Model) => {
   selectedModel.value = model;
+};
+
+const openPreview = (model: Model) => {
+  previewModel.value = model;
 };
 
 const handleFileSelect = (e: Event) => {
@@ -1529,6 +1598,31 @@ const modelMeta = (model: Model): string =>
   border-radius: var(--radius-sm);
   padding: 1px 6px;
   white-space: nowrap;
+}
+
+/* AI 生成标记：与占位徽章同一形状，用强调色区分 */
+.ai-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  color: var(--accent);
+  background-color: var(--accent-soft);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  border-radius: var(--radius-sm);
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.ai-badge--inline {
+  display: inline-block;
+}
+
+.source-link {
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.source-link:hover {
+  text-decoration: underline;
 }
 
 /* 两段式删除确认态：动作行整行换成确认对 */

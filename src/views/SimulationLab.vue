@@ -287,9 +287,18 @@
           <div class="parameter-item" v-if="recordedData.length > 0">
             <button class="export-btn" @click="exportData">导出数据</button>
           </div>
+          <div class="parameter-item">
+            <button
+              class="record-btn"
+              title="记录本次运行"
+              @click="recordCurrentRun"
+            >
+              记录本次运行
+            </button>
+          </div>
         </section>
 
-        <!-- 两个重面板收进 tab 组：本地 ref 二选一，v-show 保挂载（后端探测的轮询与状态不丢） -->
+        <!-- 重面板收进 tab 组：本地 ref 三选一，v-show 保挂载（后端探测的轮询与状态不丢） -->
         <section class="side-section">
           <div class="side-tabs" role="tablist" aria-label="后端面板">
             <button
@@ -312,11 +321,23 @@
             >
               服务端渲染
             </button>
+            <button
+              type="button"
+              class="side-tab"
+              :class="{ active: backendTab === 'history' }"
+              role="tab"
+              :aria-selected="backendTab === 'history'"
+              @click="backendTab = 'history'"
+            >
+              运行记录
+            </button>
           </div>
           <!-- 批量仿真面板：后端缺席时安静降级，不影响本页的实时仿真 -->
           <SimulationBatchPanel v-show="backendTab === 'batch'" />
           <!-- 服务端渲染面板：后端缺席时同样安静降级 -->
           <RenderPanel v-show="backendTab === 'render'" />
+          <!-- 运行记录面板：本地 localStorage，不依赖后端 -->
+          <ExperimentHistoryPanel v-show="backendTab === 'history'" @replay="replayRun" />
         </section>
       </div>
     </div>
@@ -333,17 +354,20 @@ import PanelHeader from '@/components/common/PanelHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import SimulationBatchPanel from '@/components/simulations/SimulationBatchPanel.vue'
 import RenderPanel from '@/components/simulations/RenderPanel.vue'
+import ExperimentHistoryPanel from '@/components/simulations/ExperimentHistoryPanel.vue'
 import { usePhysics } from '@/composables/usePhysics'
 import { simulationConfig } from '@/config/simulation'
 import { RENDER_POWER_PREFERENCE } from '@/config/rendering'
 import { labFraming } from '@/config/sceneFraming'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
-import type { SceneDocumentObject, SceneIndexEntry } from '@/types'
+import { normalizeSceneDocument } from '@/utils/sceneDocument'
+import type { SceneDocument, SceneDocumentObject, SceneIndexEntry } from '@/types'
 
 // 引入状态管理
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import { useSimulationStore } from '@/stores/simulationStore'
 import { useModelStore } from '@/stores/modelStore'
+import { useExperimentRunStore, type ExperimentRun } from '@/stores/experimentRunStore'
 import { useRoute } from 'vue-router'
 import { reportError } from '@/services/api/telemetry'
 import { getScene } from '@/services/api/scenes'
@@ -359,6 +383,7 @@ const route = useRoute()
 const sceneEditorStore = useSceneEditorStore()
 const simulationStore = useSimulationStore()
 const modelStore = useModelStore()
+const experimentRunStore = useExperimentRunStore()
 
 // Three.js 核心对象
 let scene: THREE.Scene
@@ -394,8 +419,8 @@ const fps = ref(0)
 const initLoading = ref(true)
 const initError = ref('')
 
-/** 右栏重面板 tab：「批量仿真 | 服务端渲染」二选一；v-show 保挂载，后端探测与轮询状态不丢 */
-const backendTab = ref<'batch' | 'render'>('batch')
+/** 右栏重面板 tab：「批量仿真 | 服务端渲染 | 运行记录」三选一；v-show 保挂载，后端探测与轮询状态不丢 */
+const backendTab = ref<'batch' | 'render' | 'history'>('batch')
 
 /**
  * FPS 统计窗口。
@@ -1054,28 +1079,218 @@ const applySceneDocument = async (
  * 以前这个按钮只会硬编码两个演示物体，跟编辑器毫无关系；
  * 现在它读的是场景编辑器真正存下来的场景文档（localStorage）。
  */
-const loadSceneFromEditor = async () => {
+const loadSceneFromEditor = async (): Promise<boolean> => {
   const sceneId = selectedSceneId.value
   if (!sceneId) {
     displayMessage('请先在工具栏里选择一个已保存的场景')
-    return
+    return false
   }
 
   const doc = sceneEditorStore.getSceneDocument(sceneId)
   if (!doc) {
     displayMessage(`未找到场景: ${sceneId}`)
     refreshSavedScenes()
-    return
+    return false
   }
 
   try {
     await applySceneDocument(doc)
     displayMessage(`已从场景编辑器加载: ${doc.name}`)
+    return true
   } catch (error) {
     console.warn('[SimulationLab] 加载场景失败', error)
     reportError(error, '/simulation-lab')
     displayMessage('加载场景失败')
+    return false
   }
+}
+
+// ===================== 场景编辑器 → 实验室交接 =====================
+// 编辑器「送到实验室」把场景文档写进 sessionStorage 后跳到 ?from=editor；
+// 实验室在物理世界初始化完成后消费它——一次有效，读完即删。
+const LAB_HANDOFF_KEY = 'lab-handoff-scene'
+
+/** 最近一次从编辑器接收的场景文档：记录运行时作为来源，复现时直接重建 */
+let handoffDocument: SceneDocument | null = null
+
+const consumeHandoffScene = async (): Promise<void> => {
+  const handoffRequested = route.query?.from === 'editor'
+
+  let raw: string | null = null
+  try {
+    raw = sessionStorage.getItem(LAB_HANDOFF_KEY)
+  } catch (error) {
+    // 隐私模式等场景下 sessionStorage 可能直接抛错
+    console.warn('[SimulationLab] 读取编辑器交接场景失败', error)
+    if (handoffRequested) displayMessage('读取编辑器交接场景失败：浏览器会话存储不可用')
+    return
+  }
+
+  if (!raw) {
+    // 只有明确带着 ?from=editor 进来时才提示；普通进入实验室不该被打扰
+    if (handoffRequested) {
+      displayMessage('没有找到编辑器交接的场景，请回到场景编辑器重新点「送到实验室」')
+    }
+    return
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch (error) {
+    console.warn('[SimulationLab] 编辑器交接场景解析失败', error)
+    displayMessage('编辑器交接场景解析失败：不是合法的 JSON')
+    return
+  }
+
+  const envelope = (parsed ?? null) as { document?: unknown } | null
+  if (!envelope || !envelope.document) {
+    displayMessage('编辑器交接场景缺少 document 字段，无法加载')
+    return
+  }
+
+  const result = normalizeSceneDocument(envelope.document)
+  if (!result.ok) {
+    displayMessage(`编辑器交接场景校验失败：${result.error}`)
+    return
+  }
+
+  try {
+    await applySceneDocument(result.document)
+  } catch (error) {
+    console.warn('[SimulationLab] 加载编辑器交回的场景失败', error)
+    reportError(error, '/simulation-lab')
+    displayMessage('加载编辑器交回的场景失败')
+    return
+  }
+
+  handoffDocument = result.document
+  // 加载成功才删 key：失败时保留现场，用户回编辑器重送一次即可
+  try {
+    sessionStorage.removeItem(LAB_HANDOFF_KEY)
+  } catch (error) {
+    console.warn('[SimulationLab] 清理编辑器交接 key 失败', error)
+  }
+  displayMessage(
+    `已接收编辑器场景：${result.document.name}（${result.document.objects.length} 个物体）`,
+  )
+}
+
+// ===================== 运行记录与复现 =====================
+
+/** 当前运行的来源：预设优先，其次场景编辑器里选中的场景，最后是编辑器交接的场景 */
+const resolveRunSource = (): ExperimentRun['source'] => {
+  const preset = presets.value.find((entry) => entry.id === selectedPreset.value)
+  if (preset) return { kind: 'preset', id: preset.id, name: preset.name }
+
+  if (selectedSceneId.value) {
+    const sceneEntry = savedScenes.value.find((entry) => entry.id === selectedSceneId.value)
+    return {
+      kind: 'scene',
+      id: selectedSceneId.value,
+      name: sceneEntry?.name ?? selectedSceneId.value,
+    }
+  }
+
+  if (handoffDocument) {
+    return { kind: 'handoff', id: handoffDocument.id, name: handoffDocument.name }
+  }
+
+  // 没有明确来源时记成演示场景：复现会如实提示「没有可复现的来源」
+  return { kind: 'scene', id: '', name: '演示场景' }
+}
+
+/** 记录当前运行：参数、物体数、仿真时长与已记录帧数都取当前界面的值 */
+const recordCurrentRun = (): void => {
+  if (!scene) {
+    displayMessage('仿真世界还没初始化完成，暂时不能记录')
+    return
+  }
+
+  const source = resolveRunSource()
+  const run = experimentRunStore.recordRun({
+    name: source.name || '未命名运行',
+    source,
+    config: {
+      gravity: gravity.value,
+      friction: friction.value,
+      restitution: restitution.value,
+      simulationSpeed: simulationSpeed.value,
+    },
+    objectCount: objectCount.value,
+    simulationTime: simulationTime.value,
+    recordedFrames: recordedData.value.length,
+    ...(source.kind === 'handoff' && handoffDocument ? { document: handoffDocument } : {}),
+  })
+
+  if (!run) {
+    // store 里已经写好了可读原因，面板顶部会展示；这里只补一句即时提示
+    displayMessage('运行记录保存失败：浏览器本地存储不可用')
+    return
+  }
+
+  displayMessage(`已记录本次运行：${run.name}`)
+}
+
+/**
+ * 回填一条记录里的实验参数。
+ *
+ * 物理世界重建后参数会被默认值盖回去：摩擦与弹性必须同时建立全局覆盖
+ * （frictionOverride / restitutionOverride），否则下一次 initPhysics 又会抹平。
+ */
+const applyRunConfig = (config: ExperimentRun['config']): void => {
+  gravity.value = config.gravity
+  friction.value = config.friction
+  restitution.value = config.restitution
+  simulationSpeed.value = config.simulationSpeed
+  frictionOverride = config.friction
+  restitutionOverride = config.restitution
+  applyPhysicsParameters()
+}
+
+/** 复现一条运行记录：先重建来源场景，再回填配置 */
+const replayRun = async (run: ExperimentRun): Promise<void> => {
+  if (run.source.kind === 'preset') {
+    const preset = presets.value.find((entry) => entry.id === run.source.id)
+    if (!preset) {
+      displayMessage(`预设已不存在，无法复现：${run.source.name}`)
+      return
+    }
+    await loadPreset(preset.id)
+  } else if (run.source.kind === 'scene') {
+    if (!run.source.id) {
+      displayMessage('这条记录没有可复现的场景来源')
+      return
+    }
+    if (!sceneEditorStore.getSceneDocument(run.source.id)) {
+      displayMessage(`场景已不存在，无法复现：${run.source.name}`)
+      refreshSavedScenes()
+      return
+    }
+    selectedSceneId.value = run.source.id
+    // 场景与预设是互斥来源：不清掉预设的话，记录会被误判成预设运行
+    selectedPreset.value = ''
+    const ok = await loadSceneFromEditor()
+    if (!ok) return
+  } else {
+    if (!run.document) {
+      displayMessage('这条记录没有保存场景文档，无法复现')
+      return
+    }
+    try {
+      await applySceneDocument(run.document)
+    } catch (error) {
+      console.warn('[SimulationLab] 复现记录失败', error)
+      reportError(error, '/simulation-lab')
+      displayMessage('复现失败：场景重建出错')
+      return
+    }
+    selectedPreset.value = ''
+    handoffDocument = run.document
+  }
+
+  applyRunConfig(run.config)
+  displayMessage(`已复现运行：${run.name}`)
 }
 
 // ===================== 只读分享回放 =====================
@@ -1272,6 +1487,9 @@ const initializePhysicsWorld = async () => {
 const startLabRuntime = () => {
   // 场景编辑器里保存过的场景（「从编辑器加载」用）
   refreshSavedScenes()
+
+  // 接收场景编辑器的交接场景：物理世界已就绪；成功/失败都通过消息条说清楚
+  void consumeHandoffScene()
 
   // 启动渲染循环
   render()
@@ -1768,6 +1986,30 @@ onMounted(() => {
 
 .export-btn:hover {
   background-color: var(--accent-strong-hover);
+}
+
+/* 「记录本次运行」：与导出按钮同一套观感，但走中性描边，不和导出抢主次 */
+.record-btn {
+  background-color: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  padding: 6px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  transition:
+    background-color 0.2s,
+    border-color 0.2s;
+}
+
+.record-btn:hover {
+  background-color: var(--accent-soft);
+  border-color: rgba(var(--accent-rgb), 0.6);
+}
+
+.record-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* 「批量仿真 | 服务端渲染」tab 条：样式对齐 SceneEditor 的 side-tab，两个工作台观感同源 */

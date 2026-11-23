@@ -43,18 +43,42 @@ describe('路由表', () => {
     expect([...duplicates]).toEqual([])
   })
 
-  it('六个顶层页面都在', () => {
+  it('五个导航入口与新壳的子路由都在', () => {
     const paths = flattenPaths(routes)
     for (const p of [
       '/',
       '/overview',
       '/scene-editor',
       '/simulation-lab',
-      '/model-library',
-      '/ai-playground',
+      '/resource-center',
+      '/resource-center/models',
+      '/resource-center/templates',
+      '/resource-center/materials',
+      '/ai-lab',
+      '/ai-lab/playground',
+      '/ai-lab/workbench',
     ]) {
       expect(paths).toContain(p)
     }
+  })
+
+  it('两个新壳默认落到第一个页签', () => {
+    const redirectOf = (path: string) => {
+      const route = routes.find((r) => r.path === path)
+      return route && 'redirect' in route ? route.redirect : undefined
+    }
+    expect(redirectOf('/ai-lab')).toBe('/ai-lab/playground')
+    expect(redirectOf('/resource-center')).toBe('/resource-center/models')
+  })
+
+  it('旧地址保留重定向，不丢入口', () => {
+    const redirectOf = (path: string) => {
+      const route = routes.find((r) => r.path === path)
+      return route && 'redirect' in route ? route.redirect : undefined
+    }
+    expect(redirectOf('/ai-playground')).toBe('/ai-lab/playground')
+    expect(redirectOf('/agent-workbench')).toBe('/ai-lab/workbench')
+    expect(redirectOf('/model-library')).toBe('/resource-center/models')
   })
 
   it('仿真实验室的深链接参数仍然透传给页面', () => {

@@ -5,6 +5,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import sceneRoutes from './modules/sceneRoutes';
 import simulationRoutes from './modules/simulationRoutes';
 import aiRoutes from './modules/aiRoutes';
+import resourceRoutes from './modules/resourceRoutes';
 
 // 第二步：创建路由器实例。
 //
@@ -13,7 +14,7 @@ import aiRoutes from './modules/aiRoutes';
 //   - 带子路由、带深链接 props、或有独立元信息的路由，放到 ./modules/ 下；
 //   - 同一个 path 只能出现一次——后定义的会覆盖先定义的，
 //     那会让先定义的那份变成改了也不生效的死代码。
-// 这里只声明「本文件独有」的四条，其余由模块提供。
+// 这里只声明「本文件独有」的三条，其余由模块提供。
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -39,16 +40,11 @@ const router = createRouter({
       component: () => import('@/views/SceneEditor.vue'),
       meta: { title: '3D仿真系统 - 场景编辑器', icon: '🛠️' }
     },
-    {
-      path: '/model-library',
-      name: 'ModelLibrary',
-      component: () => import('@/views/ModelLibrary.vue'),
-      meta: { title: '3D仿真系统 - 模型库', icon: '📚' }
-    },
     // 加入模块化路由
     ...sceneRoutes,
     ...simulationRoutes,
     ...aiRoutes,
+    ...resourceRoutes,
   ],
 })
 

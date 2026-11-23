@@ -46,6 +46,8 @@ const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-001',
     name: '机甲',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '风格化机甲，装甲与能源核心为靛紫主色',
     category: 'characters',
     thumbnailUrl: '/assets/models/thumbnails/mech.png',
@@ -60,6 +62,8 @@ const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-002',
     name: '无人机',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '四旋翼巡检机，云台镜头与琥珀顶灯',
     category: 'characters',
     thumbnailUrl: '/assets/models/thumbnails/drone.png',
@@ -74,6 +78,8 @@ const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-003',
     name: '悬浮守卫',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '带独眼与三推进器的悬浮球形守卫',
     category: 'characters',
     thumbnailUrl: '/assets/models/thumbnails/hover-guardian.png',
@@ -88,6 +94,9 @@ const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-004',
     name: '外星人',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 迷你外星人，带 32 段动作动画',
     category: 'characters',
     thumbnailUrl: '/assets/models/thumbnails/alien.png',
@@ -102,6 +111,9 @@ const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-005',
     name: '宇航员',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 太空宇航员，轻量化太空服造型',
     category: 'characters',
     thumbnailUrl: '/assets/models/thumbnails/astronaut.png',
@@ -116,6 +128,9 @@ const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-006',
     name: '机器人',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 迷你机器人，带 32 段动作动画',
     category: 'characters',
     thumbnailUrl: '/assets/models/thumbnails/robot.png',
@@ -130,6 +145,9 @@ const createCharacterModels = (seed: number = 0): Model[] => [
   {
     id: 'char-007',
     name: '士兵',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 迷你士兵，带 32 段动作动画',
     category: 'characters',
     thumbnailUrl: '/assets/models/thumbnails/soldier.png',
@@ -148,6 +166,8 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-001',
     name: '太空站内部',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '一段舱室：舷窗、管线、货箱与控制台',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/space-station-interior.png',
@@ -162,6 +182,8 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-002',
     name: '森林场景',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '低多边形林地：四棵树、灌木与碎石',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/forest.png',
@@ -176,6 +198,8 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-003',
     name: '城市街道',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '街区块：两侧楼宇、路灯与发亮的窗带',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/city-street.png',
@@ -190,6 +214,9 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-004',
     name: '巨石',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 大型岩石，低多边形场景装饰件',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/rock_large.png',
@@ -204,6 +231,9 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-005',
     name: '橡树',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 橡树，低多边形植被',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/tree_oak.png',
@@ -218,6 +248,9 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-006',
     name: '松树',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 高大松树，低多边形植被',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/tree_pine.png',
@@ -232,6 +265,9 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-007',
     name: '太空机库',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 大型机库建筑，太空基地场景件',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/hangar_large.png',
@@ -246,6 +282,9 @@ const createEnvironmentModels = (seed: number = 0): Model[] => [
   {
     id: 'env-008',
     name: '太空站走廊',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 圆窗走廊转角段，可与机库拼接扩展',
     category: 'environments',
     thumbnailUrl: '/assets/models/thumbnails/station_corridor.png',
@@ -264,6 +303,8 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-001',
     name: '科幻武器',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '紧凑型能量手枪，靛紫外壳配琥珀能量条',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/energy-blaster.png',
@@ -278,6 +319,8 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-002',
     name: '魔法书',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '悬浮的靛紫古籍，封面符文与光点发亮',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/arcane-book.png',
@@ -292,6 +335,8 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-003',
     name: '控制台',
+    license: 'Apache-2.0',
+    author: '3D Simulation System',
     description: '斜面操作台，青色屏幕配琥珀按键',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/terminal-console.png',
@@ -306,6 +351,9 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-004',
     name: '一捗书',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 书堆道具，低多边形',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/books.png',
@@ -320,6 +368,9 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-005',
     name: '电脑屏',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 显示器道具，屏幕与支架分离材质',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/computer_screen.png',
@@ -334,6 +385,9 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-006',
     name: '月球车',
+    license: 'CC0-1.0',
+    author: 'Kenney',
+    sourceUrl: 'https://kenney.nl/',
     description: 'Kenney 六轮探测车，桅杆相机造型',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/rover.png',
@@ -348,6 +402,9 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-007',
     name: '磁带机',
+    license: 'CC0-1.0',
+    author: 'Poly Haven',
+    sourceUrl: 'https://polyhaven.com/',
     description: 'Poly Haven 扫描磁带播放器，含 1K 贴图',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/cassette-player.png',
@@ -362,6 +419,9 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-008',
     name: '十字锤',
+    license: 'CC0-1.0',
+    author: 'Poly Haven',
+    sourceUrl: 'https://polyhaven.com/',
     description: 'Poly Haven 扫描十字锤，含 1K 贴图',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/cross-pein-hammer.png',
@@ -376,6 +436,9 @@ const createPropModels = (seed: number = 0): Model[] => [
   {
     id: 'prop-009',
     name: '罐头组',
+    license: 'CC0-1.0',
+    author: 'Poly Haven',
+    sourceUrl: 'https://polyhaven.com/',
     description: 'Poly Haven 扫描食品罐头组，含 1K 贴图',
     category: 'props',
     thumbnailUrl: '/assets/models/thumbnails/russian-food-cans.png',

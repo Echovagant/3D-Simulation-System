@@ -5,14 +5,14 @@
       <button
         class="toolbar-btn"
         @click="handlePlayPause"
-        :title="isPlaying ? '暂停模拟' : '开始模拟'"
+        :title="isPlaying ? '暂停预览' : '开始预览'"
       >
         <i class="fas" :class="isPlaying ? 'fa-pause' : 'fa-play'"></i>
       </button>
       <button
         class="toolbar-btn"
         @click="handleResetSimulation"
-        title="重置模拟（回到物体初始位置）"
+        title="重置预览（回到物体初始位置）"
       >
         <i class="fas fa-undo-alt"></i>
       </button>
@@ -132,6 +132,14 @@
       >
         <i class="fas fa-arrow-up-from-bracket"></i>
       </button>
+      <button
+        class="toolbar-btn"
+        @click="handleSendToLab"
+        :disabled="!isSceneInitialized"
+        title="送到实验室（把当前场景带入仿真实验室）"
+      >
+        <i class="fas fa-flask"></i>
+      </button>
     </div>
 
     <!-- 场地尺寸 -->
@@ -176,6 +184,7 @@
 
 <script setup>
 import { inject, computed, ref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useSceneEditorStore } from '@/stores/sceneEditorStore';
 import { useModelStore } from '@/stores/modelStore';
 import { reportError } from '@/services/api/telemetry';
@@ -187,6 +196,10 @@ import AiSceneDialog from './AiSceneDialog.vue';
 // 状态管理
 const store = useSceneEditorStore();
 const modelStore = useModelStore();
+const router = useRouter();
+
+/** 与仿真实验室约定的交接键：值必须是 { document, source: 'scene-editor', at } */
+const LAB_HANDOFF_KEY = 'lab-handoff-scene';
 
 // 从父组件注入的方法。兜底成「返回 false」的空实现：
 // 没有上游提供时按钮点了不炸，只提示失败
@@ -217,19 +230,19 @@ const showTempMessage = (message, duration = 2000) => {
   }, duration);
 };
 
-// 播放/暂停模拟
+// 播放/暂停预览
 const handlePlayPause = () => {
   // 切换**前**先记住当前状态：isPlaying 在切换调用里就同步翻转了，
   // 之后再读读到的是切换后的状态，提示语会与实际动作正好相反。
   const wasPlaying = isPlaying.value;
   store.togglePlayStateWithTransition();
-  showTempMessage(wasPlaying ? '已暂停物理模拟' : '已开始物理模拟');
+  showTempMessage(wasPlaying ? '已暂停预览' : '已开始预览');
 };
 
-// 重置模拟
+// 重置预览
 const handleResetSimulation = () => {
   store.resetSimulation();
-  showTempMessage('重置物理模拟');
+  showTempMessage('重置预览');
 };
 
 // 聚焦场景：自动取景，把全部物体收进画面
@@ -286,6 +299,27 @@ const handleRecallFallen = () => {
   } else {
     showTempMessage('没有掉出场地的物体', 2500);
   }
+};
+
+// 送到实验室：场景文档写进 sessionStorage，由仿真实验室读取
+const handleSendToLab = () => {
+  if (!isSceneInitialized.value) return;
+
+  try {
+    const doc = store.buildSceneDocument('送到实验室');
+    sessionStorage.setItem(
+      LAB_HANDOFF_KEY,
+      JSON.stringify({ document: doc, source: 'scene-editor', at: Date.now() }),
+    );
+  } catch (error) {
+    console.warn('[Toolbar] 送到实验室失败', error);
+    reportError(error, '/scene-editor');
+    showTempMessage('送到实验室失败：浏览器存储不可用或空间不足，请清理后重试', 5000);
+    return;
+  }
+
+  showTempMessage('已送到仿真实验室', 2000);
+  Promise.resolve(router.push('/simulation-lab?from=editor')).catch(() => {});
 };
 
 // 切换场地大小
