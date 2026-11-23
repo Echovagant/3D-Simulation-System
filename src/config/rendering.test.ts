@@ -175,6 +175,7 @@ describe('渲染器的 GPU 偏好', () => {
         'composables/useSceneEditor.ts',
         'render/main.ts',
         'views/SimulationLab.vue',
+        'components/workbench/WorkbenchViewport.vue',
         'background/geometry-background.ts',
       ]),
     )

@@ -18,7 +18,12 @@
         <WorkbenchSessionPanel />
       </div>
       <div class="pane pane-center">
-        <WorkbenchExecutePanel />
+        <div class="center-viewport">
+          <WorkbenchViewport :scene="store.currentScene" :observation="store.lastObservation" />
+        </div>
+        <div class="center-execute">
+          <WorkbenchExecutePanel />
+        </div>
       </div>
       <div class="pane pane-right">
         <!-- 右栏纵向分两块：审计流在上（轮询主视觉），记忆/资料在下；各自内部滚动 -->
@@ -61,6 +66,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import WorkbenchSessionPanel from '@/components/workbench/WorkbenchSessionPanel.vue'
 import WorkbenchExecutePanel from '@/components/workbench/WorkbenchExecutePanel.vue'
 import WorkbenchAuditPanel from '@/components/workbench/WorkbenchAuditPanel.vue'
+import WorkbenchViewport from '@/components/workbench/WorkbenchViewport.vue'
 import MemoryPanel from '@/components/workbench/MemoryPanel.vue'
 import KnowledgePanel from '@/components/workbench/KnowledgePanel.vue'
 import { useGymWorkbenchStore } from '@/stores/gymWorkbenchStore'
@@ -156,6 +162,24 @@ onUnmounted(() => {
 .pane-center {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.center-viewport {
+  flex: 0 0 54%;
+  min-height: 220px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-panel-raised);
+}
+
+.center-execute {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .pane-right {
@@ -250,6 +274,17 @@ onUnmounted(() => {
 
   .side-body {
     height: auto;
+  }
+
+  .center-viewport {
+    flex: none;
+    height: 320px;
+  }
+
+  .center-execute {
+    flex: none;
+    height: auto;
+    overflow: visible;
   }
 }
 </style>

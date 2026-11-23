@@ -106,6 +106,8 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   const currentSessionId = ref('')
   /** 当前会话的参数回显（生效参数 / 丢键 / 回落键 / 力上限），来自 create/reset 响应 */
   const currentParams = ref<GymParamEcho | null>(null)
+  /** 当前会话创建时提交的场景文档（3D 视口按它取几何类型与尺寸） */
+  const currentScene = ref<Record<string, unknown> | null>(null)
   /** 最近一次观测（建会话 / reset / step 之后都会更新） */
   const lastObservation = ref<GymObservation | null>(null)
   /** 最近一次 step 的结果（不含观测，观测在 lastObservation 里） */
@@ -207,6 +209,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     stopAuditPolling()
     currentSessionId.value = ''
     currentParams.value = null
+    currentScene.value = null
     lastObservation.value = null
     lastStep.value = null
     stepError.value = ''
@@ -228,6 +231,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     // 把旧回显摘掉，等下一次 create/reset 再补上，不拿旧会话的口径冒充当前会话的
     currentParams.value = null
     // 观测跟着会话走：旧会话的观测留着，LLM 提议会拿错场地的数据出主意
+    currentScene.value = null
     lastObservation.value = null
     lastStep.value = null
     stepError.value = ''
@@ -254,6 +258,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     try {
       const created = await createGymSession(llmStore.ownerToken, input)
       selectSession(created.sessionId)
+      currentScene.value = input.scene
       currentParams.value = {
         effectiveParams: created.effectiveParams,
         droppedParamKeys: created.droppedParamKeys,
@@ -684,6 +689,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     currentSessionId,
     currentSession,
     currentParams,
+    currentScene,
     lastObservation,
     lastStep,
     stepError,
