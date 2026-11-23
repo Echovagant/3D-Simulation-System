@@ -289,11 +289,11 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 
 ```bash
 cd backend
-uv run pytest        # 242 个用例
+uv run pytest        # 286 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
-后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（42 个端点）是**生成物**：
+后端接口的契约文档 [`docs/api-contract.md`](docs/api-contract.md)（49 个端点）是**生成物**：
 它由后端代码生成，改了接口却没重新生成，CI 会直接红。
 
 </details>
