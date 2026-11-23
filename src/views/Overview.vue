@@ -82,14 +82,11 @@ import { RouterLink } from 'vue-router'
   }
 }
 
-/* 银色渐变标题条：老版原样；金晕收敛到弱光（强外发光=曝光过高） */
+/* 标题条：去掉银色渐变与投影，避免高曝光感 */
 .title-bar {
   max-width: 760px;
   margin: 0 auto 20px;
   padding: 14px 20px;
-  border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, #fdfdfd 0%, #d9d9d6 55%, #bfbfbc 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 
 .title-bar h1 {
