@@ -71,6 +71,7 @@ import { useRouter } from 'vue-router'
 import type { SceneIndexEntry } from '@/types'
 import {
   useSceneEditorStore,
+  type ModelPhysicsOptions,
   type PrimitiveCreateOptions,
 } from '@/stores/sceneEditorStore'
 import { useSceneSyncStore } from '@/stores/sceneSyncStore'
@@ -98,7 +99,7 @@ const probeDone = ref(false)
 const addCube = inject<(options?: PrimitiveCreateOptions) => boolean>('addCube', () => false)
 const addSphere = inject<(options?: PrimitiveCreateOptions) => boolean>('addSphere', () => false)
 const addRamp = inject<(options?: PrimitiveCreateOptions) => boolean>('addRamp', () => false)
-const importModel = inject<(modelId: string) => Promise<boolean>>(
+const importModel = inject<(modelId: string, physics?: ModelPhysicsOptions) => Promise<boolean>>(
   'importModel',
   async () => false,
 )
@@ -225,7 +226,7 @@ onMounted(async () => {
     createCube: (options) => addCube(options),
     createSphere: (options) => addSphere(options),
     createRamp: (options) => addRamp(options),
-    importModel: (modelId) => importModel(modelId),
+    importModel: (modelId, physics) => importModel(modelId, physics),
   })
 
   // 后端是可选增强：探不通就安静降级，不打扰用户

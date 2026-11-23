@@ -75,7 +75,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import type { ScenePrimitiveSpec } from '@/types'
-import type { PrimitiveCreateOptions } from '@/stores/sceneEditorStore'
+import type {
+  ModelPhysicsOptions,
+  PrimitiveCreateOptions,
+} from '@/stores/sceneEditorStore'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import ThreeScene from '@/components/three/core/ThreeScene.vue'
@@ -111,7 +114,7 @@ const sceneMethods = ref<{
   addSphere: (options?: PrimitiveCreateOptions) => boolean
   addRamp: (options?: PrimitiveCreateOptions) => boolean
   addPrimitive: (spec: ScenePrimitiveSpec) => boolean
-  importModel: (modelId: string) => Promise<boolean>
+  importModel: (modelId: string, physics?: ModelPhysicsOptions) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   // 物理推进函数接收 rAF 的时间戳：固定步长累加器靠它算真实时间
   updatePhysics: (timestamp?: number) => void
@@ -139,7 +142,11 @@ provide(
   'addPrimitive',
   (spec: ScenePrimitiveSpec) => sceneMethods.value.addPrimitive(spec),
 )
-provide('importModel', (modelId: string) => sceneMethods.value.importModel(modelId))
+provide(
+  'importModel',
+  (modelId: string, physics?: ModelPhysicsOptions) =>
+    sceneMethods.value.importModel(modelId, physics),
+)
 provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized())
 provide('setWorldSize', (size: number) => sceneMethods.value.setWorldSize(size))
 provide('focusScene', () => sceneMethods.value.focusScene())
@@ -151,7 +158,7 @@ const exposeMethods = (methods: {
   addSphere: (options?: PrimitiveCreateOptions) => boolean
   addRamp: (options?: PrimitiveCreateOptions) => boolean
   addPrimitive: (spec: ScenePrimitiveSpec) => boolean
-  importModel: (modelId: string) => Promise<boolean>
+  importModel: (modelId: string, physics?: ModelPhysicsOptions) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   updatePhysics: (timestamp?: number) => void
   setWorldSize: (size: number) => boolean

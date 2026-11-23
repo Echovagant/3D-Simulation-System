@@ -155,12 +155,20 @@ const normalizeMaterialSettings = (
       }
     : undefined
 
+/** 导入 / 重建模型时可覆盖的物理参数；缺省走编辑器默认值 */
+export type ModelPhysicsOptions = {
+  type?: 'static' | 'dynamic' | 'kinematic'
+  mass?: number
+  friction?: number
+  restitution?: number
+}
+
 export type PrimitiveFactory = {
   createCube: (options?: PrimitiveCreateOptions) => boolean
   createSphere: (options?: PrimitiveCreateOptions) => boolean
   createRamp: (options?: PrimitiveCreateOptions) => boolean
   /** 模型重建：走编辑器的导入链路才能连带刚体；没有这一项时退回「只有 mesh」 */
-  importModel?: (modelId: string) => Promise<boolean>
+  importModel?: (modelId: string, physics?: ModelPhysicsOptions) => Promise<boolean>
 }
 
 /** loadScene 的结构化结果：界面据此说清「成功到什么程度」，不再假成功 */
@@ -934,7 +942,20 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     const factory = primitiveFactory.value
     if (factory?.importModel) {
       const before = objects.value.length
-      const ok = await factory.importModel(objData.modelId)
+      // 存档里的物理参数必须交给导入链路：模型刚体默认是动态、默认质量，
+      // 不覆盖的话「存了静态/自定义质量」的模型一打开就变回默认动态体。
+      const sourcePhysics = objData.physics
+      const ok = await factory.importModel(
+        objData.modelId,
+        sourcePhysics
+          ? {
+              type: sourcePhysics.type,
+              mass: sourcePhysics.mass,
+              friction: sourcePhysics.friction,
+              restitution: sourcePhysics.restitution,
+            }
+          : undefined,
+      )
       const restored = ok ? objects.value[before] : undefined
       if (restored) {
         updateObject(restored.uuid, {

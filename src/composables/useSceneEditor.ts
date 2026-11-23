@@ -6,6 +6,7 @@ import {
   DEFAULT_OBJECT_MASS,
   DEFAULT_OBJECT_RESTITUTION,
   useSceneEditorStore,
+  type ModelPhysicsOptions,
 } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
@@ -1311,10 +1312,19 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   }
 
   // 导入模型（与模型库集成）
-  const importModel = async (modelId: string): Promise<boolean> => {
+  const importModel = async (
+    modelId: string,
+    physics: ModelPhysicsOptions = {},
+  ): Promise<boolean> => {
     if (!isSceneInitialized || !physicsWorld || !rapier || !scene) {
       return false
     }
+
+    const bodyType: 'static' | 'dynamic' | 'kinematic' =
+      physics.type === 'static' || physics.type === 'kinematic' ? physics.type : 'dynamic'
+    const mass = normalizeMass(physics.mass)
+    const friction = normalizeUnitInterval(physics.friction, DEFAULT_OBJECT_FRICTION)
+    const restitution = normalizeUnitInterval(physics.restitution, DEFAULT_OBJECT_RESTITUTION)
 
     // 刚体一创建出来就登记进账本（与 createGeometry 同理）：
     // 否则中途抛错会留下永远无法移除的「孤儿刚体」。
@@ -1368,7 +1378,13 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       const size = box.getSize(new THREE.Vector3())
       const halfExtents = size.multiplyScalar(0.5)
 
-      const rigidBodyDesc = rapier.RigidBodyDesc.dynamic().setTranslation(
+      const bodyDesc =
+        bodyType === 'static'
+          ? rapier.RigidBodyDesc.fixed()
+          : bodyType === 'kinematic'
+            ? rapier.RigidBodyDesc.kinematicPositionBased()
+            : rapier.RigidBodyDesc.dynamic()
+      const rigidBodyDesc = bodyDesc.setTranslation(
         model.position.x,
         model.position.y,
         model.position.z,
@@ -1379,6 +1395,11 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       // 创建碰撞体
       const colliderDesc = rapier.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
       const collider = physicsWorld.createCollider(colliderDesc, rigidBody)
+      // 与基本体同口径：质量 / 摩擦 / 弹性写进碰撞体。
+      // 不写的话界面显示的质量 1、弹性 0.2 与 Rapier 的密度默认值对不上。
+      collider.setMass(mass)
+      collider.setFriction(friction)
+      collider.setRestitution(restitution)
       // 登记碰撞体**基准尺寸**（缩放为 1 时的半长）：模型导入时会先做一次
       // 尺度归一，包围盒量到的是归一后的世界尺寸——要除掉当前 scale 才是基准。
       // 否则属性面板把 scale 从 0.4 改成 1 时，碰撞体会被二次缩小。
@@ -1398,7 +1419,11 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
       // 设置userData
       ;(rigidBody as RapierRigidBody).userData = { object: model }
-      attachRigidBodyToUserData(model, rigidBody, collider, 'box')
+      attachRigidBodyToUserData(model, rigidBody, collider, 'box', bodyType, {
+        mass,
+        friction,
+        restitution,
+      })
 
       // 添加到场景和store
       scene.add(model)
@@ -1408,6 +1433,10 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         name: modelInfo.name,
         threeObject: model,
         modelId,
+        physicsType: bodyType,
+        mass,
+        friction,
+        restitution,
         position: {
           x: model.position.x,
           y: model.position.y,

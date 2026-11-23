@@ -12,7 +12,7 @@
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
 import { useSceneEditor } from '@/composables/useSceneEditor'
 import type { ScenePrimitiveSpec } from '@/types'
-import type { PrimitiveCreateOptions } from '@/stores/sceneEditorStore'
+import type { PrimitiveCreateOptions, ModelPhysicsOptions } from '@/stores/sceneEditorStore'
 
 const container: Ref<HTMLDivElement | null> = ref<HTMLDivElement | null>(null)
 const isInitializing = ref(true)
@@ -30,7 +30,7 @@ const emits = defineEmits<{
       addSphere: (options?: PrimitiveCreateOptions) => boolean
       addRamp: (options?: PrimitiveCreateOptions) => boolean
       addPrimitive: (spec: ScenePrimitiveSpec) => boolean
-      importModel: (modelId: string) => Promise<boolean>
+      importModel: (modelId: string, physics?: ModelPhysicsOptions) => Promise<boolean>
       getIsSceneInitialized: () => boolean
       updatePhysics: () => void
       setWorldSize: (size: number) => boolean

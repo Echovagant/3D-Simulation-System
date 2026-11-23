@@ -376,6 +376,79 @@ describe('场景文档的加载', () => {
     })
   })
 
+  it('restoreModel 把存档里的物理参数交给导入链路', async () => {
+    const store = useSceneEditorStore()
+    store.initializeScene(
+      new THREE.Scene(),
+      new THREE.PerspectiveCamera(),
+      {} as unknown as THREE.WebGLRenderer,
+    )
+
+    const captured: Array<Record<string, unknown>> = []
+    store.registerPrimitiveFactory({
+      createCube: () => false,
+      createSphere: () => false,
+      createRamp: () => false,
+      importModel: async (modelId, physics) => {
+        captured.push({ modelId, ...(physics ?? {}) })
+        store.addObject({
+          ...newObject('restored-model'),
+          type: 'model',
+          modelId,
+          physicsType: physics?.type,
+          mass: physics?.mass,
+          friction: physics?.friction,
+          restitution: physics?.restitution,
+        })
+        return true
+      },
+    })
+
+    const result = await store.loadSceneDocument({
+      id: 'model-doc',
+      name: '模型物理',
+      createdAt: '2026-11-23T10:00:00.000Z',
+      updatedAt: '2026-11-23T10:00:00.000Z',
+      version: 1,
+      worldSize: 40,
+      objects: [
+        {
+          uuid: 'src-model',
+          type: 'model',
+          name: '机器人',
+          modelId: 'robot',
+          position: { x: 0, y: 1, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          visible: true,
+          physics: {
+            type: 'static',
+            shape: 'box',
+            mass: 7,
+            friction: 0.9,
+            restitution: 0.3,
+          },
+        },
+      ],
+    })
+
+    expect(result.ok).toBe(true)
+    expect(captured).toHaveLength(1)
+    expect(captured[0]).toMatchObject({
+      modelId: 'robot',
+      type: 'static',
+      mass: 7,
+      friction: 0.9,
+      restitution: 0.3,
+    })
+    expect(store.objects[0].physics).toMatchObject({
+      type: 'static',
+      mass: 7,
+      friction: 0.9,
+      restitution: 0.3,
+    })
+  })
+
   it('没有注册工厂时，加载场景仍能还原基本体的 mesh（只是没有物理）', async () => {
     const store = useSceneEditorStore()
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial())
