@@ -67,10 +67,52 @@
         <p class="wb-repair-text">{{ store.repairHint.message }}</p>
       </div>
 
+      <!-- LLM 提议动作：观测快照 → 模型提议 → 自动执行；提议失败如实报错，不静默降级 -->
+      <div class="wb-llm-block">
+        <h4 class="wb-form-title">LLM 提议动作</h4>
+        <div class="wb-preset-row" role="group" aria-label="LLM 提议动作">
+          <button
+            type="button"
+            class="wb-preset-btn llm"
+            title="把当前观测交给模型，提议一个不超过安全上限的推力并自动执行"
+            :disabled="store.deciding || store.stepping"
+            @click="onAutoDecide"
+          >
+            {{ store.deciding ? '提议中…' : '请求提议' }}
+          </button>
+          <button
+            type="button"
+            class="wb-preset-btn"
+            title="把当前提议的力再发一步"
+            :disabled="!store.lastProposal || store.deciding || store.stepping"
+            @click="onSendProposal"
+          >
+            一键发送
+          </button>
+        </div>
+        <p v-if="store.decisionError" class="wb-error-line">{{ store.decisionError }}</p>
+        <div v-if="store.lastProposal" class="wb-proposal">
+          <div class="wb-proposal-head">
+            <span class="wb-proposal-meta">{{ proposalSourceLabel }}</span>
+            <span class="wb-proposal-status" :class="{ done: store.lastProposal.executed }">
+              {{ store.lastProposal.executed ? '已发送执行' : '待发送' }}
+            </span>
+          </div>
+          <pre class="wb-proposal-json">{{ proposalJson }}</pre>
+          <p v-if="store.lastProposal.clamped" class="wb-clamp-line">
+            合力超出安全上限，已等比缩回（原值 {{ originalJson }}）
+          </p>
+        </div>
+      </div>
+
       <!-- 执行结果 -->
       <div v-if="store.lastStep" class="wb-result-block">
         <h4 class="wb-form-title">最近一步</h4>
         <dl class="wb-result-list">
+          <div class="wb-result-row">
+            <dt>来源</dt>
+            <dd>{{ sourceLabel }}</dd>
+          </div>
           <div class="wb-result-row">
             <dt>reward</dt>
             <dd :class="rewardClass">{{ formatNumber(store.lastStep.reward) }}</dd>
@@ -205,6 +247,46 @@ const onReset = async (): Promise<void> => {
   localError.value = ''
   await store.resetCurrent()
 }
+
+// ---- LLM 提议动作 ----
+
+const onAutoDecide = async (): Promise<void> => {
+  localError.value = ''
+  await store.autoDecide()
+}
+
+/** 把当前提议的力再发一步（来源照实记为 LLM 提议） */
+const onSendProposal = async (): Promise<void> => {
+  const action = store.lastProposal?.action
+  if (!action) return
+  await store.stepCurrent(action.forceX, action.forceZ, 'llm')
+}
+
+const proposalJson = computed(() =>
+  store.lastProposal ? JSON.stringify(store.lastProposal.action) : '',
+)
+
+const originalJson = computed(() =>
+  store.lastProposal?.original ? JSON.stringify(store.lastProposal.original) : '',
+)
+
+/** 提议来源的一行话：LLM · 服务商 / 模型；缺了就只写 LLM */
+const proposalSourceLabel = computed(() => {
+  const proposal = store.lastProposal
+  if (!proposal) return ''
+  const provider = proposal.source.provider?.trim()
+  const model = proposal.source.model?.trim()
+  if (provider && model) return `LLM · ${provider} / ${model}`
+  if (model) return `LLM · ${model}`
+  return 'LLM 提议'
+})
+
+/** 最近一步的决策来源：LLM 提议 / 手动输入 */
+const sourceLabel = computed(() => {
+  if (store.lastActionSource === 'llm') return 'LLM 提议'
+  if (store.lastActionSource === 'rule') return '手动输入'
+  return '—'
+})
 </script>
 
 <style scoped>
@@ -344,6 +426,70 @@ const onReset = async (): Promise<void> => {
   line-height: 1.6;
   color: var(--text-1);
   font-family: var(--font-mono);
+}
+
+/* LLM 提议动作区：与结果块同一套克制的内嵌框 */
+.wb-llm-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg-inset);
+  border-radius: var(--radius-sm);
+}
+
+.wb-preset-btn.llm {
+  color: var(--accent);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.wb-proposal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wb-proposal-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.wb-proposal-meta {
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-proposal-status {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.wb-proposal-status.done {
+  color: var(--success);
+}
+
+.wb-proposal-json {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-1);
+  overflow-x: auto;
+}
+
+.wb-clamp-line {
+  margin: 0;
+  font-size: 12px;
+  color: var(--accent-2);
 }
 
 .wb-result-block {

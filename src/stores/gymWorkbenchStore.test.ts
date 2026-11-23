@@ -1,6 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGymWorkbenchStore, AUDIT_POLL_INTERVAL_MS } from './gymWorkbenchStore'
+import { useLlmStore } from './llmStore'
 import type { GymStepLogItem } from '@/services/api/gymWorkbench'
 
 /**
@@ -149,6 +150,17 @@ const countLogCalls = (fetchMock: ReturnType<typeof vi.fn>): number =>
   fetchMock.mock.calls.filter(
     ([input]) => String(input).includes('/api/gym/sessions/sess-1/logs'),
   ).length
+
+/** 数一数打到 step 端点的请求数 */
+const countStepCalls = (fetchMock: ReturnType<typeof vi.fn>): number =>
+  fetchMock.mock.calls.filter(
+    ([input, init]) =>
+      String(input).includes('/api/gym/sessions/sess-1/step') && init?.method === 'POST',
+  ).length
+
+/** LLM 出网口替身：正常返回一段模型正文 */
+const stubInvokeOk = (content: string) =>
+  vi.spyOn(useLlmStore(), 'invoke').mockResolvedValue({ ok: true, content, error: '' })
 
 /** apiRequest 会把 headers 包成 Headers 实例再传给 fetch：按 Headers 读 */
 const headerOf = (init: RequestInit | undefined, name: string): string | null =>
@@ -341,5 +353,105 @@ describe('gymWorkbenchStore', () => {
     expect(store.currentSessionId).toBe('')
     expect(store.sessions).toHaveLength(0)
     expect(store.auditPollingActive).toBe(false)
+  })
+
+  describe('autoDecide（LLM 自动决策）', () => {
+    it('提议成功：动作自动送进执行面，来源记为 LLM，提议留档 executed', async () => {
+      const fetchMock = installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      stubInvokeOk('{"forceX": 5, "forceZ": 0}')
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(true)
+      expect(store.decisionError).toBe('')
+      expect(store.lastProposal?.action).toEqual({ forceX: 5, forceZ: 0 })
+      expect(store.lastProposal?.executed).toBe(true)
+      expect(store.lastProposal?.clamped).toBe(false)
+      expect(store.lastActionSource).toBe('llm')
+      expect(store.lastStep?.reward).toBe(0.1)
+      expect(countStepCalls(fetchMock)).toBe(1)
+    })
+
+    it('超安全上限的提议：等比缩回后执行，原始值留档', async () => {
+      installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      // 力上限 30 → 安全线 24；模型提议 30
+      stubInvokeOk('{"forceX": 30, "forceZ": 0}')
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(true)
+      expect(store.lastProposal?.clamped).toBe(true)
+      expect(store.lastProposal?.action).toEqual({ forceX: 24, forceZ: 0 })
+      expect(store.lastProposal?.original).toEqual({ forceX: 30, forceZ: 0 })
+      expect(store.lastProposal?.executed).toBe(true)
+    })
+
+    it('畸形输出：decisionError 如实报，不发 step、不静默降级', async () => {
+      const fetchMock = installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      stubInvokeOk('我觉得应该往左推一点')
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(false)
+      expect(store.decisionError).toContain('JSON')
+      expect(store.lastProposal).toBeNull()
+      // 只有建会话时的初始结果，没有新的执行
+      expect(store.lastStep?.info).toEqual({})
+      expect(countStepCalls(fetchMock)).toBe(0)
+    })
+
+    it('提议成功但 step 422：修复指令透传，提议记 executed=false', async () => {
+      installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      stubInvokeOk('{"forceX": 5, "forceZ": 0}')
+      stepMode = 'over'
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(false)
+      expect(store.repairHint?.code).toBe('gym_force_out_of_range')
+      expect(store.decisionError).toBe('')
+      expect(store.lastProposal?.executed).toBe(false)
+      // 没有成功的一步：来源口径保持空，不拿失败动作冒充「最近一步」
+      expect(store.lastActionSource).toBeNull()
+      expect(store.lastStep?.info).toEqual({})
+    })
+
+    it('出网口失败（未配 key / 冷却）：错误原样透传，不发 step', async () => {
+      const fetchMock = installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      vi.spyOn(useLlmStore(), 'invoke').mockResolvedValue({
+        ok: false,
+        content: '',
+        error: '未配置测试商的 API Key',
+      })
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(false)
+      expect(store.decisionError).toContain('未配置')
+      expect(store.lastProposal).toBeNull()
+      expect(countStepCalls(fetchMock)).toBe(0)
+    })
+
+    it('没有会话 / 没有观测：如实报错，不请求模型', async () => {
+      installFetch()
+      const store = useGymWorkbenchStore()
+      const invokeSpy = stubInvokeOk('{"forceX": 1, "forceZ": 0}')
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(false)
+      expect(store.decisionError).toContain('还没有选中会话')
+      expect(invokeSpy).not.toHaveBeenCalled()
+    })
   })
 })

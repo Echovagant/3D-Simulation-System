@@ -38,10 +38,35 @@ import {
   type MemoryCreateInput,
   type MemoryItem,
 } from '@/services/api/memory'
+import {
+  buildGymDecisionSnapshot,
+  GYM_DEFAULT_FORCE_LIMIT,
+  proposeForceAction,
+  type ForceProposalSource,
+} from '@/services/llm/gymDecision'
 import { useLlmStore } from './llmStore'
 
 /** 审计流轮询间隔（毫秒） */
 export const AUDIT_POLL_INTERVAL_MS = 3000
+
+/** 一次执行的决策来源：LLM 提议还是手动/预设输入（手动不出网） */
+export type GymActionSource = 'llm' | 'rule'
+
+/** LLM 提议的留档：提议本身、是否被安全收窄、是否已送进执行面 */
+export interface GymProposalRecord {
+  /** 提议的动作（已过解析层安全校验，可直接送 step） */
+  action: { forceX: number; forceZ: number }
+  /** 决策来源留档：哪家服务商哪个模型出的主意 */
+  source: ForceProposalSource
+  /** 模型原始输出（截到 200 字符，排障用） */
+  raw: string
+  /** 合力模长超安全上限，被解析层等比缩回 */
+  clamped: boolean
+  /** 收窄前的原始提议（clamped 为 true 时才有值） */
+  original: { forceX: number; forceZ: number } | null
+  /** 是否已经送进执行面（送了但 422/网络失败也算送过，executed 为 false） */
+  executed: boolean
+}
 
 /**
  * 把异常翻译成一句能直接显示的话。
@@ -82,6 +107,14 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   const logRoundFilter = ref<number | undefined>(undefined)
   /** 正在提交动作 */
   const stepping = ref(false)
+  /** 最近一次执行的决策来源（null = 本次选中会话还没发过动作） */
+  const lastActionSource = ref<GymActionSource | null>(null)
+  /** 正在请求 LLM 提议（含解析，不含 step） */
+  const deciding = ref(false)
+  /** LLM 提议环节的失败原因（与 stepError 分开：提议挂了不代表执行挂了） */
+  const decisionError = ref('')
+  /** 最近一次 LLM 提议与其处置记录（执行面板「LLM 提议动作」区用） */
+  const lastProposal = ref<GymProposalRecord | null>(null)
   /** 正在创建会话 */
   const creating = ref(false)
   /** 审计轮询定时器句柄（组件卸载必须收掉） */
@@ -155,6 +188,9 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     lastStep.value = null
     stepError.value = ''
     repairHint.value = null
+    lastActionSource.value = null
+    lastProposal.value = null
+    decisionError.value = ''
     logs.value = []
     logsError.value = ''
   }
@@ -166,9 +202,14 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     // 参数回显来自 create/reset 响应，列表里没有——切会话（含取消选中）时
     // 把旧回显摘掉，等下一次 create/reset 再补上，不拿旧会话的口径冒充当前会话的
     currentParams.value = null
+    // 观测跟着会话走：旧会话的观测留着，LLM 提议会拿错场地的数据出主意
+    lastObservation.value = null
     lastStep.value = null
     stepError.value = ''
     repairHint.value = null
+    lastActionSource.value = null
+    lastProposal.value = null
+    decisionError.value = ''
     logs.value = []
     logsError.value = ''
     if (!sessionId) return
@@ -212,10 +253,15 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   /**
    * 对当前会话推进一步。
    *
+   * source 是这次动作的决策来源（LLM 提议自动发送 / 手动输入），只做留档展示。
    * 422 越界力单独拆成 repairHint（修复指令原文），其余失败进 stepError；
    * 两种失败都不清掉上一次成功的执行结果——界面能对照着看。
    */
-  const stepCurrent = async (forceX: number, forceZ: number): Promise<boolean> => {
+  const stepCurrent = async (
+    forceX: number,
+    forceZ: number,
+    source: GymActionSource = 'rule',
+  ): Promise<boolean> => {
     const sessionId = currentSessionId.value
     if (!sessionId) {
       stepError.value = '还没有选中会话——先在会话面板建一个或选一个'
@@ -232,6 +278,8 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
         truncated: result.truncated,
         info: result.info,
       }
+      // 来源与「最近一步」绑定：失败的一步不改写它的口径
+      lastActionSource.value = source
       lastObservation.value = result.observation
       // 审计流不等下一次轮询：step 完立刻刷新，动作与日志的因果关系不脱节
       void fetchLogs()
@@ -250,6 +298,60 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
       return false
     } finally {
       stepping.value = false
+    }
+  }
+
+  /**
+   * LLM 自动决策：把当前观测交给模型提议一个力动作，提议成功就自动发 step。
+   *
+   * 失败链路（未配 key / 冷却 / 次数上限 / 畸形输出）如实写进 decisionError，
+   * **不静默降级执行**——没有提议就没有动作；step 环节的失败照旧走
+   * stepError / repairHint（422 修复指令原样透传），两处错误互不覆盖。
+   * 提议成功与否都留档在 lastProposal 里，执行面板据此展示预览与状态。
+   */
+  const autoDecide = async (): Promise<boolean> => {
+    if (!currentSessionId.value) {
+      decisionError.value = '还没有选中会话——先在会话面板建一个或选一个'
+      return false
+    }
+    const observation = lastObservation.value
+    if (!observation) {
+      decisionError.value = '当前会话还没有观测——先建会话或重置回合，再请求提议'
+      return false
+    }
+    deciding.value = true
+    decisionError.value = ''
+    try {
+      const snapshot = buildGymDecisionSnapshot({
+        observation,
+        lastStep: lastStep.value,
+        forceLimit: currentParams.value?.forceLimit ?? GYM_DEFAULT_FORCE_LIMIT,
+      })
+      const proposal = await proposeForceAction(snapshot, {
+        invoke: llmStore.invoke,
+        provider: llmStore.provider.name,
+        model: llmStore.model,
+        baseUrl: llmStore.baseUrl,
+      })
+      if (!proposal.ok) {
+        decisionError.value = proposal.error
+        return false
+      }
+      lastProposal.value = {
+        action: proposal.action,
+        source: proposal.source,
+        raw: proposal.raw,
+        clamped: proposal.clamped,
+        original: proposal.original,
+        executed: false,
+      }
+      const ok = await stepCurrent(proposal.action.forceX, proposal.action.forceZ, 'llm')
+      if (lastProposal.value) {
+        lastProposal.value = { ...lastProposal.value, executed: ok }
+      }
+      return ok
+    } finally {
+      deciding.value = false
     }
   }
 
@@ -427,6 +529,10 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     stepping,
     creating,
     auditPollingActive,
+    lastActionSource,
+    deciding,
+    decisionError,
+    lastProposal,
     memories,
     memoriesError,
     memoryActionError,
@@ -439,6 +545,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     createSession,
     selectSession,
     stepCurrent,
+    autoDecide,
     resetCurrent,
     deleteCurrent,
     setLogRoundFilter,

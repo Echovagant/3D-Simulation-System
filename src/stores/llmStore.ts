@@ -869,6 +869,7 @@ export const useLlmStore = defineStore('llm', () => {
     detectKeyKind,
     keyKindMismatch,
     keyFamilyMismatch,
+    invoke,
     requestExplanation,
     requestAction,
     requestSceneGeneration,
