@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.errors import ApiError
 from app.models import SimulationJob, SimulationResult, utcnow
+from app.services import simulator
 
 # 任务状态机：queued -> running -> succeeded | failed
 JOB_QUEUED = "queued"
@@ -75,14 +76,10 @@ def count_runs_since(session: Session, since: datetime) -> int:
 def plan_runs(sweep: Mapping[str, Any] | None) -> int:
     """这个任务一共要跑几次。
 
-    没有扫描就是 1 次；扫描几次就是几次（扫描只扫一个维度）。
+    运行数 = 各扫描维度取值数的乘积 × seeds 数（见 ``simulator.count_runs``）；
+    没有扫描就是 1 次。配置非法时抛 ``SimulationError``，由调用方转成 422。
     """
-    if not sweep:
-        return 1
-    values = sweep.get("values")
-    if not isinstance(values, list) or not values:
-        return 1
-    return len(values)
+    return simulator.count_runs(sweep)
 
 
 def create_job(

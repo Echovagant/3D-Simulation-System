@@ -218,6 +218,58 @@ describe('场景文档导入校验', () => {
     })
   })
 
+  it('材质参数 metalness / roughness 随文档往返保留', () => {
+    const parsed = normalizeSceneDocument({
+      objects: [
+        {
+          type: 'cube',
+          position: { x: 0, y: 0.5, z: 0 },
+          color: 0xb8bcc2,
+          material: { metalness: 0.85, roughness: 0.35 },
+        },
+      ],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    expect(parsed.document.objects[0].material).toEqual({
+      metalness: 0.85,
+      roughness: 0.35,
+    })
+  })
+
+  it('旧文档没有 material 字段时保持缺省（沿用编辑器默认材质）', () => {
+    const parsed = normalizeSceneDocument({
+      objects: [{ type: 'sphere', position: { x: 0, y: 1, z: 0 } }],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    expect(parsed.document.objects[0].material).toBeUndefined()
+  })
+
+  it('越界的 material 被夹到 0~1，非数字回退默认 0.08 / 0.58', () => {
+    const parsed = normalizeSceneDocument({
+      objects: [
+        {
+          type: 'cube',
+          position: { x: 0, y: 0.5, z: 0 },
+          material: { metalness: 5, roughness: -2 },
+        },
+        {
+          type: 'cube',
+          position: { x: 2, y: 0.5, z: 0 },
+          material: { metalness: '很亮', roughness: Number.NaN },
+        },
+      ],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    expect(parsed.document.objects[0].material).toEqual({ metalness: 1, roughness: 0 })
+    expect(parsed.document.objects[1].material).toEqual({ metalness: 0.08, roughness: 0.58 })
+  })
+
   it('物体数量超过上限时拒绝，避免一份文件把页面拖死', () => {
     const parsed = normalizeSceneDocument({
       objects: Array.from({ length: 501 }, () => ({

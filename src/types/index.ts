@@ -1,9 +1,19 @@
 // 导入 THREE.js 类型
 import { Object3D } from 'three'
+import type { AiEnvironmentSettings } from '@/stores/aiStore'
 
 type Vector3 = { x: number; y: number; z: number }
 
-import type { AiEnvironmentSettings } from '@/stores/aiStore'
+/**
+ * 场景物体的材质参数。
+ *
+ * 只描述 MeshStandardMaterial 的金属度 / 粗糙度：颜色仍在 `color` 字段里，
+ * 贴图随模型文件自带，透明与发光不在本版本的场景格式内。
+ */
+export interface SceneMaterialSettings {
+  metalness: number
+  roughness: number
+}
 
 // 物理描述（SceneObject.physics 用，模块内类型）
 interface PhysicsData {
@@ -50,6 +60,8 @@ export interface SceneObject {
   visible: boolean
   /** 基础体颜色（十六进制）；模型不写这一项 */
   color?: number
+  /** 材质参数（金属度 / 粗糙度）；不写表示沿用默认材质 */
+  material?: SceneMaterialSettings
   threeObject?: Object3D
   physics?: PhysicsData
 }
@@ -79,6 +91,8 @@ export interface SceneDocumentObject {
   visible: boolean
   /** 基础体颜色（十六进制） */
   color?: number
+  /** 材质参数（金属度 / 粗糙度）；旧文档没有这一项时按编辑器默认材质处理 */
+  material?: SceneMaterialSettings
   /** 静态物理描述（没有刚体的物体不写这一项） */
   physics?: {
     type: 'static' | 'dynamic' | 'kinematic'

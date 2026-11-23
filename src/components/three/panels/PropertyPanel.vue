@@ -1,5 +1,18 @@
 <template>
   <div class="property-panel">
+    <!-- 资源中心「在编辑器中应用」带过来的材质：未选中物体时也显示，便于先看到再选物体 -->
+    <div v-if="pendingMaterial" class="material-pending">
+      <span class="material-pending-name">已载入材质：{{ pendingMaterial.name }}</span>
+      <button
+        type="button"
+        class="material-pending-apply"
+        :disabled="!selectedObject"
+        @click="applyPendingMaterial"
+      >
+        应用到选中物体
+      </button>
+    </div>
+
     <!-- 选中物体时显示属性编辑表单 -->
     <template v-if="selectedObject">
       <h3>
@@ -216,6 +229,83 @@
           </label>
         </div>
       </div>
+
+      <!-- 材质：颜色 + 金属度 / 粗糙度（滑杆与数字双向），预设下拉一次填好三值 -->
+      <div class="transform-group material-group">
+        <span class="group-title">材质</span>
+        <label class="material-row material-color">
+          <span class="axis-name">颜色</span>
+          <input
+            type="color"
+            :value="materialColor"
+            @input="handleMaterialColorInput"
+            @change="commit(updateMaterial)"
+            @focus="startEditing"
+            @blur="stopEditing"
+          />
+        </label>
+        <div class="material-row">
+          <span class="axis-name">金属度</span>
+          <input
+            class="material-range"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            :value="materialMetalness"
+            @input="handleMaterialMetalnessInput"
+            @change="commit(updateMaterial)"
+          />
+          <input
+            class="material-number"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            :value="materialMetalness"
+            @input="handleMaterialMetalnessInput"
+            @change="commit(updateMaterial)"
+            @focus="startEditing"
+            @blur="stopEditing"
+            placeholder="金属度"
+          />
+        </div>
+        <div class="material-row">
+          <span class="axis-name">粗糙度</span>
+          <input
+            class="material-range"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            :value="materialRoughness"
+            @input="handleMaterialRoughnessInput"
+            @change="commit(updateMaterial)"
+          />
+          <input
+            class="material-number"
+            type="number"
+            min="0"
+            max="1"
+            step="0.01"
+            :value="materialRoughness"
+            @input="handleMaterialRoughnessInput"
+            @change="commit(updateMaterial)"
+            @focus="startEditing"
+            @blur="stopEditing"
+            placeholder="粗糙度"
+          />
+        </div>
+        <label class="material-row material-preset">
+          <span class="axis-name">预设</span>
+          <select :value="materialPresetId" @change="handleMaterialPresetChange">
+            <option value="">自定义</option>
+            <option v-for="preset in materialPresets" :key="preset.id" :value="preset.id">
+              {{ preset.name }}
+            </option>
+          </select>
+        </label>
+      </div>
     </template>
 
     <!-- 未选中物体时：空场景给引导，有物体时给「对象列表」，不重复工具栏的添加功能 -->
@@ -264,6 +354,14 @@ import * as THREE from 'three'
 import { computed, watch, ref } from 'vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import EmptyState from '@/components/common/EmptyState.vue'
+import {
+  DEFAULT_MATERIAL_METALNESS,
+  DEFAULT_MATERIAL_ROUGHNESS,
+  MATERIAL_PRESETS,
+  findMaterialPreset,
+  hexToColorNumber,
+  toHexColorString,
+} from '@/data/materialPresets'
 
 // 获取场景编辑器状态
 const store = useSceneEditorStore()
@@ -309,6 +407,17 @@ const physicsType = ref('dynamic')
 const physicsMass = ref(1)
 const physicsFriction = ref(0.5)
 const physicsRestitution = ref(0.2)
+// 材质参数：颜色 / 金属度 / 粗糙度 / 当前预设（空串表示自定义）
+const materialColor = ref('#ffffff')
+const materialMetalness = ref(DEFAULT_MATERIAL_METALNESS)
+const materialRoughness = ref(DEFAULT_MATERIAL_ROUGHNESS)
+const materialPresetId = ref('')
+
+/** 预设下拉的选项（数据与资源中心同源） */
+const materialPresets = MATERIAL_PRESETS
+
+/** 资源中心带过来的待应用材质；没有时为 null，横幅不显示 */
+const pendingMaterial = computed(() => findMaterialPreset(store.pendingMaterialId))
 
 // 输入处理函数
 
@@ -403,6 +512,37 @@ const handlePhysicsRestitutionInput = (event) => {
   physicsRestitution.value = Number(event.target.value)
 }
 
+// 材质输入：手动改任一参数即视为「自定义」，预设下拉回到空选项
+const handleMaterialColorInput = (event) => {
+  startEditing()
+  materialColor.value = event.target.value
+  materialPresetId.value = ''
+}
+
+const handleMaterialMetalnessInput = (event) => {
+  startEditing()
+  materialMetalness.value = Number(event.target.value)
+  materialPresetId.value = ''
+}
+
+const handleMaterialRoughnessInput = (event) => {
+  startEditing()
+  materialRoughness.value = Number(event.target.value)
+  materialPresetId.value = ''
+}
+
+/** 选择预设：一次填好颜色 / 金属度 / 粗糙度，并立即写回物体 */
+const handleMaterialPresetChange = (event) => {
+  const preset = findMaterialPreset(event.target.value)
+  materialPresetId.value = event.target.value
+  if (!preset) return
+
+  materialColor.value = toHexColorString(preset.color)
+  materialMetalness.value = preset.metalness
+  materialRoughness.value = preset.roughness
+  commit(updateMaterial)
+}
+
 // 监听store中的selectedObjectUuid变化
 watch(
   () => store.selectedObjectUuid,
@@ -440,6 +580,10 @@ const syncFormFromObject = (force = false) => {
     physicsMass.value = 1
     physicsFriction.value = 0.5
     physicsRestitution.value = 0.2
+    materialColor.value = '#ffffff'
+    materialMetalness.value = DEFAULT_MATERIAL_METALNESS
+    materialRoughness.value = DEFAULT_MATERIAL_ROUGHNESS
+    materialPresetId.value = ''
     syncedUuid = null
     isEditing.value = false
     return
@@ -471,6 +615,13 @@ const syncFormFromObject = (force = false) => {
   physicsMass.value = newObj.physics?.mass ?? 1
   physicsFriction.value = newObj.physics?.friction ?? 0.5
   physicsRestitution.value = newObj.physics?.restitution ?? 0.2
+
+  // 同步材质：颜色来自 store 的 color，金属度 / 粗糙度缺省时按默认材质显示
+  materialColor.value = toHexColorString(newObj.color ?? 0xffffff)
+  materialMetalness.value = newObj.material?.metalness ?? DEFAULT_MATERIAL_METALNESS
+  materialRoughness.value = newObj.material?.roughness ?? DEFAULT_MATERIAL_ROUGHNESS
+  // 选中对象变了就回到「自定义」：不假装它一定是某个预设
+  if (force) materialPresetId.value = ''
 
   syncedUuid = newObj.uuid
 }
@@ -606,6 +757,44 @@ const updatePhysics = () => {
       restitution,
     },
   })
+}
+
+/**
+ * 更新材质：颜色 + 金属度 / 粗糙度一次写回 store。
+ *
+ * store 统一派发 `update-material`，由 useSceneEditor 落到 mesh 的
+ * MeshStandardMaterial 上——面板不直接改 three 对象，避免出现第二个材质权威。
+ */
+const updateMaterial = () => {
+  if (!selectedObject.value) return
+
+  const metalness = clampUnitInterval(materialMetalness.value, DEFAULT_MATERIAL_METALNESS)
+  const roughness = clampUnitInterval(materialRoughness.value, DEFAULT_MATERIAL_ROUGHNESS)
+  const color =
+    hexToColorNumber(materialColor.value) ?? selectedObject.value.color ?? 0xffffff
+
+  // 界面立即回到规范化后的值，避免输入 3 后显示还是 3、实际存的是 1
+  materialMetalness.value = metalness
+  materialRoughness.value = roughness
+  materialColor.value = toHexColorString(color)
+
+  store.updateObject(selectedObject.value.uuid, {
+    color,
+    material: { metalness, roughness },
+  })
+}
+
+/** 应用资源中心带过来的材质；应用后清掉 pending，横幅消失 */
+const applyPendingMaterial = () => {
+  const preset = pendingMaterial.value
+  if (!preset || !selectedObject.value) return
+
+  materialColor.value = toHexColorString(preset.color)
+  materialMetalness.value = preset.metalness
+  materialRoughness.value = preset.roughness
+  materialPresetId.value = preset.id
+  updateMaterial()
+  store.setPendingMaterialId(null)
 }
 
 // 删除选中对象 - 移除重复功能
@@ -744,6 +933,122 @@ h3 {
 }
 
 .property-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* 待应用材质横幅：资源中心选了材质但还没套到物体上时显示 */
+.material-pending {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-1);
+  background-color: var(--accent-soft);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  border-radius: 4px;
+}
+
+.material-pending-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-pending-apply {
+  flex: 0 0 auto;
+  padding: 5px 10px;
+  font-size: 12px;
+  color: var(--accent);
+  background-color: transparent;
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.material-pending-apply:hover:enabled {
+  background-color: var(--bg-hover);
+}
+
+.material-pending-apply:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* 材质组：颜色独占一行，金属度 / 粗糙度为「滑杆 + 数字」，预设独占一行 */
+.material-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.material-row .axis-name {
+  flex: 0 0 44px;
+}
+
+.material-row input[type='color'] {
+  width: 46px;
+  height: 26px;
+  padding: 0 2px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background-color: var(--bg-inset);
+  color-scheme: dark;
+  cursor: pointer;
+}
+
+.material-row input[type='color']:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.material-range {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.material-number {
+  flex: 0 0 58px;
+  width: 58px;
+  padding: 6px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-1);
+  background-color: var(--bg-inset);
+  color-scheme: dark;
+  box-sizing: border-box;
+}
+
+.material-number:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.material-preset select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-1);
+  background-color: var(--bg-inset);
+  color-scheme: dark;
+  box-sizing: border-box;
+}
+
+.material-preset select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);

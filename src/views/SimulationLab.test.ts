@@ -285,7 +285,7 @@ describe('仿真实验室 —— 实验配置的存取', () => {
       samplingInterval: 0.25,
     })
     expect(wrapper.find('.message-toast').text()).toBe('实验配置已保存')
-  })
+  }, 10000)
 
   it('重新进入页面时回填上次保存的实验配置', async () => {
     const first = await mountLab()

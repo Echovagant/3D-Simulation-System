@@ -87,6 +87,43 @@ describe('场景文档的保存与索引', () => {
     })
   })
 
+  it('存进文档的材质参数带 metalness / roughness（越界收敛到 0~1）', async () => {
+    const store = useSceneEditorStore()
+    store.addObject({
+      ...newObject('u-material'),
+      color: 0xb8bcc2,
+      material: { metalness: 5, roughness: 0.35 },
+    })
+
+    const id = await store.saveScene('材质')
+    const doc = JSON.parse(localStorage.getItem(`scene-${id}`) as string)
+
+    expect(doc.objects[0].color).toBe(0xb8bcc2)
+    expect(doc.objects[0].material).toEqual({ metalness: 1, roughness: 0.35 })
+  })
+
+  it('updateObject 改颜色 / 材质时派发一次 update-material 事件', () => {
+    const store = useSceneEditorStore()
+    store.addObject(newObject('u1'))
+
+    const events: CustomEvent[] = []
+    const handler = (event: Event) => events.push(event as CustomEvent)
+    window.addEventListener('update-material', handler)
+
+    store.updateObject('u1', {
+      color: 0xff0000,
+      material: { metalness: 0.2, roughness: 0.9 },
+    })
+    window.removeEventListener('update-material', handler)
+
+    expect(events).toHaveLength(1)
+    expect(events[0].detail).toMatchObject({
+      uuid: 'u1',
+      color: 0xff0000,
+      material: { metalness: 0.2, roughness: 0.9 },
+    })
+  })
+
   it('listScenes 按保存顺序倒序列出场景', async () => {
     const store = useSceneEditorStore()
 
@@ -286,6 +323,56 @@ describe('场景文档的加载', () => {
       mass: 2,
       friction: 0.3,
       restitution: 0.7,
+    })
+  })
+
+  it('restorePrimitive 把 material 的金属度 / 粗糙度交给工厂', async () => {
+    const store = useSceneEditorStore()
+    store.initializeScene(
+      new THREE.Scene(),
+      new THREE.PerspectiveCamera(),
+      {} as unknown as THREE.WebGLRenderer,
+    )
+
+    const captured: Array<Record<string, unknown> | undefined> = []
+    store.registerPrimitiveFactory({
+      createCube: (options) => {
+        captured.push(options as Record<string, unknown> | undefined)
+        store.addObject({ ...newObject('restored-material') })
+        return true
+      },
+      createSphere: () => false,
+      createRamp: () => false,
+    })
+
+    const result = await store.loadSceneDocument({
+      id: 'material-doc',
+      name: '材质',
+      createdAt: '2026-11-23T10:00:00.000Z',
+      updatedAt: '2026-11-23T10:00:00.000Z',
+      version: 1,
+      worldSize: 40,
+      objects: [
+        {
+          uuid: 'src',
+          type: 'cube',
+          name: '拉丝钢方块',
+          position: { x: 0, y: 1, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          visible: true,
+          color: 0xb8bcc2,
+          material: { metalness: 0.85, roughness: 0.35 },
+        },
+      ],
+    })
+
+    expect(result.ok).toBe(true)
+    expect(captured).toHaveLength(1)
+    expect(captured[0]).toMatchObject({
+      color: 0xb8bcc2,
+      metalness: 0.85,
+      roughness: 0.35,
     })
   })
 

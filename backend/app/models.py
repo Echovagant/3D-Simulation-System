@@ -132,7 +132,7 @@ class SimulationJob(Base):
     scene: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False)
     params: Mapped[dict[str, Any]] = mapped_column(JSONType, nullable=False, default=dict)
     sweep: Mapped[dict[str, Any] | None] = mapped_column(JSONType, nullable=True)
-    # 一共要跑几次（扫描取值数 × 1）
+    # 一共要跑几次（各扫描维度取值数相乘 × seeds 数）
     total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # 已经跑完几次
     done: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

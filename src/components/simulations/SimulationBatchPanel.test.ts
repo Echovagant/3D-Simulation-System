@@ -259,6 +259,157 @@ describe('批量仿真面板 —— 数字输入与本地错误', () => {
   })
 })
 
+describe('批量仿真面板 —— 多维扫描与随机种子', () => {
+  it('可以添加与删除扫描维度行', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => jsonResponse([])),
+    )
+
+    const wrapper = mountPanel()
+    await settle()
+
+    expect(wrapper.findAll('.sim-sweep-row')).toHaveLength(1)
+
+    await wrapper.find('.sim-sweep-add').trigger('click')
+    expect(wrapper.findAll('.sim-sweep-row')).toHaveLength(2)
+
+    await wrapper.findAll('.sim-sweep-remove')[0].trigger('click')
+    expect(wrapper.findAll('.sim-sweep-row')).toHaveLength(1)
+  })
+
+  it('提交时组装多行 sweeps 与 seeds / randomization，不再发旧版 sweep', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (method === 'POST') return jsonResponse({ jobId: 'job-1' }, 202)
+      if (url.endsWith('/results')) return jsonResponse(resultsFixture)
+      if (url.endsWith('/api/simulations')) return jsonResponse([])
+      return jsonResponse({
+        jobId: 'job-1',
+        status: 'succeeded',
+        total: 4,
+        done: 4,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mountPanel()
+    await settle()
+
+    // 第一行：摩擦扫描
+    const firstRow = wrapper.findAll('.sim-sweep-row')[0]
+    await firstRow.find('select').setValue('friction')
+    await firstRow.find('input').setValue('0.1, 0.5')
+
+    // 第二行：重力扫描
+    await wrapper.find('.sim-sweep-add').trigger('click')
+    const secondRow = wrapper.findAll('.sim-sweep-row')[1]
+    await secondRow.find('select').setValue('gravityY')
+    await secondRow.find('input').setValue('-9.81 -1.62')
+
+    await wrapper.find('#sim-seeds').setValue('1, 2')
+    await wrapper.find('#sim-randomization').setValue('0.2')
+    await settle()
+
+    await wrapper.find('.sim-submit').trigger('click')
+    await settle()
+
+    const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit)?.method === 'POST')
+    expect(post).toBeTruthy()
+    const body = JSON.parse((post![1] as RequestInit).body as string)
+    expect(body.sweeps).toEqual([
+      { param: 'friction', values: [0.1, 0.5] },
+      { param: 'gravityY', values: [-9.81, -1.62] },
+    ])
+    expect(body.seeds).toEqual([1, 2])
+    expect(body.randomization).toBe(0.2)
+    expect('sweep' in body).toBe(false)
+  })
+
+  it('种子不是整数时给出提示，不提交', async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => jsonResponse([]),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const wrapper = mountPanel()
+    await settle()
+
+    await wrapper.find('#sim-seeds').setValue('1, 2.5')
+    await wrapper.find('.sim-submit').trigger('click')
+    await settle()
+
+    expect(wrapper.find('.sim-notice').text()).toContain('整数')
+    expect(
+      fetchMock.mock.calls.some(([, init]) => (init as RequestInit)?.method === 'POST'),
+    ).toBe(false)
+  })
+
+  it('结果按 seed 汇总，并把 seed 显示在每轮参数里', async () => {
+    const seedResults = {
+      runs: [
+        {
+          index: 0,
+          params: { friction: 0.1, seed: 1 },
+          durationMs: 10,
+          objects: [],
+          metrics: { settledAtFrame: 10, maxPenetration: 0.01, totalFallDistance: 2 },
+        },
+        {
+          index: 1,
+          params: { friction: 0.5, seed: 1 },
+          durationMs: 10,
+          objects: [],
+          metrics: { settledAtFrame: 12, maxPenetration: 0.03, totalFallDistance: 4 },
+        },
+        {
+          index: 2,
+          params: { friction: 0.1, seed: 2 },
+          durationMs: 10,
+          objects: [],
+          metrics: { settledAtFrame: 14, maxPenetration: 0.05, totalFallDistance: 6 },
+        },
+      ],
+      summary: { runs: 3, settledRuns: 3, maxPenetration: 0.05 },
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? 'GET'
+        if (method === 'POST') return jsonResponse({ jobId: 'job-1' }, 202)
+        if (url.endsWith('/results')) return jsonResponse(seedResults)
+        if (url.endsWith('/api/simulations')) return jsonResponse([])
+        return jsonResponse({
+          jobId: 'job-1',
+          status: 'succeeded',
+          total: 3,
+          done: 3,
+          createdAt: '2026-01-01T00:00:00.000Z',
+        })
+      }),
+    )
+
+    const wrapper = mountPanel()
+    await settle()
+
+    await wrapper.find('.sim-submit').trigger('click')
+    await settle()
+
+    expect(wrapper.findAll('.sim-run-row')[0].text()).toContain('seed=1')
+
+    const rows = wrapper.findAll('.sim-seed-row')
+    expect(rows).toHaveLength(2)
+    // seed 1：两轮，均值 0.020、最大 0.030、平均下落 3.000
+    expect(rows[0].text()).toContain('0.020')
+    expect(rows[0].text()).toContain('0.030')
+    expect(rows[0].text()).toContain('3.000')
+    // seed 2：一轮
+    expect(rows[1].text()).toContain('0.050')
+    expect(rows[1].text()).toContain('6.000')
+  })
+})
+
 describe('批量仿真面板 —— 轮询', () => {
   it('任务跑完后停下轮询，并展示结果与汇总', async () => {
     let detailCalls = 0

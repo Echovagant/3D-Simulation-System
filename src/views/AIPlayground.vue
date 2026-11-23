@@ -3,7 +3,7 @@
     <!-- 页头：标题 + 一句话说明；右侧 actions 区放运行状态 chip（原页脚的三态状态上移收敛） -->
     <PageHeader
       title="AI演武场"
-      lead="实时演练智能体读感知、绕障碍、自主移动；这不是正式评测——评测台需要场景 JSON，可先在场景编辑器保存场景"
+      lead="实时演练智能体读感知、绕障碍、自主移动；这不是正式评测——「去评测台」会把当前场地与智能体折成交接数据，到评测台检查参数后创建会话"
     >
       <template #actions>
         <span class="ai-status-chip">
@@ -13,11 +13,14 @@
         <button
           type="button"
           class="ai-workbench-link"
-          title="去评测审计（Agent 评测台）：需要 Gym 场景 JSON；本页场地不会自动转成会话，可先在场景编辑器保存场景"
+          title="把当前场地与智能体交接给评测审计（Agent 评测台），到那边检查参数后创建会话"
           @click="goToWorkbench"
         >
           去评测台
         </button>
+        <span v-if="handoffNotice" class="ai-handoff-notice" role="alert">
+          {{ handoffNotice }}
+        </span>
       </template>
     </PageHeader>
 
@@ -184,6 +187,7 @@ import { useRenderer } from '@/composables/useRenderer'
 import { useControls } from '@/composables/useControls'
 import { arenaFraming } from '@/config/sceneFraming'
 import { useAI } from '@/composables/useAI'
+import { writeAiLabHandoff } from '@/utils/aiLabHandoff'
 import { useAiStore } from '@/stores/aiStore'
 import { useLlmStore } from '@/stores/llmStore'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -212,9 +216,30 @@ const aiStore = useAiStore()
 const llmStore = useLlmStore()
 const router = useRouter()
 
-/** 去评测审计（Agent 评测台）——实时演练只是演练，正式评测在那边 */
+/** 去评测台失败时的可读提示（不弹窗，就地显示在页头 actions 区） */
+const handoffNotice = ref('')
+
+/**
+ * 去评测审计（Agent 评测台）——实时演练只是演练，正式评测在那边。
+ *
+ * 把当前场地与智能体折成交接数据写进 sessionStorage 后再跳转；
+ * 没有智能体或写入失败时留在本页给出可读提示，不让用户带着空数据过去。
+ */
 const goToWorkbench = (): void => {
-  void router.push('/ai-lab/workbench')
+  const handoff = ai.exportArenaHandoff()
+  if (!handoff) {
+    handoffNotice.value =
+      aiStore.agents.length === 0
+        ? '当前没有智能体：先在左侧「AI控制器」里添加智能体，再送去评测台'
+        : '未能从当前场地生成交接数据：请确认 3D 场景已初始化完成'
+    return
+  }
+  if (!writeAiLabHandoff(handoff)) {
+    handoffNotice.value = '交接数据保存失败：浏览器会话存储不可用或空间不足'
+    return
+  }
+  handoffNotice.value = ''
+  void router.push('/ai-lab/workbench?from=playground')
 }
 
 /** 运行状态 chip（原页脚三态，收敛到页头 actions 区）：LLM 降级红 / 运行中绿 / 暂停琥珀 */
@@ -472,6 +497,18 @@ onUnmounted(() => {
 
 .ai-workbench-link:hover {
   background: rgba(255, 161, 23, 0.12);
+}
+
+/* 去评测台失败提示：页头就地显示，不弹窗打断操作 */
+.ai-handoff-notice {
+  max-width: 22rem;
+  padding: 0.3rem 0.7rem;
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  color: var(--danger);
+  background: rgba(240, 97, 106, 0.12);
+  border: 1px solid rgba(240, 97, 106, 0.45);
+  border-radius: 9999px;
 }
 
 /* 24 栏主栅格：左 5 / 中 14 / 右 5 —— 3D 视图是主角，宽度优先给它。

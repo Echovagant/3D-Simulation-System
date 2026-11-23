@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
+import * as THREE from 'three'
 import { useSceneEditor } from './useSceneEditor'
 import { useSceneEditorStore } from '../stores/sceneEditorStore'
 
@@ -569,5 +570,110 @@ describe('变换写回物理引擎', () => {
     store.updateObject(uuid, { name: 'Renamed' })
 
     expect(body.translation()).toEqual(before)
+  })
+})
+
+describe('材质写回 mesh', () => {
+  const wrappers: VueWrapper[] = []
+
+  const createEditor = (): Editor => {
+    let editor: Editor | undefined
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          editor = useSceneEditor(null)
+          return () => h('div')
+        },
+      }),
+    )
+    wrappers.push(wrapper)
+    return editor!
+  }
+
+  const initEditor = async (): Promise<Editor> => {
+    const editor = createEditor()
+    const ok = await editor.initEditor()
+    expect(ok).toBe(true)
+    return editor
+  }
+
+  const materialOf = (store: ReturnType<typeof useSceneEditorStore>) => {
+    const mesh = store.objects[0].threeObject as THREE.Mesh
+    return mesh.material as THREE.MeshStandardMaterial
+  }
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    rapierMock.removedBodies.length = 0
+    rapierMock.lastWorld = null
+    rapierMock.throwOnRemove = false
+  })
+
+  afterEach(() => {
+    while (wrappers.length) {
+      wrappers.pop()?.unmount()
+    }
+  })
+
+  it('建体时按 options 的金属度 / 粗糙度创建材质，并在 userData 留底', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+
+    expect(editor.addCube({ color: 0x123456, metalness: 0.9, roughness: 0.2 })).toBe(true)
+
+    const material = materialOf(store)
+    expect(material.color.getHex()).toBe(0x123456)
+    expect(material.metalness).toBe(0.9)
+    expect(material.roughness).toBe(0.2)
+    expect(store.objects[0].material).toEqual({ metalness: 0.9, roughness: 0.2 })
+    expect(store.objects[0].threeObject?.userData.material).toEqual({
+      metalness: 0.9,
+      roughness: 0.2,
+    })
+  })
+
+  it('未给材质参数时沿用编辑器默认口径 0.08 / 0.58', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+
+    editor.addSphere()
+
+    const material = materialOf(store)
+    expect(material.metalness).toBe(0.08)
+    expect(material.roughness).toBe(0.58)
+  })
+
+  it('store.updateObject 的颜色 / 材质变更经 update-material 落到 MeshStandardMaterial', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+    editor.addCube()
+    const uuid = store.objects[0].uuid
+
+    store.updateObject(uuid, {
+      color: 0xff0000,
+      material: { metalness: 0.15, roughness: 0.95 },
+    })
+
+    const material = materialOf(store)
+    expect(material.color.getHex()).toBe(0xff0000)
+    expect(material.metalness).toBe(0.15)
+    expect(material.roughness).toBe(0.95)
+    expect(store.objects[0].threeObject?.userData.material).toEqual({
+      metalness: 0.15,
+      roughness: 0.95,
+    })
+  })
+
+  it('越界的材质参数收敛到 0~1 再写进材质', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+    editor.addCube()
+    const uuid = store.objects[0].uuid
+
+    store.updateObject(uuid, { material: { metalness: 5, roughness: -1 } })
+
+    const material = materialOf(store)
+    expect(material.metalness).toBe(1)
+    expect(material.roughness).toBe(0)
   })
 })

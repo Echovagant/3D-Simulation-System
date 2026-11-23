@@ -26,9 +26,11 @@
 from __future__ import annotations
 
 import math
+import random
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from itertools import product
 from typing import Any
 
 import rapier3d as rp
@@ -288,11 +290,21 @@ def _collider_builder(
     return builder
 
 
-def build_world(scene: Mapping[str, Any], params: SimulationParams) -> SimulationWorld:
+def build_world(
+    scene: Mapping[str, Any],
+    params: SimulationParams,
+    *,
+    seed: int = 0,
+    randomization: float = 0.0,
+) -> SimulationWorld:
     """把场景文档映射成物理世界。
 
     这是「后端算出来的和浏览器一样」的关键一步：
     每一个参数都必须与前端一致，差一点都不行。
+
+    ``randomization > 0`` 时，动态物体建好后、推进前按
+    ``random.Random(f"{seed}:{uuid}")`` 给初始线速度加抖动（static 不加）。
+    抖动发生在世界建好之后，因此同 seed + 同场景的结果完全可复现。
     """
     world = rp.PhysicsWorld(gravity=(0.0, params.gravity_y, 0.0))
     world.integration_parameters.dt = params.dt
@@ -315,11 +327,28 @@ def build_world(scene: Mapping[str, Any], params: SimulationParams) -> Simulatio
         if not isinstance(raw, Mapping):
             continue
         binding = _add_object(world, raw, params)
+        if randomization > 0 and binding.skipped is None and not binding.is_static:
+            _apply_initial_jitter(binding, seed, randomization)
         built.objects.append(binding)
         if binding.skipped is not None:
             built.skipped.append(binding)
 
     return built
+
+
+def _apply_initial_jitter(binding: ObjectBinding, seed: int, amplitude: float) -> None:
+    """给动态物体的初始线速度加确定性抖动。
+
+    RNG 按 ``f"{seed}:{uuid}"`` 播种：同 seed + 同物体 = 同抖动，
+    与运行顺序无关；不同 seed 得到不同的初速度。
+    只加在已有初速度上（``initialVelocityY`` 仍然生效）。
+    """
+    rng = random.Random(f"{seed}:{binding.uuid}")
+    dx = rng.uniform(-amplitude, amplitude)
+    dz = rng.uniform(-amplitude, amplitude)
+    dy = rng.uniform(-amplitude, amplitude)
+    velocity = binding.body.linvel
+    binding.body.linvel = (velocity.x + dx, velocity.y + dy, velocity.z + dz)
 
 
 def _add_object(world: Any, raw: Mapping[str, Any], params: SimulationParams) -> ObjectBinding:
@@ -450,13 +479,16 @@ def run_once(
     *,
     index: int = 0,
     run_params: Mapping[str, Any] | None = None,
+    seed: int = 0,
+    randomization: float = 0.0,
 ) -> dict[str, Any]:
     """跑一次仿真，返回结果载荷（形状见后端计划的 §2.2）。
 
-    ``run_params`` 是这次运行**实际生效**的参数（扫描时是被扫的那个值）。
+    ``run_params`` 是这次运行**实际生效**的参数（扫描时是被扫的那个值 +
+    seed）；``seed`` / ``randomization`` 决定动态物体的初始速度抖动。
     """
     started = time.perf_counter()
-    sim = build_world(scene, params)
+    sim = build_world(scene, params, seed=seed, randomization=randomization)
 
     steps = params.steps
     sampled = set(_sample_frames(steps, params.trace))
@@ -556,30 +588,163 @@ def run_once(
     }
 
 
-# 参数扫描只扫一个维度：多维笛卡尔积会让「到底是哪个参数导致的」变得难查。
+# 可扫描的参数维度。多维同时扫做笛卡尔积；同一维度不能重复出现。
 SWEEP_PARAMS = ("gravityY", "friction", "restitution", "initialVelocityY")
 
+# 缺省 seed：请求里不给 seeds 时只按 seed=0 跑一遍，与旧行为一致。
+DEFAULT_SEED = 0
 
-def sweep_values(params: SimulationParams, sweep: Mapping[str, Any] | None) -> list[dict[str, Any]]:
-    """把扫描维度展开成一串「这次运行生效的参数」。
 
-    没有扫描 → 只有一次运行（参数就是请求里给的那套）。
+def normalize_sweeps(sweeps: Any) -> list[dict[str, Any]]:
+    """校验并归一化扫描维度列表。
+
+    每一项必须是 ``{param, values}``；维度重复会直接报错——
+    两个维度扫同一个参数时「哪个值最终生效」说不清。
+    """
+    if not isinstance(sweeps, (list, tuple)):
+        raise SimulationError("sweeps 必须是数组")
+
+    cleaned: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for raw in sweeps:
+        if not isinstance(raw, Mapping):
+            raise SimulationError("sweeps 的每一项都必须是 {param, values}")
+        param = str(raw.get("param", ""))
+        values = raw.get("values")
+        if not isinstance(values, list) or not values:
+            raise SimulationError(f"扫描维度 {param or '?'} 的 values 不能为空")
+        if param not in SWEEP_PARAMS:
+            raise SimulationError(
+                f"未知的扫描维度：{param}；只支持 {'/'.join(SWEEP_PARAMS)}"
+            )
+        if param in seen:
+            raise SimulationError(f"同一个参数不能重复扫描：{param}")
+        seen.add(param)
+        cleaned.append({"param": param, "values": list(values)})
+    return cleaned
+
+
+def normalize_seeds(seeds: Any) -> list[int]:
+    """校验 seed 列表：非负整数；空 / 缺省 = ``[0]``。"""
+    if seeds is None:
+        return [DEFAULT_SEED]
+    if isinstance(seeds, (str, bytes)) or not isinstance(seeds, (list, tuple)):
+        raise SimulationError("seeds 必须是整数数组")
+    if not seeds:
+        return [DEFAULT_SEED]
+
+    normalized: list[int] = []
+    for raw in seeds:
+        # bool 是 int 的子类：True 不该被当成 seed 1
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw < 0:
+            raise SimulationError(f"seeds 只能是非负整数，收到 {raw!r}")
+        normalized.append(raw)
+    return normalized
+
+
+def normalize_randomization(value: Any) -> float:
+    """校验抖动幅度：有限的非负数；缺省 / None = 0。"""
+    if value is None or isinstance(value, bool):
+        return 0.0
+    try:
+        amplitude = float(value)
+    except (TypeError, ValueError) as exc:
+        raise SimulationError(f"randomization 必须是数字，收到 {value!r}") from exc
+    if not math.isfinite(amplitude) or amplitude < 0:
+        raise SimulationError(f"randomization 必须是非负有限数，收到 {amplitude}")
+    return amplitude
+
+
+def parse_sweep_config(
+    sweep: Mapping[str, Any] | None,
+) -> tuple[list[Mapping[str, Any]], Any, Any]:
+    """把存储 / 请求里的扫描配置归一成 ``(sweeps, seeds, randomization)``。
+
+    兼容两种形状：
+
+    * 旧：``{"param": ..., "values": [...]}``——单个维度；
+    * 新：``{"sweeps": [...], "seeds": [...], "randomization": r}``。
+
+    返回值里的 seeds / randomization 仍是原始值，由调用方决定缺省口径。
     """
     if not sweep:
-        return [{}]
+        return [], None, None
+    if "sweeps" in sweep or "seeds" in sweep or "randomization" in sweep:
+        raw_sweeps = sweep.get("sweeps")
+        if raw_sweeps is None:
+            raw_sweeps = []
+        if not isinstance(raw_sweeps, list):
+            raise SimulationError("sweeps 必须是数组")
+        return raw_sweeps, sweep.get("seeds"), sweep.get("randomization")
+    # 旧的单维度写法：当作单元素列表
+    return [sweep], None, None
 
-    param = str(sweep.get("param", ""))
-    values = sweep.get("values")
-    if not isinstance(values, list) or not values:
-        raise SimulationError("sweep.values 不能为空")
-    if param not in SWEEP_PARAMS:
-        raise SimulationError(f"未知的扫描维度：{param}；只支持 {'/'.join(SWEEP_PARAMS)}")
 
-    return [{param: value} for value in values]
+def sweep_values(
+    params: SimulationParams,
+    sweep: Mapping[str, Any] | None = None,
+    *,
+    sweeps: Any = None,
+    seeds: Any = None,
+) -> list[dict[str, Any]]:
+    """把扫描配置展开成一串「这次运行生效的参数」。
+
+    每个 override 都带 ``seed``；没有扫描时按 seeds 各跑一次。
+    多维度做笛卡尔积，seed 内层循环（同一组扫描值下 seed 连续排列）。
+    显式的 ``sweeps`` / ``seeds`` 优先于 ``sweep`` 里的配置。
+    """
+    if sweeps is None:
+        raw_sweeps, cfg_seeds, _ = parse_sweep_config(sweep)
+        sweeps = raw_sweeps
+        if seeds is None:
+            seeds = cfg_seeds
+
+    dimensions = normalize_sweeps(sweeps)
+    seed_list = normalize_seeds(seeds)
+    if not dimensions:
+        return [{"seed": seed} for seed in seed_list]
+
+    param_names = [dimension["param"] for dimension in dimensions]
+    value_grid = [dimension["values"] for dimension in dimensions]
+
+    overrides: list[dict[str, Any]] = []
+    for combination in product(*value_grid):
+        base = dict(zip(param_names, combination, strict=True))
+        for seed in seed_list:
+            # 扫描参数与 seed 的键不会重叠（seed 不是可扫维度），不产生重复键
+            overrides.append({**base, "seed": seed})
+    return overrides
+
+
+def count_runs(
+    sweep: Mapping[str, Any] | None = None,
+    *,
+    sweeps: Any = None,
+    seeds: Any = None,
+) -> int:
+    """这次请求一共要跑几次 = 各维度取值数乘积 × seeds 数。
+
+    不真正展开参数（避免大笛卡尔积先占内存），只做乘法；
+    维度 / seed 非法时抛 ``SimulationError``。
+    """
+    if sweeps is None:
+        raw_sweeps, cfg_seeds, _ = parse_sweep_config(sweep)
+        sweeps = raw_sweeps
+        if seeds is None:
+            seeds = cfg_seeds
+
+    dimensions = normalize_sweeps(sweeps)
+    total = len(normalize_seeds(seeds))
+    for dimension in dimensions:
+        total *= len(dimension["values"])
+    return total
 
 
 def apply_sweep(params: SimulationParams, override: Mapping[str, Any]) -> SimulationParams:
-    """把扫描值盖到参数上。"""
+    """把扫描值盖到参数上。
+
+    ``seed`` 只是运行标识，不是物理参数——这里自然忽略它。
+    """
     if not override:
         return params
     merged = {
@@ -594,24 +759,61 @@ def apply_sweep(params: SimulationParams, override: Mapping[str, Any]) -> Simula
     return SimulationParams.from_mapping(merged)
 
 
+def _run_params_for(params: SimulationParams, override: Mapping[str, Any]) -> dict[str, Any]:
+    """这次运行对外展示的参数：被扫的值 + seed。
+
+    没有扫描时保持旧口径（默认重力 / 步长 / 步数快照），再补上 seed。
+    """
+    seed = int(override["seed"])
+    swept = {key: value for key, value in override.items() if key != "seed"}
+    if swept:
+        return {**swept, "seed": seed}
+    return {
+        "gravityY": params.gravity_y,
+        "dt": params.dt,
+        "steps": params.steps,
+        "seed": seed,
+    }
+
+
 def run_sweep(
     scene: Mapping[str, Any],
     params: SimulationParams,
     sweep: Mapping[str, Any] | None = None,
+    *,
+    sweeps: Any = None,
+    seeds: Any = None,
+    randomization: Any = None,
 ) -> list[dict[str, Any]]:
-    """跑完整个扫描，返回每次运行的结果载荷。"""
-    overrides = sweep_values(params, sweep)
+    """跑完整个扫描，返回每次运行的结果载荷。
+
+    ``sweep`` 兼容旧的单维度字典，也可以直接传聚合配置
+    ``{"sweeps": [...], "seeds": [...], "randomization": r}``（worker
+    从库里读到的就是这一份）；显式关键字参数优先于 ``sweep`` 里的配置。
+    """
+    raw_sweeps, cfg_seeds, cfg_randomization = parse_sweep_config(sweep)
+    if sweeps is None:
+        sweeps = raw_sweeps
+    if seeds is None:
+        seeds = cfg_seeds
+    if randomization is None:
+        randomization = cfg_randomization
+    amplitude = normalize_randomization(randomization)
+
+    overrides = sweep_values(params, sweeps=sweeps, seeds=seeds)
     runs: list[dict[str, Any]] = []
     for index, override in enumerate(overrides):
         effective = apply_sweep(params, override)
-        effective_params = dict(override)
-        if not effective_params:
-            effective_params = {
-                "gravityY": params.gravity_y,
-                "dt": params.dt,
-                "steps": params.steps,
-            }
-        runs.append(run_once(scene, effective, index=index, run_params=effective_params))
+        runs.append(
+            run_once(
+                scene,
+                effective,
+                index=index,
+                run_params=_run_params_for(params, override),
+                seed=int(override["seed"]),
+                randomization=amplitude,
+            )
+        )
     return runs
 
 

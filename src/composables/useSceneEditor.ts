@@ -604,6 +604,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     window.addEventListener('update-transform', handleUpdateTransform)
     // 新增：监听属性面板的物理参数修改事件
     window.addEventListener('update-physics', handleUpdatePhysics)
+    // 新增：监听属性面板的颜色 / 材质修改事件
+    window.addEventListener('update-material', handleUpdateMaterial)
     // 加载带镜头的场景文档：由 store 在重建完成后派发
     window.addEventListener('apply-scene-camera', handleApplySceneCamera as EventListener)
   }
@@ -617,6 +619,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     window.removeEventListener('update-transform', handleUpdateTransform)
     // 新增：移除物理参数修改事件监听器
     window.removeEventListener('update-physics', handleUpdatePhysics)
+    // 新增：移除颜色 / 材质修改事件监听器
+    window.removeEventListener('update-material', handleUpdateMaterial)
     window.removeEventListener('apply-scene-camera', handleApplySceneCamera as EventListener)
   }
 
@@ -853,6 +857,72 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   }
 
   /**
+   * 把颜色 / 金属度 / 粗糙度写进对象的材质。
+   *
+   * 基本体是单个 MeshStandardMaterial；导入的模型通常是一棵 Group，
+   * 材质挂在子 mesh 上（还可能是数组），所以要遍历整棵对象图。
+   * 只改 MeshStandardMaterial：其它材质类型（如 GLTF 里的物理材质）不强行改写。
+   */
+  const applyMaterialToObject = (
+    object: THREE.Object3D,
+    detail: { color?: number; material?: { metalness?: number; roughness?: number } },
+  ): number => {
+    const materials: THREE.Material[] = []
+    object.traverse((child) => {
+      const material = (child as THREE.Mesh).material
+      if (!material) return
+      if (Array.isArray(material)) materials.push(...material)
+      else materials.push(material)
+    })
+
+    let applied = 0
+    for (const material of materials) {
+      if (!(material instanceof THREE.MeshStandardMaterial)) continue
+      if (typeof detail.color === 'number') material.color.setHex(detail.color)
+      if (detail.material?.metalness !== undefined) {
+        material.metalness = normalizeUnitInterval(
+          detail.material.metalness,
+          material.metalness,
+        )
+      }
+      if (detail.material?.roughness !== undefined) {
+        material.roughness = normalizeUnitInterval(
+          detail.material.roughness,
+          material.roughness,
+        )
+      }
+      applied += 1
+    }
+
+    // 反向查询入口：面板 / 后续导出读 mesh.userData.material，与 userData.physics 同一约定
+    if (detail.material) {
+      object.userData.material = {
+        metalness: normalizeUnitInterval(
+          detail.material.metalness,
+          SCENE_PRESENTATION.materialMetalness,
+        ),
+        roughness: normalizeUnitInterval(
+          detail.material.roughness,
+          SCENE_PRESENTATION.materialRoughness,
+        ),
+      }
+    }
+
+    return applied
+  }
+
+  const handleUpdateMaterial = (event: Event): void => {
+    const customEvent = event as CustomEvent
+    const { uuid } = customEvent.detail ?? {}
+    if (!uuid) return
+
+    const mesh = store.objects.find((item) => item.uuid === uuid)?.threeObject
+    if (!mesh) return
+
+    applyMaterialToObject(mesh, customEvent.detail ?? {})
+  }
+
+  /**
    * 物理更新函数 - 供Viewport组件的渲染循环调用。
    *
    * `timestamp` 是 `requestAnimationFrame` 给的时间戳（毫秒）。
@@ -964,6 +1034,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     },
     options: {
       color?: number
+      metalness?: number
+      roughness?: number
       bodyType?: 'dynamic' | 'static' | 'kinematic'
       mass?: number
       friction?: number
@@ -981,21 +1053,32 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       options.restitution,
       DEFAULT_OBJECT_RESTITUTION,
     )
+    // 材质参数：调用方（场景恢复 / 资源中心预设）没给时沿用编辑器默认口径
+    const metalness = normalizeUnitInterval(
+      options.metalness,
+      SCENE_PRESENTATION.materialMetalness,
+    )
+    const roughness = normalizeUnitInterval(
+      options.roughness,
+      SCENE_PRESENTATION.materialRoughness,
+    )
 
     // 材质每对象独立（高亮靠 material.emissive，共享会串色）
     const material = new THREE.MeshStandardMaterial({
       // 不再用纯随机色：高饱和随机色放一起会脏，精选场景也没法配色
       color: options.color ?? PRIMITIVE_PALETTE[colorSeq++ % PRIMITIVE_PALETTE.length],
       // 没有环境贴图时高金属度会把物体压成黑块：低金属 + 中粗糙度
-      // 才能让主光/补光把体积读出来。
-      metalness: SCENE_PRESENTATION.materialMetalness,
-      roughness: SCENE_PRESENTATION.materialRoughness,
+      // 才能让主光/补光把体积读出来。预设按用户给的值覆盖。
+      metalness,
+      roughness,
       // 楔形共享顶点会把棱角法线平均掉，逐面着色才能看出实体
       flatShading: type === 'ramp',
     })
 
     // 创建3D物体
     const mesh = new THREE.Mesh(geometry, material)
+    // 反向查询入口：与 userData.physics 同一约定
+    mesh.userData.material = { metalness, roughness }
 
     mesh.name = name || `${type}-${Date.now()}`
     mesh.castShadow = true
@@ -1118,6 +1201,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         name: mesh.name,
         threeObject: mesh,
         color: material.color.getHex(),
+        material: { metalness, roughness },
         physicsType: bodyType,
         mass,
         friction,
@@ -1157,6 +1241,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
   interface PrimitiveCreateOptions {
     color?: number
+    metalness?: number
+    roughness?: number
     bodyType?: 'dynamic' | 'static' | 'kinematic'
     mass?: number
     friction?: number

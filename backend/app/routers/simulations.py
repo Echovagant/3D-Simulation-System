@@ -36,11 +36,14 @@ from app.services import simulation_service, simulator
 
 router = APIRouter(prefix="/simulations", tags=["simulations"])
 
-# 顶层已知键 = SimulationCreateRequest 的字段（label / scene / params / sweep）。
+# 顶层已知键 = SimulationCreateRequest 的字段
+# （label / scene / params / sweep / sweeps / seeds / randomization）。
 # params 层的已知键以 simulator._KNOWN_PARAM_KEYS 为唯一真相源（仿真器读的就是
 # 这些 camelCase 键）；再并上 API schema 的字段名——populate_by_name 让
 # snake_case 拼写也能落进 schema 并真实生效，生效的键不能算「被忽略」。
-_KNOWN_TOP_LEVEL_KEYS = frozenset({"label", "scene", "params", "sweep"})
+_KNOWN_TOP_LEVEL_KEYS = frozenset(
+    {"label", "scene", "params", "sweep", "sweeps", "seeds", "randomization"}
+)
 _KNOWN_PARAM_KEYS = simulator._KNOWN_PARAM_KEYS | set(SimulationParams.model_fields)
 
 
@@ -69,6 +72,28 @@ def _to_status(job: SimulationJob) -> SimulationJobStatus:
     )
 
 
+def _sweep_payload(payload: SimulationCreateRequest) -> dict[str, object] | None:
+    """把 ``sweep`` / ``sweeps`` / ``seeds`` / ``randomization`` 归一成落库配置。
+
+    旧请求（只有一个 ``sweep``，且没有 seed / 扰动）保持原来的单维度形状；
+    其余统一存聚合形状 ``{"sweeps": [...], "seeds": [...], "randomization": r}``，
+    worker 从库里读到的就是这一份，不需要区分新旧。
+    """
+    sweeps = list(payload.sweeps or [])
+    if not sweeps and payload.sweep is not None:
+        sweeps = [payload.sweep]
+
+    if not sweeps and payload.seeds is None and not payload.randomization:
+        return None
+    if len(sweeps) == 1 and payload.seeds is None and not payload.randomization:
+        return sweeps[0].model_dump(by_alias=True)
+    return {
+        "sweeps": [sweep.model_dump(by_alias=True) for sweep in sweeps],
+        "seeds": payload.seeds,
+        "randomization": payload.randomization,
+    }
+
+
 @router.post(
     "",
     response_model=SimulationJobAccepted,
@@ -93,7 +118,8 @@ async def create_simulation(
 
     # 按别名导出（camelCase）：仿真器读的也是 camelCase 的键
     params = payload.params.model_dump(by_alias=True, exclude_none=True) if payload.params else {}
-    sweep = payload.sweep.model_dump(by_alias=True) if payload.sweep else None
+    # 新字段先归一成一份落库配置；sweeps 优先于 sweep（旧的单维度写法）
+    sweep = _sweep_payload(payload)
 
     simulation_service.check_daily_quota(session)
 
@@ -113,12 +139,24 @@ async def create_simulation(
             message=(f"单次运行最多 {settings.simulation_max_steps} 步，收到 {parsed.steps} 步"),
         )
 
-    total = simulation_service.plan_runs(sweep)
+    try:
+        total = simulation_service.plan_runs(sweep)
+    except simulator.SimulationError as exc:
+        raise ApiError(
+            status_code=422,
+            code="simulation_invalid_params",
+            message=str(exc),
+        ) from exc
+
     if total > settings.simulation_max_runs_per_job:
         raise ApiError(
             status_code=422,
             code="simulation_invalid_params",
-            message=(f"单次任务最多跑 {settings.simulation_max_runs_per_job} 次，收到 {total} 次"),
+            message=(
+                f"单次任务最多跑 {settings.simulation_max_runs_per_job} 次，"
+                f"本次请求会跑 {total} 次（各扫描维度取值数相乘 × seeds 数）；"
+                "请减少扫描维度或 seed"
+            ),
         )
 
     job_id = uuid.uuid4().hex

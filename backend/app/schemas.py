@@ -7,7 +7,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -174,8 +174,9 @@ class LlmQuotaStatus(ApiModel):
 # 批量仿真
 # --------------------------------------------------------------------------
 
-# 参数扫描支持哪些维度。**一次只扫一个维度**——多维笛卡尔积会让
-# 「到底是哪个参数导致的」变得难查。
+# 参数扫描支持哪些维度。可以同时扫多个维度（取值做笛卡尔积），
+# 也可以给多组 seed；单个任务的运行数上限由 API 层按配置校验（默认 32）。
+# 同一个维度重复出现会被拒绝，否则「哪个值生效」说不清。
 SIMULATION_SWEEP_PARAMS = ("gravityY", "friction", "restitution", "initialVelocityY")
 
 
@@ -196,7 +197,11 @@ class SimulationParams(ApiModel):
 
 
 class SimulationSweep(ApiModel):
-    """参数扫描：只有一个维度。"""
+    """一个扫描维度：参数名 + 取值列表。
+
+    多维扫描时用 ``SimulationCreateRequest.sweeps`` 传一组；
+    ``sweep`` 仍接收单个维度，兼容旧调用方式。
+    """
 
     param: str
     values: list[float] = Field(min_length=1)
@@ -210,14 +215,55 @@ class SimulationSweep(ApiModel):
 
 
 class SimulationCreateRequest(ApiModel):
-    """提交一次批量仿真。"""
+    """提交一次批量仿真。
+
+    扫描配置的三种写法：
+
+    * ``sweep``：单个维度（旧调用方式，保留兼容）；
+    * ``sweeps``：多个维度，各维度取值做笛卡尔积（与 ``sweep`` 同时出现时
+      ``sweeps`` 优先，``sweep`` 被忽略）；
+    * ``seeds`` / ``randomization``：每个扫描组合按 seed 各跑一遍，
+      并可选地对动态物体施加初始速度抖动。
+
+    运行数 = 各维度取值数的乘积 × seeds 数；缺省 ``seeds=[0]``、
+    ``randomization=0``（不抖动）。上限由 API 层按配置校验（默认 32）。
+    """
 
     # 给人看的名字，可选
     label: str | None = Field(default=None, max_length=200)
     # 完整的前端 SceneDocument
     scene: dict[str, Any]
     params: SimulationParams | None = None
+    # 旧写法：单个扫描维度
     sweep: SimulationSweep | None = None
+    # 新写法：多个扫描维度（与 sweep 同时出现时以 sweeps 为准）
+    sweeps: list[SimulationSweep] | None = None
+    # 随机种子：非负整数数组；空 / 缺省 = [0]
+    seeds: list[int] | None = None
+    # 初始速度抖动幅度（m/s）：>=0；缺省 0 = 不扰动
+    randomization: float | None = Field(default=None, ge=0.0, allow_inf_nan=False)
+
+    @field_validator("seeds")
+    @classmethod
+    def _check_seeds(cls, value: list[int] | None) -> list[int] | None:
+        if value is None:
+            return value
+        for seed in value:
+            # bool 是 int 的子类：True 不该被当成 seed 1
+            if isinstance(seed, bool) or seed < 0:
+                raise ValueError(f"seeds 只能是非负整数，收到 {seed!r}")
+        return value
+
+    @model_validator(mode="after")
+    def _check_sweeps(self) -> "SimulationCreateRequest":
+        """同一个参数扫两次会让「哪个值生效」说不清，直接拒掉。"""
+        if self.sweeps:
+            seen: set[str] = set()
+            for sweep in self.sweeps:
+                if sweep.param in seen:
+                    raise ValueError(f"sweeps 里同一个参数不能重复扫描：{sweep.param}")
+                seen.add(sweep.param)
+        return self
 
 
 class SimulationJobAccepted(ApiModel):

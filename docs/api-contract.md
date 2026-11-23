@@ -8,6 +8,8 @@
 
 ## 端点
 
+`*` 表示必填字段；请求体字段只列顶层字段，嵌套结构见后端 schema。
+
 | 方法 | 路径 | 操作 id | 说明 |
 | --- | --- | --- | --- |
 | `GET` | `/api/gym/sessions` | `list_gym_sessions_api_gym_sessions_get` | 列出在场会话 |
@@ -59,6 +61,21 @@
 | `POST` | `/api/triposr` | `create_triposr_job_api_triposr_post` | 提交一次单图生成 3D |
 | `GET` | `/api/triposr/{jobId}` | `get_triposr_job_api_triposr__jobId__get` | 读取一个 TripoSR 任务的状态 |
 | `GET` | `/api/triposr/{jobId}/model.glb` | `get_triposr_model_api_triposr__jobId__model_glb_get` | 下载生成的模型 |
+
+## 请求体字段
+
+- `POST /api/gym/sessions`：scene*、params、agentUuid、target、maxSteps、agents
+- `POST /api/gym/sessions/{sessionId}/step`：forceX、forceZ、actions
+- `POST /api/knowledge/entries`：title*、content*、tags、importance
+- `POST /api/llm/complete`：providerId、model、messages、maxTokens、passphrase
+- `POST /api/llm/keys`：providerId*、apiKey*、passphrase
+- `POST /api/memory`：kind*、content*、importance、source
+- `POST /api/model3d/keys`：providerId*、secretId、secretKey、apiKey、workspaceId、passphrase
+- `POST /api/render`：label、scene*、actions、frames、fps、width、height
+- `POST /api/scenes`：name*、document*
+- `PUT /api/scenes/{scene_id}`：name*、document*
+- `POST /api/simulations`：label、scene*、params、sweep、sweeps、seeds、randomization
+- `POST /api/telemetry`：events*
 
 ## 统一错误形状
 

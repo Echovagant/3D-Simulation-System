@@ -15,6 +15,18 @@
 
     <p v-if="store.listError" class="wb-error-line">{{ store.listError }}</p>
 
+    <!-- 实时演练交接：成功横幅 / 无动态物体警告 / 没有交接数据 -->
+    <div v-if="handoffNotices.length" class="wb-handoff-block" role="status">
+      <p
+        v-for="(notice, index) in handoffNotices"
+        :key="index"
+        class="wb-handoff-note"
+        :class="notice.tone"
+      >
+        {{ notice.text }}
+      </p>
+    </div>
+
     <!-- 会话列表 -->
     <ul class="wb-session-list">
       <li v-if="store.sessions.length === 0" class="wb-empty-line">
@@ -141,11 +153,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useGymWorkbenchStore } from '@/stores/gymWorkbenchStore'
 import type { GymAgentSpec } from '@/services/api/gymWorkbench'
+import { clearAiLabHandoff, readAiLabHandoff, type AiLabHandoff } from '@/utils/aiLabHandoff'
 
 const store = useGymWorkbenchStore()
+// 测试与独立挂载时可能没有路由器；交接预填本身不依赖 query，缺省时按 key 是否存在决定
+const route = useRoute()
 
 /**
  * 默认演示场景：一个 1kg 的立方体智能体。
@@ -180,6 +196,64 @@ const agentsJson = ref('')
 const targetX = ref(3)
 const targetZ = ref(0)
 const maxSteps = ref(300)
+
+/** 实时演练交接的提示：成功横幅、无动态物体警告、没有交接数据 */
+const handoffNotices = ref<Array<{ tone: 'info' | 'warning'; text: string }>>([])
+
+/**
+ * 把交接数据填进表单——只预填，不自动创建会话。
+ *
+ * 用户仍要自己检查场景/目标/agents 后点「创建会话」：交接的是场地快照，
+ * 参数口径是否合适只有看过的人能判断。
+ */
+const applyHandoff = (handoff: AiLabHandoff): void => {
+  sceneJson.value = JSON.stringify(handoff.scene, null, 2)
+  targetX.value = handoff.target.x
+  targetZ.value = handoff.target.z
+  maxSteps.value = handoff.maxSteps
+  agentsJson.value = handoff.agents.length ? JSON.stringify(handoff.agents, null, 2) : ''
+
+  const objects = handoff.scene.objects
+  const obstacleCount = objects.filter(
+    (object) => object.uuid.startsWith('arena-obstacle-') || object.physics?.type === 'static',
+  ).length
+  const dynamicCount = objects.filter((object) => object.physics?.type === 'dynamic').length
+  const agentCount = handoff.agents.length
+
+  const notices: Array<{ tone: 'info' | 'warning'; text: string }> = [
+    {
+      tone: 'info',
+      text: `已从实时演练载入：${obstacleCount} 个障碍 + ${agentCount} 个智能体；检查参数后点创建会话`,
+    },
+  ]
+  if (dynamicCount === 0) {
+    notices.push({
+      tone: 'warning',
+      text: '场景里没有动态物体，Gym 需要至少一个动态物体才能创建会话——请检查场景 JSON 或 agents',
+    })
+  }
+  handoffNotices.value = notices
+
+  // 一次有效：读完即删，下次进入评测台不重复预填
+  clearAiLabHandoff()
+}
+
+onMounted(() => {
+  const fromPlayground = route?.query?.from === 'playground'
+  const handoff = readAiLabHandoff()
+  if (!handoff) {
+    if (fromPlayground) {
+      handoffNotices.value = [
+        {
+          tone: 'warning',
+          text: '没有找到可用的实时演练交接数据，请回到实时演练重新点「去评测台」',
+        },
+      ]
+    }
+    return
+  }
+  applyHandoff(handoff)
+})
 
 /**
  * 双智能体示例：两个 1kg 立方体，一个朝 +X、一个朝 -X。
@@ -387,6 +461,31 @@ const onRefresh = async (): Promise<void> => {
   margin: 0;
   font-size: 12px;
   color: var(--danger);
+}
+
+/* 实时演练交接提示：成功一条，缺动态物体时再加一条警告 */
+.wb-handoff-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.wb-handoff-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wb-handoff-note.info {
+  color: var(--text-2);
+}
+
+.wb-handoff-note.warning {
+  color: var(--accent-2);
 }
 
 .wb-empty-line {

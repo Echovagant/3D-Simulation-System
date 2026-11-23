@@ -14,7 +14,7 @@ import { apiRequest } from './client'
 /** 任务状态机：queued → running → succeeded | failed */
 export type SimulationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed'
 
-/** 可被扫描的参数维度（一次只扫一个维度，不做笛卡尔积） */
+/** 可被扫描的参数维度（多维度扫描时各维度取值做笛卡尔积） */
 export type SimulationSweepParam = 'gravityY' | 'friction' | 'restitution' | 'initialVelocityY'
 
 /**
@@ -47,7 +47,14 @@ export interface SimulationJobRequest {
   /** 完整场景文档，必填 */
   scene: SceneDocument
   params?: SimulationParams
+  /** 兼容旧调用：单维扫描。新代码统一用 `sweeps` */
   sweep?: SimulationSweep
+  /** 多维度扫描：各维度取值做笛卡尔积；缺省 = 不扫描 */
+  sweeps?: SimulationSweep[]
+  /** 随机种子列表；缺省 / 空 = `[0]` */
+  seeds?: number[]
+  /** 随机扰动幅度；缺省 = 0（不加扰动） */
+  randomization?: number
 }
 
 /** 提交成功（202）的应答 */
@@ -73,13 +80,13 @@ export interface SimulationJobDetail extends SimulationJobSummary {
 }
 
 /** 轨迹上的一个采样点 */
-interface SimulationTracePoint {
+export interface SimulationTracePoint {
   frame: number
   position: { x: number; y: number; z: number }
 }
 
 /** 一次运行里的单个物体 */
-interface SimulationRunObject {
+export interface SimulationRunObject {
   uuid: string
   type: string
   /** 是否已经静止落地 */
@@ -95,16 +102,16 @@ interface SimulationRunObject {
 }
 
 /** 一次运行的关键指标 */
-interface SimulationRunMetrics {
+export interface SimulationRunMetrics {
   settledAtFrame?: number | null
   maxPenetration: number
   totalFallDistance: number
 }
 
 /** 一次运行 */
-interface SimulationRun {
+export interface SimulationRun {
   index: number
-  /** 这一轮实际生效的扫描参数 */
+  /** 这一轮实际生效的扫描参数（含 seed） */
   params: Record<string, number>
   durationMs: number
   objects: SimulationRunObject[]
@@ -112,7 +119,7 @@ interface SimulationRun {
 }
 
 /** 结果汇总 */
-interface SimulationSummary {
+export interface SimulationSummary {
   runs: number
   settledRuns: number
   maxPenetration: number

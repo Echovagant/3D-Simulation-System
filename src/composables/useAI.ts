@@ -14,6 +14,7 @@ import { useThree } from './useThree'
 import { usePhysics } from './usePhysics'
 import { createFixedStepAccumulator } from '@/utils/fixedStepAccumulator'
 import { formatLogParameters } from '@/utils/agentLogExport'
+import { arenaAgentUuid, buildArenaHandoff, type AiLabHandoff } from '@/utils/aiLabHandoff'
 import { createRandom, DEFAULT_SEED } from '@/utils/prng'
 import type { AgentMetricInput } from '@/utils/agentMetrics'
 import { simulationConfig } from '@/config/simulation'
@@ -1123,8 +1124,7 @@ export function useAI() {
    * 把当前场地导出成一份场景文档（障碍物 + 智能体）。
    *
    * 只做**低成本快照**：位置、旋转、尺寸都从场景对象与物理描述里读，
-   * 不重新求解、不改动任何运行时状态。用途是给运行记录留一份可读的场地，
-   * 不是评测台的一键互通——评测台仍要求显式提供场景 JSON。
+   * 不重新求解、不改动任何运行时状态。运行记录与评测台交接共用这份底稿。
    */
   const exportArenaSceneDocument = (): SceneDocument => {
     const now = new Date().toISOString()
@@ -1156,7 +1156,7 @@ export function useAI() {
       const agent = aiStore.agents.find((item) => item.id === agentId)
       const type = agent?.type ?? 'basic'
       objects.push({
-        uuid: `arena-agent-${agentId}`,
+        uuid: arenaAgentUuid(agentId),
         type: 'cube',
         name: agent?.name ?? agentId,
         // 用出生点而不是当前位置：记录的是这一轮实验的初始布局
@@ -1179,6 +1179,27 @@ export function useAI() {
       worldSize: ARENA_GROUND_HALF * 2,
       objects,
     }
+  }
+
+  /**
+   * 把当前场地与智能体折成评测台交接数据。
+   *
+   * agents 的 uuid 与场景里的智能体物体共用同一个约定（arena-agent-<id>），
+   * target 取每个智能体**当前**的目标点；场地与目标点都从运行时状态直接读出，
+   * 不改动仿真。没有智能体时返回 null——评测台至少需要一只受控物体。
+   */
+  const exportArenaHandoff = (): AiLabHandoff | null => {
+    const agents = Array.from(agentRuntimes.entries()).map(([agentId, runtime]) => ({
+      uuid: arenaAgentUuid(agentId),
+      target: { x: runtime.goal.x, z: runtime.goal.z },
+    }))
+
+    return buildArenaHandoff({
+      scene: exportArenaSceneDocument(),
+      agents,
+      timeLimitSeconds: Number(aiStore.environmentSettings.timeLimit) || 0,
+      label: '实时演练 · 当前场地',
+    })
   }
 
   /** 指标快照：UI 指标条与日志导出都用它。纯数据，聚合在 agentMetrics.ts */
@@ -1210,6 +1231,8 @@ export function useAI() {
     getMetricsSnapshot,
     /** 当前场地的场景文档快照——导出运行记录时顺带留档 */
     exportArenaSceneDocument,
+    /** 实时演练 → 评测审计的交接数据（场地 + agents + 目标 + 回合上限） */
+    exportArenaHandoff,
     cleanup,
   }
 }

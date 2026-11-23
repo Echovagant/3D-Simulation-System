@@ -8,6 +8,10 @@
 import type { SceneDocument, SceneDocumentObject } from '@/types'
 import { DEFAULT_SCENE_WORLD_SIZE, normalizeWorldSize } from '@/config/sceneEditor'
 import { normalizeSceneCamera } from '@/utils/sceneCamera'
+import {
+  DEFAULT_MATERIAL_METALNESS,
+  DEFAULT_MATERIAL_ROUGHNESS,
+} from '@/data/materialPresets'
 
 const SUPPORTED_TYPES = new Set(['cube', 'sphere', 'ramp', 'model'])
 const PHYSICS_TYPES = new Set(['static', 'dynamic', 'kinematic'])
@@ -88,6 +92,16 @@ const normalizeObject = (raw: unknown, index: number): SceneDocumentObject => {
     if (value >= 0 && value <= 0xffffff) color = value
   }
 
+  // 材质：只有文档里真的写了 material 才回写；缺省表示「沿用默认材质」。
+  // 非法数值按默认值收敛，不让一个坏字段拖垮整份导入。
+  let material: SceneDocumentObject['material']
+  if (isRecord(raw.material)) {
+    material = {
+      metalness: readUnitInterval(raw.material.metalness, DEFAULT_MATERIAL_METALNESS),
+      roughness: readUnitInterval(raw.material.roughness, DEFAULT_MATERIAL_ROUGHNESS),
+    }
+  }
+
   let physics: SceneDocumentObject['physics']
   if (isRecord(raw.physics)) {
     const physicsType = raw.physics.type
@@ -115,6 +129,7 @@ const normalizeObject = (raw: unknown, index: number): SceneDocumentObject => {
     scale,
     visible: raw.visible !== false,
     ...(color !== undefined ? { color } : {}),
+    ...(material ? { material } : {}),
     ...(physics ? { physics } : {}),
   }
 }

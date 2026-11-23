@@ -361,3 +361,125 @@ def test_daily_quota_is_counted_from_the_results_table(
         with pytest.raises(Exception) as excinfo:
             svc.check_daily_quota(session)
     assert getattr(excinfo.value, "code", None) == "simulation_quota_exceeded"
+
+
+# --------------------------------------------------------------------------
+# 多维扫描 / seed / 随机扰动
+# --------------------------------------------------------------------------
+
+
+def test_multi_dimension_sweep_with_seeds_runs_cartesian_product(
+    client: TestClient, fake_queue: FakePool
+):
+    """2 维（2 组取值组合）× 2 seeds = 4 次；每次的 params 带被扫参数与 seed。"""
+    job_id = _submit(
+        client,
+        params={"steps": 20},
+        sweeps=[
+            {"param": "gravityY", "values": [-9.81, -3.0]},
+            {"param": "friction", "values": [0.5]},
+        ],
+        seeds=[0, 5],
+    )["jobId"]
+
+    assert client.get(f"/api/simulations/{job_id}").json()["total"] == 4
+
+    asyncio.run(run_simulation({}, job_id))
+
+    body = client.get(f"/api/simulations/{job_id}/results").json()
+    assert len(body["runs"]) == 4
+    assert body["summary"]["runs"] == 4
+    combos = {
+        (run["params"]["gravityY"], run["params"]["friction"], run["params"]["seed"])
+        for run in body["runs"]
+    }
+    assert combos == {
+        (gravity, 0.5, seed)
+        for gravity in (-9.81, -3.0)
+        for seed in (0, 5)
+    }
+    # 不出现重复键：params 只有被扫参数 + seed
+    assert all(set(run["params"]) == {"gravityY", "friction", "seed"} for run in body["runs"])
+
+
+def test_sweeps_take_priority_over_sweep(client: TestClient, fake_queue: FakePool):
+    """同时给 sweep 与 sweeps 时以 sweeps 为准（sweep 被忽略）。"""
+    job_id = _submit(
+        client,
+        sweep={"param": "friction", "values": [0.1, 0.2, 0.3]},
+        sweeps=[{"param": "gravityY", "values": [-9.81, -1.0]}],
+    )["jobId"]
+
+    assert client.get(f"/api/simulations/{job_id}").json()["total"] == 2
+
+
+def test_combined_run_count_over_limit_is_rejected(client: TestClient, fake_queue: FakePool):
+    """各维度取值数相乘 × seeds 数超过上限 → 422，错误信息说明实际次数。"""
+    response = client.post(
+        "/api/simulations",
+        json={
+            "scene": SCENE,
+            "sweeps": [
+                {"param": "friction", "values": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]},
+                {"param": "gravityY", "values": [-9.81, -5.0, -1.0]},
+            ],
+            "seeds": [0, 1],
+        },
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body["error"]["code"] == "simulation_invalid_params"
+    # 6 × 3 × 2 = 36 > 32
+    assert "36" in body["error"]["message"]
+
+
+def test_negative_seed_is_rejected(client: TestClient, fake_queue: FakePool):
+    response = client.post("/api/simulations", json={"scene": SCENE, "seeds": [-1]})
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_negative_randomization_is_rejected(client: TestClient, fake_queue: FakePool):
+    response = client.post(
+        "/api/simulations", json={"scene": SCENE, "randomization": -0.5}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_same_seed_is_reproducible_through_the_api(client: TestClient, fake_queue: FakePool):
+    """同 seed + 同参数 = 同结果（重复 seed 得到两次完全相同的运行）。"""
+    job_id = _submit(client, params={"steps": 60}, seeds=[2, 2], randomization=2.0)["jobId"]
+
+    asyncio.run(run_simulation({}, job_id))
+
+    runs = client.get(f"/api/simulations/{job_id}/results").json()["runs"]
+    assert len(runs) == 2
+    assert runs[0]["params"]["seed"] == runs[1]["params"]["seed"] == 2
+    assert runs[0]["objects"][0]["finalPosition"] == runs[1]["objects"][0]["finalPosition"]
+
+
+def test_different_seeds_differ_with_randomization(client: TestClient, fake_queue: FakePool):
+    """amp > 0 时不同 seed 的落点不同。"""
+    job_id = _submit(client, params={"steps": 60}, seeds=[1, 2], randomization=3.0)["jobId"]
+
+    asyncio.run(run_simulation({}, job_id))
+
+    runs = client.get(f"/api/simulations/{job_id}/results").json()["runs"]
+    first, second = runs[0]["objects"][0]["finalPosition"], runs[1]["objects"][0]["finalPosition"]
+    assert (first["x"], first["z"]) != (second["x"], second["z"])
+
+
+def test_zero_randomization_is_identical_across_seeds(
+    client: TestClient, fake_queue: FakePool
+):
+    """amp = 0：不同 seed 也完全一致（不扰动任何速度）。"""
+    job_id = _submit(client, params={"steps": 60}, seeds=[0, 9])["jobId"]
+
+    asyncio.run(run_simulation({}, job_id))
+
+    runs = client.get(f"/api/simulations/{job_id}/results").json()["runs"]
+    assert runs[0]["objects"][0]["finalPosition"] == runs[1]["objects"][0]["finalPosition"]

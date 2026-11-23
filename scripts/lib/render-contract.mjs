@@ -13,6 +13,38 @@ const describe = (op) => {
   return firstLine
 }
 
+/** 把 `$ref` 解析成 components.schemas 里的实际 schema。 */
+const resolveSchema = (spec, schema) => {
+  if (!schema || typeof schema !== 'object') return null
+  if (typeof schema.$ref === 'string') {
+    const prefix = '#/components/schemas/'
+    if (!schema.$ref.startsWith(prefix)) return null
+    return spec.components?.schemas?.[schema.$ref.slice(prefix.length)] ?? null
+  }
+  return schema
+}
+
+/**
+ * 取 JSON 请求体的顶层字段。
+ *
+ * 契约文档以前只列端点，schema 字段改了文档不会变，CI 会误以为没同步。
+ * 这里把顶层字段与必填标记渲染出来，让 `sweeps/seeds/randomization`
+ * 这类纯字段变更也能在契约文档里留下可见 diff。
+ */
+const requestFields = (spec, op) => {
+  const schema = resolveSchema(
+    spec,
+    op.requestBody?.content?.['application/json']?.schema,
+  )
+  if (!schema || typeof schema.properties !== 'object' || schema.properties === null) {
+    return null
+  }
+  const required = new Set(Array.isArray(schema.required) ? schema.required : [])
+  return Object.keys(schema.properties).map((name) =>
+    required.has(name) ? `${name}*` : name,
+  )
+}
+
 /** 规格里有几个端点（路径 × 方法）。路径数与端点数不是一回事，别混用。 */
 export const countEndpoints = (spec) => {
   let count = 0
@@ -37,6 +69,7 @@ export const renderContract = (spec) => {
         path,
         operation: op.operationId ?? '',
         summary: describe(op),
+        fields: requestFields(spec, op),
       })
     }
   }
@@ -53,9 +86,18 @@ export const renderContract = (spec) => {
     '',
     '## 端点',
     '',
+    '`*` 表示必填字段；请求体字段只列顶层字段，嵌套结构见后端 schema。',
+    '',
     '| 方法 | 路径 | 操作 id | 说明 |',
     '| --- | --- | --- | --- |',
     ...rows.map((r) => `| \`${r.method}\` | \`${r.path}\` | \`${r.operation}\` | ${r.summary} |`),
+    '',
+    '## 请求体字段',
+    '',
+    ...rows
+      .filter((r) => r.fields && r.fields.length > 0)
+      .map((r) => `- \`${r.method} ${r.path}\`：${r.fields.join('、')}`),
+    ...(rows.some((r) => r.fields && r.fields.length > 0) ? [] : ['- 无 JSON 请求体']),
     '',
     '## 统一错误形状',
     '',

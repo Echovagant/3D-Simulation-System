@@ -8,10 +8,20 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, reactive, shallowRef, markRaw } from 'vue'
 import * as THREE from 'three'
-import type { SceneDocument, SceneDocumentObject, SceneIndexEntry, SceneObject } from '@/types'
+import type {
+  SceneDocument,
+  SceneDocumentObject,
+  SceneIndexEntry,
+  SceneMaterialSettings,
+  SceneObject,
+} from '@/types'
 import { useModelStore } from './modelStore'
 import { useSceneSyncStore } from './sceneSyncStore'
 import { createPrimitiveMesh, isPrimitiveType } from '@/utils/primitiveFactory'
+import {
+  DEFAULT_MATERIAL_METALNESS,
+  DEFAULT_MATERIAL_ROUGHNESS,
+} from '@/data/materialPresets'
 import {
   DEFAULT_SCENE_WORLD_SIZE,
   SCENE_FALL_LIMIT_Y,
@@ -77,6 +87,24 @@ type InitialTransform = {
 const SCENE_KEY_PREFIX = 'scene-'
 const SCENE_INDEX_KEY = 'scene-index'
 
+/**
+ * 资源中心 → 场景编辑器的材质交接键。
+ *
+ * 只存预设 id（不存整份材质），编辑器据此在属性面板里显示「已载入材质」。
+ * 同一会话里 store 的 `pendingMaterialId` 也会同步这份值，sessionStorage
+ * 只是刷新页面后的兜底。
+ */
+const PENDING_MATERIAL_KEY = 'pending-material'
+
+/** 读取待应用材质 id；storage 不可用（隐私模式）时返回 null，不抛错 */
+const readPendingMaterialId = (): string | null => {
+  try {
+    return sessionStorage.getItem(PENDING_MATERIAL_KEY)
+  } catch {
+    return null
+  }
+}
+
 /** 场景 id → 存储键 */
 const sceneKey = (sceneId: string): string => `${SCENE_KEY_PREFIX}${sceneId}`
 
@@ -92,6 +120,10 @@ const sceneKey = (sceneId: string): string => `${SCENE_KEY_PREFIX}${sceneId}`
  */
 export type PrimitiveCreateOptions = {
   color?: number
+  /** 金属度 0~1；缺省用编辑器默认材质 */
+  metalness?: number
+  /** 粗糙度 0~1；缺省用编辑器默认材质 */
+  roughness?: number
   bodyType?: 'dynamic' | 'static' | 'kinematic'
   /** 质量；缺省 1 */
   mass?: number
@@ -111,6 +143,17 @@ const normalizeUnitInterval = (value: unknown, fallback: number): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.min(1, Math.max(0, value))
 }
+
+/** 材质参数收敛成 0~1；没有材质时保持 undefined（表示沿用默认材质） */
+const normalizeMaterialSettings = (
+  raw: SceneMaterialSettings | undefined,
+): SceneMaterialSettings | undefined =>
+  raw
+    ? {
+        metalness: normalizeUnitInterval(raw.metalness, DEFAULT_MATERIAL_METALNESS),
+        roughness: normalizeUnitInterval(raw.roughness, DEFAULT_MATERIAL_ROUGHNESS),
+      }
+    : undefined
 
 export type PrimitiveFactory = {
   createCube: (options?: PrimitiveCreateOptions) => boolean
@@ -143,6 +186,25 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
 
   // 分离状态：场景状态
   const selectedObjectUuid = ref<string | null>(null)
+
+  /**
+   * 资源中心带过来的待应用材质预设 id。
+   *
+   * 编辑器可能刚被路由挂载（store 才创建），因此初始值从 sessionStorage 读；
+   * 应用或放弃后由属性面板调用 `setPendingMaterialId(null)` 清掉。
+   */
+  const pendingMaterialId = ref<string | null>(readPendingMaterialId())
+
+  const setPendingMaterialId = (presetId: string | null) => {
+    pendingMaterialId.value = presetId
+    try {
+      if (presetId) sessionStorage.setItem(PENDING_MATERIAL_KEY, presetId)
+      else sessionStorage.removeItem(PENDING_MATERIAL_KEY)
+    } catch (error) {
+      // 隐私模式下 storage 不可用：内存态照常生效，不打断「应用材质」这条动线
+      console.warn('[sceneEditorStore] 待应用材质写入 sessionStorage 失败', error)
+    }
+  }
 
   /** 当前场地边长（米）。useSceneEditor 按它重建网格与物理地面 */
   const worldSize = ref<SceneWorldSize>(DEFAULT_SCENE_WORLD_SIZE)
@@ -549,6 +611,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       scale,
       visible: obj.visible !== false,
       ...(obj.color !== undefined ? { color: obj.color } : {}),
+      ...(obj.material ? { material: normalizeMaterialSettings(obj.material) } : {}),
       physics: obj.physics
         ? {
             type: obj.physics.type,
@@ -768,8 +831,10 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     if (factory) {
       const before = objects.value.length
       const sourcePhysics = objData.physics
+      const material = normalizeMaterialSettings(objData.material)
       const options: PrimitiveCreateOptions = {
         ...(objData.color !== undefined ? { color: objData.color } : {}),
+        ...(material ? { metalness: material.metalness, roughness: material.roughness } : {}),
         bodyType:
           sourcePhysics?.type === 'static'
             ? 'static'
@@ -798,9 +863,12 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
         if (restored.threeObject) {
           restored.threeObject.name = objData.name
         }
-        // updateObject 会把变换写进 mesh，并派发 update-transform 让刚体跟上
+        // updateObject 会把变换写进 mesh，并派发 update-transform 让刚体跟上；
+        // 颜色 / 材质一并写回，保证记录与 mesh 的材质参数一致。
         updateObject(restored.uuid, {
           name: objData.name,
+          ...(objData.color !== undefined ? { color: objData.color } : {}),
+          ...(material ? { material } : {}),
           position: objData.position,
           rotation: objData.rotation,
           scale: objData.scale,
@@ -818,10 +886,16 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     }
 
     // 兜底：没有物理桥（没有编辑器界面 / 物理还没起来）时，只还原 mesh
+    const material = normalizeMaterialSettings(objData.material)
     const mesh = createPrimitiveMesh(objData.type, {
       name: objData.name,
       ...(objData.color !== undefined ? { color: objData.color } : {}),
     })
+    if (material && mesh.material instanceof THREE.MeshStandardMaterial) {
+      mesh.material.metalness = material.metalness
+      mesh.material.roughness = material.roughness
+      mesh.userData.material = { ...material }
+    }
     mesh.position.set(objData.position.x, objData.position.y, objData.position.z)
     mesh.rotation.set(objData.rotation.x, objData.rotation.y, objData.rotation.z)
     mesh.scale.set(objData.scale.x, objData.scale.y, objData.scale.z)
@@ -833,6 +907,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       name: objData.name,
       threeObject: mesh,
       color: objData.color,
+      ...(material ? { material } : {}),
       physicsType: objData.physics?.type,
       mass: objData.physics?.mass,
       friction: objData.physics?.friction,
@@ -864,6 +939,10 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       if (restored) {
         updateObject(restored.uuid, {
           name: objData.name,
+          ...(objData.color !== undefined ? { color: objData.color } : {}),
+          ...(objData.material
+            ? { material: normalizeMaterialSettings(objData.material) }
+            : {}),
           position: objData.position,
           rotation: objData.rotation,
           scale: objData.scale,
@@ -894,6 +973,10 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       name: objData.name,
       threeObject: model,
       modelId: objData.modelId,
+      ...(objData.color !== undefined ? { color: objData.color } : {}),
+      ...(objData.material
+        ? { material: normalizeMaterialSettings(objData.material) }
+        : {}),
       position: objData.position,
       rotation: objData.rotation,
       scale: objData.scale,
@@ -1025,6 +1108,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       scale: { x: number; y: number; z: number }
       visible?: boolean
       color?: number
+      /** 材质参数（金属度 / 粗糙度）；缺省表示沿用默认材质 */
+      material?: SceneMaterialSettings
       physicsType?: 'static' | 'dynamic' | 'kinematic'
       /** 质量；缺省用第二个参数（默认 1） */
       mass?: number
@@ -1047,6 +1132,9 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       scale: objectData.scale,
       visible: objectData.visible ?? true,
       ...(objectData.color !== undefined ? { color: objectData.color } : {}),
+      ...(objectData.material
+        ? { material: normalizeMaterialSettings(objectData.material) }
+        : {}),
       // three 对象必须在**写入 store 的那一刻**就 markRaw：
       // 只在读取处包一层 toRaw() 能修症状，但对象仍会被深度代理，性能问题还在。
       // 只标记 threeObject 本身，不标记整条 SceneObject（其余字段仍需可追踪）。
@@ -1202,6 +1290,21 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
           }),
         )
       }
+
+      // 颜色与材质参数：mesh 的 MeshStandardMaterial 归 useSceneEditor 实际改写，
+      // store 只负责把「用户改了表面」转交出去。颜色与材质合并成一次事件，
+      // 避免预设应用时先改色后改参数导致中间态闪一下。
+      if (properties.color !== undefined || properties.material !== undefined) {
+        window.dispatchEvent(
+          new CustomEvent('update-material', {
+            detail: {
+              uuid,
+              ...(properties.color !== undefined ? { color: updated.color } : {}),
+              ...(properties.material !== undefined ? { material: updated.material } : {}),
+            },
+          }),
+        )
+      }
     }
   }
   /**
@@ -1333,6 +1436,9 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     selectedObject,
     worldSize,
     viewTarget,
+    /** 资源中心带过来的待应用材质预设 id（sessionStorage 兜底） */
+    pendingMaterialId,
+    setPendingMaterialId,
 
     // 分离的状态对象
     simulationState,

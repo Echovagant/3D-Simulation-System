@@ -421,3 +421,143 @@ def test_from_mapping_behavior_unchanged():
     """既有批量仿真调用方不能受影响：非法值仍静默回落。"""
     assert simulator.SimulationParams.from_mapping({"dt": "abc"}).dt == simulator.DEFAULT_DT
     assert simulator.SimulationParams.from_mapping(None) == simulator.SimulationParams()
+
+
+# --------------------------------------------------------------------------
+# 多维扫描 / seed / 随机扰动
+# --------------------------------------------------------------------------
+
+
+def test_sweep_values_expands_cartesian_product_with_seeds():
+    """多维扫描做笛卡尔积，每组扫描值按 seeds 各跑一遍。"""
+    overrides = simulator.sweep_values(
+        simulator.SimulationParams(),
+        sweeps=[
+            {"param": "gravityY", "values": [-9.81, -3.0]},
+            {"param": "friction", "values": [0.1, 0.9]},
+        ],
+        seeds=[0, 7],
+    )
+
+    assert len(overrides) == 8
+    assert {
+        (item["gravityY"], item["friction"], item["seed"]) for item in overrides
+    } == {
+        (gravity, friction, seed)
+        for gravity in (-9.81, -3.0)
+        for friction in (0.1, 0.9)
+        for seed in (0, 7)
+    }
+    # 不要重复键：每个 override 只有被扫参数 + seed
+    assert all(set(item) == {"gravityY", "friction", "seed"} for item in overrides)
+
+
+def test_sweep_values_defaults_to_seed_zero():
+    assert simulator.sweep_values(simulator.SimulationParams()) == [{"seed": 0}]
+
+
+def test_duplicate_sweep_dimensions_are_rejected():
+    """同一个参数扫两次，「哪个值生效」说不清，直接报错。"""
+    with pytest.raises(simulator.SimulationError):
+        simulator.sweep_values(
+            simulator.SimulationParams(),
+            sweeps=[
+                {"param": "friction", "values": [0.1]},
+                {"param": "friction", "values": [0.9]},
+            ],
+        )
+
+
+def test_count_runs_multiplies_dimensions_and_seeds():
+    config = {
+        "sweeps": [
+            {"param": "gravityY", "values": [-9.81, -3.0]},
+            {"param": "friction", "values": [0.1, 0.5, 0.9]},
+        ],
+        "seeds": [0, 1],
+    }
+    assert simulator.count_runs(config) == 12
+    # 旧的单维度写法照旧按取值数算；没有扫描就是 1 次
+    assert simulator.count_runs({"param": "friction", "values": [0.1, 0.2]}) == 2
+    assert simulator.count_runs(None) == 1
+
+
+def test_run_sweep_multi_dimension_with_seeds():
+    runs = simulator.run_sweep(
+        _scene(_obj()),
+        simulator.SimulationParams.from_mapping({"steps": 20}),
+        {
+            "sweeps": [
+                {"param": "gravityY", "values": [-9.81, -3.0]},
+                {"param": "friction", "values": [0.1, 0.9]},
+            ],
+            "seeds": [0, 1],
+        },
+    )
+
+    assert len(runs) == 8
+    assert [run["index"] for run in runs] == list(range(8))
+    combos = {
+        (run["params"]["gravityY"], run["params"]["friction"], run["params"]["seed"])
+        for run in runs
+    }
+    assert len(combos) == 8
+
+
+def test_randomization_is_deterministic_for_the_same_seed():
+    """同 seed + 同参数 = 同结果（RNG 按 seed:uuid 播种）。"""
+    scene = _scene(_obj())
+    params = simulator.SimulationParams.from_mapping({"steps": 120})
+
+    first = simulator.run_once(scene, params, seed=3, randomization=2.0)
+    second = simulator.run_once(scene, params, seed=3, randomization=2.0)
+
+    assert first["objects"][0]["finalPosition"] == second["objects"][0]["finalPosition"]
+    assert first["objects"][0]["finalVelocity"] == second["objects"][0]["finalVelocity"]
+
+
+def test_different_seeds_produce_different_outcomes_with_randomization():
+    """amp > 0 时不同 seed 的初速度不同，落点随之不同。"""
+    scene = _scene(_obj())
+    params = simulator.SimulationParams.from_mapping({"steps": 120})
+
+    first = simulator.run_once(scene, params, seed=1, randomization=3.0)
+    second = simulator.run_once(scene, params, seed=2, randomization=3.0)
+
+    first_pos = first["objects"][0]["finalPosition"]
+    second_pos = second["objects"][0]["finalPosition"]
+    assert (first_pos["x"], first_pos["z"]) != (second_pos["x"], second_pos["z"])
+
+
+def test_zero_randomization_ignores_seed():
+    """amp = 0 时没有任何抖动：不同 seed 结果完全一致。"""
+    scene = _scene(_obj())
+    params = simulator.SimulationParams.from_mapping({"steps": 60})
+
+    first = simulator.run_once(scene, params, seed=0, randomization=0.0)
+    second = simulator.run_once(scene, params, seed=99, randomization=0.0)
+
+    assert first["objects"][0]["finalPosition"] == second["objects"][0]["finalPosition"]
+
+
+def test_static_objects_are_not_jittered():
+    """static 物体是用户摆的地面/墙，不能被随机扰动撞飞。"""
+    scene = _scene(
+        _obj(uuid="wall", y=0.0, physics={"type": "static", "shape": "box", "mass": 0})
+    )
+    sim = simulator.build_world(scene, simulator.SimulationParams(), seed=5, randomization=4.0)
+
+    velocity = sim.simulated[0].body.linvel
+    assert (velocity.x, velocity.y, velocity.z) == (0.0, 0.0, 0.0)
+
+
+def test_dynamic_objects_get_velocity_within_amplitude():
+    sim = simulator.build_world(
+        _scene(_obj()), simulator.SimulationParams(), seed=5, randomization=2.0
+    )
+
+    velocity = sim.simulated[0].body.linvel
+    assert abs(velocity.x) <= 2.0
+    assert abs(velocity.y) <= 2.0
+    assert abs(velocity.z) <= 2.0
+    assert (velocity.x, velocity.y, velocity.z) != (0.0, 0.0, 0.0)

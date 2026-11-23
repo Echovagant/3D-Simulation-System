@@ -79,6 +79,35 @@ describe('批量仿真接口', () => {
     expect(created.jobId).toBe('job-1')
   })
 
+  it('提交多维度扫描时可带 sweeps / seeds / randomization', async () => {
+    let capturedBody = ''
+    vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {
+      capturedBody = String(init?.body)
+      return jsonResponse({ jobId: 'job-3' }, 202)
+    })
+
+    await createSimulationJob({
+      scene: buildDocument('scene-1'),
+      params: { steps: 240 },
+      sweeps: [
+        { param: 'friction', values: [0.1, 0.5] },
+        { param: 'gravityY', values: [-9.81, -1.62] },
+      ],
+      seeds: [1, 2],
+      randomization: 0.2,
+    })
+
+    const body = JSON.parse(capturedBody) as {
+      sweeps: Array<{ param: string; values: number[] }>
+      seeds: number[]
+      randomization: number
+    }
+    expect(body.sweeps).toHaveLength(2)
+    expect(body.sweeps[1].param).toBe('gravityY')
+    expect(body.seeds).toEqual([1, 2])
+    expect(body.randomization).toBe(0.2)
+  })
+
   it('提交任务时没给 label 就不发这个字段', async () => {
     let capturedBody = ''
     vi.stubGlobal('fetch', async (_url: string, init?: RequestInit) => {

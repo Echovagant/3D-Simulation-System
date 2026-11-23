@@ -89,27 +89,72 @@
       </div>
     </div>
 
-    <!-- 参数扫描 -->
-    <div class="sim-mb-3 sim-flex sim-gap-2">
-      <div class="sim-flex-1">
-        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="sim-sweep-param">扫描维度</label>
-        <select id="sim-sweep-param" v-model="sweepParam" class="sim-w-full">
+    <!-- 多维参数扫描：各维度取值做笛卡尔积 -->
+    <div class="sim-mb-3 sim-sweeps">
+      <div class="sim-fs-xs sim-t-muted sim-mb-1">参数扫描（多维取笛卡尔积）</div>
+      <div
+        v-for="(row, index) in sweepRows"
+        :key="row.id"
+        class="sim-sweep-row sim-flex sim-gap-2 sim-mb-1"
+      >
+        <select
+          v-model="row.param"
+          class="sim-flex-1"
+          :aria-label="`第 ${index + 1} 行扫描维度`"
+        >
           <option value="none">不扫描</option>
           <option value="gravityY">重力</option>
           <option value="friction">摩擦</option>
           <option value="restitution">弹性</option>
           <option value="initialVelocityY">初始竖直速度</option>
         </select>
-      </div>
-      <div class="sim-flex-1">
-        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="sim-sweep-values">取值（逗号分隔）</label>
         <input
-          id="sim-sweep-values"
-          v-model="sweepValues"
+          v-model="row.values"
+          type="text"
+          class="sim-flex-1"
+          placeholder="取值：0.1, 0.5, 0.9"
+          spellcheck="false"
+          :aria-label="`第 ${index + 1} 行扫描取值`"
+        />
+        <button
+          type="button"
+          class="sim-sweep-remove"
+          title="删除这一行"
+          @click="removeSweepRow(row.id)"
+        >
+          删除
+        </button>
+      </div>
+      <button type="button" class="sim-sweep-add" @click="addSweepRow">添加扫描维度</button>
+    </div>
+
+    <!-- 随机种子与扰动 -->
+    <div class="sim-mb-3 sim-flex sim-gap-2">
+      <div class="sim-flex-1">
+        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="sim-seeds">
+          随机种子（逗号/空格分隔）
+        </label>
+        <input
+          id="sim-seeds"
+          v-model="seedsInput"
           type="text"
           class="sim-w-full"
-          placeholder="0.1, 0.5, 0.9"
+          placeholder="留空 = 0"
           spellcheck="false"
+        />
+      </div>
+      <div class="sim-flex-1">
+        <label class="sim-fs-xs sim-t-muted sim-mb-1" for="sim-randomization">
+          随机扰动幅度
+        </label>
+        <input
+          id="sim-randomization"
+          v-model="randomizationInput"
+          type="number"
+          class="sim-w-full"
+          step="0.01"
+          min="0"
+          placeholder="留空 = 0"
         />
       </div>
     </div>
@@ -192,6 +237,35 @@
           {{ formatNumber(run.metrics.totalFallDistance) }} m
         </div>
       </div>
+
+      <!-- 按 seed 汇总：同一 seed 下的波动与落地情况 -->
+      <div v-if="seedSummary.length > 0" class="sim-mt-3 sim-seed-summary">
+        <div class="sim-flex sim-justify-between sim-items-center sim-mb-1">
+          <span class="sim-fs-xs sim-t-accent">按 seed 汇总</span>
+        </div>
+        <table class="sim-seed-table">
+          <thead>
+            <tr>
+              <th>seed</th>
+              <th>运行</th>
+              <th>落地</th>
+              <th>最大穿透均值</th>
+              <th>最大穿透最大值</th>
+              <th>平均下落距离</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in seedSummary" :key="row.seed" class="sim-seed-row">
+              <td>{{ row.seed }}</td>
+              <td>{{ row.runs }}</td>
+              <td>{{ row.settledRuns }}</td>
+              <td>{{ formatNumber(row.maxPenetrationAvg) }}</td>
+              <td>{{ formatNumber(row.maxPenetrationMax) }}</td>
+              <td>{{ formatNumber(row.avgFallDistance) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </template>
@@ -208,9 +282,15 @@ import {
   type SimulationJobStatus,
   type SimulationParams,
   type SimulationResults,
-  type SimulationSweep,
   type SimulationSweepParam,
 } from '@/services/api/simulations'
+import {
+  buildSimulationBatchPayload,
+  buildSweeps,
+  parseRandomization,
+  parseSeeds,
+  summarizeBySeed,
+} from '@/utils/simulationBatch'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 import type { SceneDocument, SceneIndexEntry } from '@/types'
 import InfoTip from '@/components/common/InfoTip.vue'
@@ -252,9 +332,28 @@ const gravityY = ref<string | number>('-9.81')
 const friction = ref<string | number>('')
 const restitution = ref<string | number>('')
 
-// 参数扫描
-const sweepParam = ref<'none' | SimulationSweepParam>('none')
-const sweepValues = ref('')
+// 参数扫描：多行，可增删；维度为 none 的行提交时忽略
+interface SweepRow {
+  id: number
+  param: SimulationSweepParam | 'none'
+  values: string
+}
+
+let sweepRowSeq = 0
+const createSweepRow = (): SweepRow => ({ id: (sweepRowSeq += 1), param: 'none', values: '' })
+const sweepRows = ref<SweepRow[]>([createSweepRow()])
+
+const addSweepRow = (): void => {
+  sweepRows.value.push(createSweepRow())
+}
+
+const removeSweepRow = (id: number): void => {
+  sweepRows.value = sweepRows.value.filter((row) => row.id !== id)
+}
+
+// 随机种子与扰动
+const seedsInput = ref('')
+const randomizationInput = ref<string | number>('')
 
 // 轨迹
 const traceMode = ref<'off' | 'on'>('off')
@@ -281,6 +380,9 @@ const progressPercent = computed(() => {
   if (jobTotal.value <= 0) return 0
   return Math.min(100, Math.round((jobDone.value / jobTotal.value) * 100))
 })
+
+/** 按 seed 汇总结果；没有结果时为空表 */
+const seedSummary = computed(() => (results.value ? summarizeBySeed(results.value.runs) : []))
 
 /**
  * 数字输入框的值：空串表示「不覆盖」，不是 0。
@@ -339,16 +441,8 @@ const buildParams = (): SimulationParams => {
   return params
 }
 
-/** 组装扫描参数：一次只扫一个维度 */
-const buildSweep = (): SimulationSweep | undefined => {
-  if (sweepParam.value === 'none') return undefined
-  const values = sweepValues.value
-    .split(/[\s,，;；]+/)
-    .map((part) => parseNumber(part))
-    .filter((value): value is number => value !== undefined)
-  if (values.length === 0) return undefined
-  return { param: sweepParam.value, values }
-}
+/** 组装扫描参数：多行合并成 sweeps，维度为 none 的行忽略 */
+const buildSweepList = () => buildSweeps(sweepRows.value)
 
 /**
  * 把一次失败翻译成「后端不在」还是「业务错误」。
@@ -383,7 +477,10 @@ const formatFrame = (value: number | null | undefined): string =>
 const formatRunParams = (params: Record<string, number>): string => {
   const entries = Object.entries(params ?? {})
   if (entries.length === 0) return '（无扫描参数）'
-  return entries.map(([key, value]) => `${key}=${value}`).join(' · ')
+  // seed 放最前面：它决定这一轮用哪组随机扰动，比扫描值更值得先看
+  const seedEntry = entries.find(([key]) => key === 'seed')
+  const ordered = seedEntry ? [seedEntry, ...entries.filter(([key]) => key !== 'seed')] : entries
+  return ordered.map(([key, value]) => `${key}=${value}`).join(' · ')
 }
 
 // 轮询
@@ -452,20 +549,11 @@ const startPolling = (): void => {
 }
 
 /**
- * 拼出提交载荷。
+ * 提交任务并开始轮询。
  *
- * 这一步只碰本地数据，出错就是**输入或序列化**的问题，
- * 跟后端在不在没关系——所以它必须在网络请求的 try 之外，
- * 否则本地 TypeError 会被当成「后端缺席」，界面给出误导性的提示。
+ * 载荷只碰本地数据，出错就是**输入或序列化**的问题，跟后端在不在没关系——
+ * 所以它必须在网络请求的 try 之外，否则本地 TypeError 会被当成「后端缺席」。
  */
-const buildPayload = (scene: SceneDocument, sweep?: SimulationSweep): SimulationJobRequest => ({
-  ...(label.value.trim() ? { label: label.value.trim() } : {}),
-  scene,
-  params: buildParams(),
-  ...(sweep ? { sweep } : {}),
-})
-
-/** 提交任务并开始轮询 */
 const submit = async (): Promise<void> => {
   if (submitting.value) return
 
@@ -476,16 +564,35 @@ const submit = async (): Promise<void> => {
     return
   }
 
-  const sweep = buildSweep()
-  if (sweepParam.value !== 'none' && !sweep) {
-    notice.value = '扫描维度的取值不能为空。'
+  const { sweeps, error: sweepError } = buildSweepList()
+  if (sweepError) {
+    notice.value = sweepError
+    return
+  }
+
+  const parsedSeeds = parseSeeds(seedsInput.value)
+  if (parsedSeeds.error) {
+    notice.value = parsedSeeds.error
+    return
+  }
+
+  const parsedRandomization = parseRandomization(randomizationInput.value)
+  if (parsedRandomization.error) {
+    notice.value = parsedRandomization.error
     return
   }
 
   // 载荷在本地拼好并试序列化一次：这里失败是内容的问题，不能说成后端不在
   let payload: SimulationJobRequest
   try {
-    payload = buildPayload(scene, sweep)
+    payload = buildSimulationBatchPayload({
+      label: label.value,
+      scene,
+      params: buildParams(),
+      sweeps,
+      seeds: parsedSeeds.seeds,
+      randomization: parsedRandomization.value,
+    })
     JSON.stringify(payload)
   } catch (error) {
     notice.value = `请求内容有问题，没能提交：${error instanceof Error ? error.message : String(error)}`
@@ -574,5 +681,53 @@ onBeforeUnmount(() => {
 .sim-status {
   white-space: nowrap;
   flex: none;
+}
+
+/* 扫描行：输入框占满剩余宽度，删除按钮不换行 */
+.sim-sweep-row {
+  align-items: center;
+}
+
+.sim-sweep-add,
+.sim-sweep-remove {
+  background: var(--bg-inset);
+  color: var(--text-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sim-sweep-add:hover,
+.sim-sweep-remove:hover {
+  color: var(--text-1);
+  border-color: var(--accent);
+}
+
+/* 按 seed 汇总表：窄面板里也能横向塞下 6 列 */
+.sim-seed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sim-seed-table th,
+.sim-seed-table td {
+  padding: 4px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.sim-seed-table th {
+  color: var(--text-3);
+  font-weight: 500;
+}
+
+.sim-seed-table td {
+  color: var(--text-1);
 }
 </style>
