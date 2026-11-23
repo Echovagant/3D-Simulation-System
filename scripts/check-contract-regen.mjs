@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 闸门：后端契约相关文件变了，docs/api-contract.md 必须同步变。
+ * 契约重生成闸门：后端契约相关文件变了，docs/api-contract.md 必须同步变。
  *
  * 为什么还需要这一道：`check-api-contract` 比的是**内容**是否一致，
  * 只有当生成物真的过期时才会红；而 PR 里「改了路由/schema 但契约文档

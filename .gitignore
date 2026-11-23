@@ -50,5 +50,11 @@ __pycache__/
 # Gym Python 客户端的虚拟环境
 clients/gym-client/.venv/
 
-# 会话/调研临时目录（调研产物归档在 D:\Projects\_audit-archive，不入库）
+# 会话/调研临时目录
 .tmp/
+
+# 本地工具产物
+.arts/
+.qoder-credits/
+.superpowers/
+docs/superpowers/
