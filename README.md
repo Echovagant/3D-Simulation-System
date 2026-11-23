@@ -10,7 +10,7 @@
   <a href="https://rapier.rs/"><img alt="Rapier3D 0.21.0" src="https://img.shields.io/badge/Rapier3D-0.21.0-f47d21?logo=rust&logoColor=000000"></a>
   <a href="https://vite.dev/"><img alt="Vite 8.3.8" src="https://img.shields.io/badge/Vite-8.3.8-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="63 test files / 580 cases" src="https://img.shields.io/badge/test-63%20files%20%2F%20580%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="65 test files / 591 cases" src="https://img.shields.io/badge/test-65%20files%20%2F%20591%20cases-16a34a?logo=vitest&logoColor=fd9714">
   <img alt="13 build gates" src="https://img.shields.io/badge/build%20gates-13%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-FF6101?logo=apache&logoColor=FF6101"></a>
 </p>
@@ -24,7 +24,7 @@
 <table>
   <tr>
     <td align="center"><b>33.05 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>580</b><br><sub>测试用例 · 63 个文件</sub></td>
+    <td align="center"><b>591</b><br><sub>测试用例 · 65 个文件</sub></td>
     <td align="center"><b>13</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
@@ -198,7 +198,7 @@ npm run preview    # 预览生产产物
 | --- | --- |
 | `npm run dev` | 开发服务器 |
 | `npm run build` | 类型检查 + 构建 + 测试 + 13 道闸门 |
-| `npm test` | Vitest 全量用例（63 个测试文件 / 580 个用例） |
+| `npm test` | Vitest 全量用例（65 个测试文件 / 591 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -289,7 +289,7 @@ obs, reward, terminated, truncated, info = env.step(env.action_space.sample())
 
 ```bash
 cd backend
-uv run pytest        # 286 个用例
+uv run pytest        # 295 个用例
 npm run verify:backend   # ruff + 格式 + mypy + pytest
 ```
 
@@ -386,7 +386,7 @@ flowchart LR
 渲染器一律显式请求高性能 GPU（`powerPreference: 'high-performance'`）——**双显卡笔记本**上
 浏览器默认可能把 WebGL 上下文交给核显，帧率直接掉一半；显式请求能显著提高拿到独显的概率。
 
-后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（286 个用例）。
+后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（295 个用例）。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 

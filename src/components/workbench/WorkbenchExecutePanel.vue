@@ -67,8 +67,57 @@
         <p class="wb-repair-text">{{ store.repairHint.message }}</p>
       </div>
 
+      <!-- 多 Agent 协同：每个受控物体各出主意，批量推进同一物理步 -->
+      <div v-if="isTeam" class="wb-llm-block">
+        <h4 class="wb-form-title">多 Agent 协同</h4>
+        <p class="wb-team-hint">
+          每个智能体按自己的目标独立提议，全部动作在同一物理步内批量执行；任一提议失败则整队不动。
+        </p>
+        <button
+          type="button"
+          class="wb-preset-btn llm"
+          title="给每个未完成的智能体各请求一次模型提议，再批量执行"
+          :disabled="store.teamActing || store.stepping"
+          @click="onTeamDecide"
+        >
+          {{ store.teamActing ? '协同决策中…' : '协同提议并执行' }}
+        </button>
+        <p v-if="store.teamDecisionError" class="wb-error-line">{{ store.teamDecisionError }}</p>
+
+        <ul class="wb-team-list">
+          <li v-for="agent in teamAgents" :key="agent.uuid" class="wb-team-row">
+            <span class="wb-team-id" :title="agent.uuid">{{ shortAgent(agent.uuid) }}</span>
+            <span class="wb-team-distance">距离 {{ agent.distance.toFixed(2) }} m</span>
+            <span class="wb-team-state" :class="{ done: agent.done }">
+              {{ agent.done ? '已完成' : '进行中' }}
+            </span>
+          </li>
+        </ul>
+
+        <div v-if="store.lastTeamRun" class="wb-proposal">
+          <div class="wb-proposal-head">
+            <span class="wb-proposal-meta">
+              本轮 {{ store.lastTeamRun.proposals.length }} 个动作 · {{ teamReferenceLabel }}
+            </span>
+            <span class="wb-proposal-status" :class="{ done: store.lastTeamRun.executed }">
+              {{ store.lastTeamRun.executed ? '已同步执行' : '未执行' }}
+            </span>
+          </div>
+          <ul class="wb-team-list">
+            <li
+              v-for="proposal in store.lastTeamRun.proposals"
+              :key="proposal.uuid"
+              class="wb-team-row"
+            >
+              <span class="wb-team-id" :title="proposal.uuid">{{ shortAgent(proposal.uuid) }}</span>
+              <code class="wb-team-force">{{ formatForce(proposal.action) }}</code>
+            </li>
+          </ul>
+        </div>
+      </div>
+
       <!-- LLM 提议动作：观测快照 → 模型提议 → 自动执行；提议失败如实报错，不静默降级 -->
-      <div class="wb-llm-block">
+      <div v-else class="wb-llm-block">
         <h4 class="wb-form-title">LLM 提议动作</h4>
         <div class="wb-preset-row" role="group" aria-label="LLM 提议动作">
           <button
@@ -255,6 +304,26 @@ const onAutoDecide = async (): Promise<void> => {
   localError.value = ''
   await store.autoDecide()
 }
+
+const onTeamDecide = async (): Promise<void> => {
+  localError.value = ''
+  await store.autoDecideTeam()
+}
+
+/** 多智能体会话：观测里有超过一个受控物体 */
+const isTeam = computed(() => (store.lastObservation?.agents?.length ?? 0) > 1)
+const teamAgents = computed(() => store.lastObservation?.agents ?? [])
+
+const shortAgent = (uuid: string): string => (uuid.length > 8 ? uuid.slice(0, 8) : uuid)
+const formatForce = (action: { forceX: number; forceZ: number }): string =>
+  `(${action.forceX.toFixed(1)}, ${action.forceZ.toFixed(1)}) N`
+
+/** 协同这一轮引用了哪些资料 */
+const teamReferenceLabel = computed(() => {
+  const references = store.lastTeamRun?.references ?? []
+  if (references.length === 0) return '未引用资料'
+  return `引用资料 ${references.length} 条`
+})
 
 /** 把当前提议的力再发一步（来源照实记为 LLM 提议） */
 const onSendProposal = async (): Promise<void> => {
@@ -508,6 +577,56 @@ const referenceLabel = computed(() => {
   line-height: 1.5;
   color: var(--text-3);
   overflow-wrap: anywhere;
+}
+
+.wb-team-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+.wb-team-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wb-team-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.wb-team-id {
+  width: 72px;
+  font-family: var(--font-mono);
+  color: var(--text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wb-team-distance {
+  color: var(--text-3);
+}
+
+.wb-team-state {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+.wb-team-state.done {
+  color: var(--success);
+}
+
+.wb-team-force {
+  font-family: var(--font-mono);
+  color: var(--text-1);
 }
 
 .wb-result-block {

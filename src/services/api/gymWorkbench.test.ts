@@ -7,6 +7,7 @@ import {
   listGymSessions,
   resetGymSession,
   stepGymSession,
+  stepGymSessionBatch,
 } from './gymWorkbench'
 
 /**
@@ -54,6 +55,26 @@ describe('gymWorkbench 客户端', () => {
     expect(body).toEqual({ scene: { objects: [{}] }, target: { x: 3, z: 0 } })
   })
 
+  it('createGymSession 多智能体：agents 数组进请求体', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ sessionId: 's2' }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createGymSession('owner-1', {
+      scene: { objects: [{}] },
+      agents: [
+        { uuid: 'agent-1', target: { x: 3, z: 0 } },
+        { uuid: 'agent-2', target: { x: -3, z: 0 } },
+      ],
+    })
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const body = JSON.parse(init.body as string) as Record<string, unknown>
+    expect(body.agents).toEqual([
+      { uuid: 'agent-1', target: { x: 3, z: 0 } },
+      { uuid: 'agent-2', target: { x: -3, z: 0 } },
+    ])
+  })
+
   it('listGymSessions：GET /api/gym/sessions', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse([]))
     vi.stubGlobal('fetch', fetchMock)
@@ -77,6 +98,25 @@ describe('gymWorkbench 客户端', () => {
     expect(url).toBe('/api/gym/sessions/sess%201/step')
     expect(methodOf(init)).toBe('POST')
     expect(JSON.parse(init.body as string)).toEqual({ forceX: 5, forceZ: -2 })
+  })
+
+  it('stepGymSessionBatch：POST …/step，请求体是 actions 数组', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ reward: 0.2 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await stepGymSessionBatch('owner-1', 'sess-1', [
+      { agentUuid: 'agent-1', forceX: 5, forceZ: 0 },
+      { agentUuid: 'agent-2', forceX: -4, forceZ: 0 },
+    ])
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(url).toBe('/api/gym/sessions/sess-1/step')
+    expect(JSON.parse(init.body as string)).toEqual({
+      actions: [
+        { agentUuid: 'agent-1', forceX: 5, forceZ: 0 },
+        { agentUuid: 'agent-2', forceX: -4, forceZ: 0 },
+      ],
+    })
   })
 
   it('step 422：错误信封解析成 ApiError，code 与 message（修复指令）原样透传', async () => {

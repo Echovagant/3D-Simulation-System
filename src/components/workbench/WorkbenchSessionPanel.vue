@@ -75,6 +75,26 @@
         spellcheck="false"
       ></textarea>
 
+      <label class="wb-field-label" for="wb-agents-json">
+        多智能体 agents JSON（可选；非空则进入多智能体模式）
+      </label>
+      <textarea
+        id="wb-agents-json"
+        v-model="agentsJson"
+        class="wb-textarea wb-textarea-compact"
+        rows="3"
+        placeholder='[{"uuid":"agent-1","target":{"x":3,"z":0}}]'
+        spellcheck="false"
+      ></textarea>
+      <button
+        type="button"
+        class="wb-mini-btn"
+        title="把场景与 agents 填成两个 1kg 立方体、各朝一边的双智能体示例"
+        @click="fillTeamExample"
+      >
+        填入双智能体示例
+      </button>
+
       <button
         type="button"
         class="wb-primary-btn"
@@ -123,6 +143,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGymWorkbenchStore } from '@/stores/gymWorkbenchStore'
+import type { GymAgentSpec } from '@/services/api/gymWorkbench'
 
 const store = useGymWorkbenchStore()
 
@@ -155,9 +176,72 @@ const DEFAULT_SCENE = `{
 
 const sceneJson = ref(DEFAULT_SCENE)
 const paramsJson = ref('')
+const agentsJson = ref('')
 const targetX = ref(3)
 const targetZ = ref(0)
 const maxSteps = ref(300)
+
+/**
+ * 双智能体示例：两个 1kg 立方体，一个朝 +X、一个朝 -X。
+ * agents 里的 uuid 必须与场景一致（后端按 uuid 绑定受控物体）。
+ */
+const TEAM_SCENE_JSON = JSON.stringify(
+  {
+    name: '双智能体演示场景',
+    objects: [
+      {
+        uuid: 'agent-1',
+        type: 'cube',
+        name: '甲',
+        position: { x: -1, y: 1, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: {
+          type: 'dynamic',
+          shape: 'cube',
+          halfExtents: { x: 0.5, y: 0.5, z: 0.5 },
+          mass: 1,
+          friction: 0.5,
+          restitution: 0.2,
+        },
+      },
+      {
+        uuid: 'agent-2',
+        type: 'cube',
+        name: '乙',
+        position: { x: 1, y: 1, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        physics: {
+          type: 'dynamic',
+          shape: 'cube',
+          halfExtents: { x: 0.5, y: 0.5, z: 0.5 },
+          mass: 1,
+          friction: 0.5,
+          restitution: 0.2,
+        },
+      },
+    ],
+  },
+  null,
+  2,
+)
+
+const TEAM_AGENTS_JSON = JSON.stringify(
+  [
+    { uuid: 'agent-1', target: { x: 4, z: 0 } },
+    { uuid: 'agent-2', target: { x: -4, z: 0 } },
+  ],
+  null,
+  2,
+)
+
+/** 一键把表单填成双智能体示例（场景 + agents 一起换） */
+const fillTeamExample = (): void => {
+  sceneJson.value = TEAM_SCENE_JSON
+  agentsJson.value = TEAM_AGENTS_JSON
+  store.listError = ''
+}
 
 /** 会话 id 只留前 8 位，完整 id 放 title */
 const shortId = (id: string): string => id.slice(0, 8)
@@ -203,16 +287,53 @@ const parseJsonField = (raw: string, label: string): Record<string, unknown> | n
   }
 }
 
+/** 解析 agents 数组；空文本 = 单智能体模式（返回空数组） */
+const parseAgentsField = (): GymAgentSpec[] | null => {
+  const trimmed = agentsJson.value.trim()
+  if (!trimmed) return []
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    store.listError = 'agents 不是合法 JSON'
+    return null
+  }
+  if (!Array.isArray(parsed)) {
+    store.listError = 'agents 要是一个数组'
+    return null
+  }
+  const specs: GymAgentSpec[] = []
+  for (const item of parsed) {
+    if (
+      !item ||
+      typeof item !== 'object' ||
+      typeof (item as { uuid?: unknown }).uuid !== 'string' ||
+      !(item as { target?: unknown }).target ||
+      typeof (item as { target: { x?: unknown } }).target.x !== 'number' ||
+      typeof (item as { target: { z?: unknown } }).target.z !== 'number'
+    ) {
+      store.listError = 'agents 每一项都要有 uuid 与 target {x, z}'
+      return null
+    }
+    const spec = item as { uuid: string; target: { x: number; z: number } }
+    specs.push({ uuid: spec.uuid, target: { x: spec.target.x, z: spec.target.z } })
+  }
+  return specs
+}
+
 const onCreate = async (): Promise<void> => {
   const scene = parseJsonField(sceneJson.value, '场景文档')
   if (!scene) return
   const params = parseJsonField(paramsJson.value, '物理参数')
   if (!params) return
+  const agents = parseAgentsField()
+  if (!agents) return
   await store.createSession({
     scene,
     ...(Object.keys(params).length ? { params } : {}),
     target: { x: targetX.value, z: targetZ.value },
     ...(Number.isFinite(maxSteps.value) ? { maxSteps: maxSteps.value } : {}),
+    ...(agents.length > 0 ? { agents } : {}),
   })
 }
 

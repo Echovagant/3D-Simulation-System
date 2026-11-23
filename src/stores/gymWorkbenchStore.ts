@@ -20,6 +20,7 @@ import {
   listGymSessions,
   resetGymSession,
   stepGymSession,
+  stepGymSessionBatch,
   type GymLogQuery,
   type GymObservation,
   type GymParamEcho,
@@ -74,6 +75,16 @@ export interface GymProposalRecord {
   executed: boolean
 }
 
+/** 多智能体协同的一轮：每个智能体的动作 + 共享资料引用 + 是否已执行 */
+export interface GymTeamRun {
+  proposals: Array<{
+    uuid: string
+    action: { forceX: number; forceZ: number }
+  }>
+  references: Array<{ id: number; title: string }>
+  executed: boolean
+}
+
 /**
  * 把异常翻译成一句能直接显示的话。
  * 「后端不在」与业务错误是两回事：前者要提示部署状态，后者原样透出。
@@ -121,6 +132,12 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   const decisionError = ref('')
   /** 最近一次 LLM 提议与其处置记录（执行面板「LLM 提议动作」区用） */
   const lastProposal = ref<GymProposalRecord | null>(null)
+  /** 多智能体协同：正在为每个受控物体请求提议并批量执行 */
+  const teamActing = ref(false)
+  /** 多智能体协同的失败原因（与单智能体 decisionError 分开） */
+  const teamDecisionError = ref('')
+  /** 最近一轮多智能体协同留档 */
+  const lastTeamRun = ref<GymTeamRun | null>(null)
   /** 正在创建会话 */
   const creating = ref(false)
   /** 审计轮询定时器句柄（组件卸载必须收掉） */
@@ -197,6 +214,8 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     lastActionSource.value = null
     lastProposal.value = null
     decisionError.value = ''
+    lastTeamRun.value = null
+    teamDecisionError.value = ''
     logs.value = []
     logsError.value = ''
   }
@@ -216,6 +235,8 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     lastActionSource.value = null
     lastProposal.value = null
     decisionError.value = ''
+    lastTeamRun.value = null
+    teamDecisionError.value = ''
     logs.value = []
     logsError.value = ''
     if (!sessionId) return
@@ -238,6 +259,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
         droppedParamKeys: created.droppedParamKeys,
         defaultedParamKeys: created.defaultedParamKeys,
         forceLimit: created.forceLimit,
+        forceLimits: created.forceLimits ?? {},
       }
       lastObservation.value = created.observation
       lastStep.value = {
@@ -253,6 +275,35 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
       return false
     } finally {
       creating.value = false
+    }
+  }
+
+  /** 成功一步的公共落位：结果、来源、观测、审计刷新（单/多智能体共用） */
+  const applyStepSuccess = (result: GymStepResponse, source: GymActionSource): void => {
+    lastStep.value = {
+      reward: result.reward,
+      terminated: result.terminated,
+      truncated: result.truncated,
+      info: result.info,
+    }
+    // 来源与「最近一步」绑定：失败的一步不改写它的口径
+    lastActionSource.value = source
+    lastObservation.value = result.observation
+    // 审计流不等下一次轮询：step 完立刻刷新，动作与日志的因果关系不脱节
+    void fetchLogs()
+  }
+
+  /** 失败一步的公共分流：422 越界力单独拆出修复指令，其余进 stepError */
+  const applyStepFailure = (error: unknown): void => {
+    if (
+      error instanceof ApiError &&
+      error.status === 422 &&
+      (error.code === 'gym_force_out_of_range' || error.code === 'gym_agent_invalid_mass')
+    ) {
+      repairHint.value = { code: error.code, message: error.message }
+      stepError.value = error.message
+    } else {
+      stepError.value = describeError(error, '后端不可达，这一步没送出去')
     }
   }
 
@@ -278,29 +329,10 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     repairHint.value = null
     try {
       const result = await stepGymSession(llmStore.ownerToken, sessionId, { forceX, forceZ })
-      lastStep.value = {
-        reward: result.reward,
-        terminated: result.terminated,
-        truncated: result.truncated,
-        info: result.info,
-      }
-      // 来源与「最近一步」绑定：失败的一步不改写它的口径
-      lastActionSource.value = source
-      lastObservation.value = result.observation
-      // 审计流不等下一次轮询：step 完立刻刷新，动作与日志的因果关系不脱节
-      void fetchLogs()
+      applyStepSuccess(result, source)
       return true
     } catch (error) {
-      if (
-        error instanceof ApiError &&
-        error.status === 422 &&
-        (error.code === 'gym_force_out_of_range' || error.code === 'gym_agent_invalid_mass')
-      ) {
-        repairHint.value = { code: error.code, message: error.message }
-        stepError.value = error.message
-      } else {
-        stepError.value = describeError(error, '后端不可达，这一步没送出去')
-      }
+      applyStepFailure(error)
       return false
     } finally {
       stepping.value = false
@@ -390,6 +422,105 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   }
 
   /**
+   * 多智能体协同：给每个未完成的受控物体各请求一次 LLM 提议，再批量推进同一步。
+   *
+   * 与单智能体的区别只在「动作空间」：每个物体按自己的目标与力上限出主意，
+   * 全部冲量在同一物理步内施加（后端 actions 批量接口），不是轮流各走一步。
+   * **全有或全无**：任一智能体的提议失败就不发动作，避免半队前进半步。
+   */
+  const autoDecideTeam = async (): Promise<boolean> => {
+    const sessionId = currentSessionId.value
+    if (!sessionId) {
+      teamDecisionError.value = '还没有选中会话——先在会话面板建一个或选一个'
+      return false
+    }
+    const observation = lastObservation.value
+    if (!observation) {
+      teamDecisionError.value = '当前会话还没有观测——先建会话或重置回合'
+      return false
+    }
+    const agents = observation.agents ?? []
+    if (agents.length < 2) {
+      teamDecisionError.value = '当前会话不是多智能体会话——用「双智能体示例」建一个'
+      return false
+    }
+    const active = agents.filter((agent) => !agent.done)
+    if (active.length === 0) {
+      teamDecisionError.value = '全部智能体已完成（进圈或坠落）——先重置回合'
+      return false
+    }
+
+    teamActing.value = true
+    teamDecisionError.value = ''
+    stepError.value = ''
+    repairHint.value = null
+    try {
+      const references = await fetchDecisionReferences()
+      const proposals: GymTeamRun['proposals'] = []
+      for (const agent of active) {
+        const perAgentObservation: GymObservation = {
+          ...observation,
+          agent: {
+            uuid: agent.uuid,
+            position: agent.position,
+            velocity: agent.velocity,
+          },
+          target: agent.target,
+          distance: agent.distance,
+        }
+        const snapshot = buildGymDecisionSnapshot({
+          observation: perAgentObservation,
+          lastStep: lastStep.value,
+          forceLimit:
+            currentParams.value?.forceLimits?.[agent.uuid] ??
+            currentParams.value?.forceLimit ??
+            GYM_DEFAULT_FORCE_LIMIT,
+        })
+        const proposal = await proposeForceAction(snapshot, {
+          invoke: llmStore.invoke,
+          provider: llmStore.provider.name,
+          model: llmStore.model,
+          baseUrl: llmStore.baseUrl,
+          references,
+        })
+        if (!proposal.ok) {
+          teamDecisionError.value = `${agent.uuid}：${proposal.error}`
+          return false
+        }
+        proposals.push({ uuid: agent.uuid, action: proposal.action })
+      }
+
+      lastTeamRun.value = {
+        proposals,
+        references: references.map(({ id, title }) => ({ id, title })),
+        executed: false,
+      }
+      stepping.value = true
+      try {
+        const result = await stepGymSessionBatch(
+          llmStore.ownerToken,
+          sessionId,
+          proposals.map((item) => ({
+            agentUuid: item.uuid,
+            forceX: item.action.forceX,
+            forceZ: item.action.forceZ,
+          })),
+        )
+        applyStepSuccess(result, 'llm')
+        if (lastTeamRun.value) lastTeamRun.value = { ...lastTeamRun.value, executed: true }
+        return true
+      } catch (error) {
+        applyStepFailure(error)
+        return false
+      } finally {
+        stepping.value = false
+      }
+    } finally {
+      teamActing.value = false
+    }
+  }
+
+  /**
    * 重建世界回到初始状态。成功后刷新参数回显与观测，清掉上一步的结果。
    */
   const resetCurrent = async (): Promise<boolean> => {
@@ -407,6 +538,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
         droppedParamKeys: result.droppedParamKeys,
         defaultedParamKeys: result.defaultedParamKeys,
         forceLimit: result.forceLimit,
+        forceLimits: result.forceLimits ?? {},
       }
       lastObservation.value = result.observation
       lastStep.value = {
@@ -567,6 +699,9 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     deciding,
     decisionError,
     lastProposal,
+    teamActing,
+    teamDecisionError,
+    lastTeamRun,
     memories,
     memoriesError,
     memoryActionError,
@@ -580,6 +715,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     selectSession,
     stepCurrent,
     autoDecide,
+    autoDecideTeam,
     resetCurrent,
     deleteCurrent,
     setLogRoundFilter,

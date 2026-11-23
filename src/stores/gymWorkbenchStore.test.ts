@@ -59,6 +59,35 @@ const stepOkBody = {
   info: { step: 1, maxSteps: 300, distance: 2.9 },
 }
 
+/** 双智能体观测：两个受控物体各自的目标与完成状态 */
+const teamObservation = {
+  ...observation,
+  agents: [
+    {
+      uuid: 'agent-1',
+      position: { x: 0, y: 1, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
+      target: { x: 3, z: 0 },
+      distance: 3,
+      done: false,
+    },
+    {
+      uuid: 'agent-2',
+      position: { x: 1, y: 1, z: 0 },
+      velocity: { x: 0, y: 0, z: 0 },
+      target: { x: -1, z: 0 },
+      distance: 2,
+      done: false,
+    },
+  ],
+}
+
+const teamCreatedBody = {
+  ...createdBody,
+  observation: teamObservation,
+  forceLimits: { 'agent-1': 30, 'agent-2': 30 },
+}
+
 const repairEnvelope = {
   error: {
     code: 'gym_force_out_of_range',
@@ -72,6 +101,7 @@ const logItem = (overrides: Partial<GymStepLogItem> = {}): GymStepLogItem => ({
   ts: '2026-11-23T10:00:00',
   ownerToken: 'owner',
   sessionId: 'sess-1',
+  agentUuid: 'agent-1',
   roundIndex: 0,
   stepIndex: 0,
   forceX: 5,
@@ -115,6 +145,10 @@ const installFetch = (): ReturnType<typeof vi.fn> => {
       sessionsNow = [
         { sessionId: 'sess-1', agentUuid: 'agent-1', step: 0, maxSteps: 300, terminated: false, truncated: false },
       ]
+      const body = init?.body ? (JSON.parse(String(init.body)) as { agents?: unknown[] }) : {}
+      if (Array.isArray(body.agents) && body.agents.length > 0) {
+        return jsonResponse(teamCreatedBody, 201)
+      }
       return jsonResponse(createdBody, 201)
     }
     if (path === '/api/gym/sessions' && method === 'GET') {
@@ -129,6 +163,16 @@ const installFetch = (): ReturnType<typeof vi.fn> => {
           },
           409,
         )
+      }
+      const body = init?.body ? (JSON.parse(String(init.body)) as { actions?: unknown[] }) : {}
+      if (Array.isArray(body.actions)) {
+        return jsonResponse({
+          observation: { ...teamObservation, step: 1 },
+          reward: 0.2,
+          terminated: false,
+          truncated: false,
+          info: { step: 1, maxSteps: 300, distance: 2.9, agents: [] },
+        })
       }
       return jsonResponse(stepOkBody)
     }
@@ -519,6 +563,89 @@ describe('gymWorkbenchStore', () => {
 
       expect(ok).toBe(false)
       expect(store.decisionError).toContain('还没有选中会话')
+      expect(invokeSpy).not.toHaveBeenCalled()
+    })
+
+    it('多智能体协同：每个智能体各请求一次，动作批量提交同一步', async () => {
+      const fetchMock = installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({
+        scene: { objects: [{}] },
+        agents: [
+          { uuid: 'agent-1', target: { x: 3, z: 0 } },
+          { uuid: 'agent-2', target: { x: -1, z: 0 } },
+        ],
+      })
+      const invoke = vi
+        .spyOn(useLlmStore(), 'invoke')
+        .mockResolvedValueOnce({ ok: true, content: '{"forceX": 5, "forceZ": 0}', error: '' })
+        .mockResolvedValueOnce({ ok: true, content: '{"forceX": -4, "forceZ": 0}', error: '' })
+
+      const ok = await store.autoDecideTeam()
+
+      expect(ok).toBe(true)
+      expect(invoke).toHaveBeenCalledTimes(2)
+      expect(store.lastTeamRun?.proposals).toEqual([
+        { uuid: 'agent-1', action: { forceX: 5, forceZ: 0 } },
+        { uuid: 'agent-2', action: { forceX: -4, forceZ: 0 } },
+      ])
+      expect(store.lastTeamRun?.executed).toBe(true)
+      expect(store.lastActionSource).toBe('llm')
+
+      const batchCall = fetchMock.mock.calls.find(
+        ([input, init]) =>
+          String(input).includes('/step') &&
+          init?.method === 'POST' &&
+          String(init.body).includes('actions'),
+      )
+      expect(batchCall).toBeDefined()
+      const body = JSON.parse(String(batchCall?.[1]?.body)) as {
+        actions: Array<{ agentUuid: string; forceX: number; forceZ: number }>
+      }
+      expect(body.actions).toEqual([
+        { agentUuid: 'agent-1', forceX: 5, forceZ: 0 },
+        { agentUuid: 'agent-2', forceX: -4, forceZ: 0 },
+      ])
+    })
+
+    it('协同里任一提议失败：整队不动，错误指明是哪个智能体', async () => {
+      const fetchMock = installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({
+        scene: { objects: [{}] },
+        agents: [
+          { uuid: 'agent-1', target: { x: 3, z: 0 } },
+          { uuid: 'agent-2', target: { x: -1, z: 0 } },
+        ],
+      })
+      vi.spyOn(useLlmStore(), 'invoke')
+        .mockResolvedValueOnce({ ok: true, content: '{"forceX": 5, "forceZ": 0}', error: '' })
+        .mockResolvedValueOnce({ ok: true, content: '我觉得往左推', error: '' })
+
+      const ok = await store.autoDecideTeam()
+
+      expect(ok).toBe(false)
+      expect(store.teamDecisionError).toContain('agent-2')
+      expect(store.lastTeamRun).toBeNull()
+      const batchCall = fetchMock.mock.calls.find(
+        ([input, init]) =>
+          String(input).includes('/step') &&
+          init?.method === 'POST' &&
+          String(init.body).includes('actions'),
+      )
+      expect(batchCall).toBeUndefined()
+    })
+
+    it('单智能体会话不能走协同：如实拒绝', async () => {
+      installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      const invokeSpy = stubInvokeOk('{"forceX": 1, "forceZ": 0}')
+
+      const ok = await store.autoDecideTeam()
+
+      expect(ok).toBe(false)
+      expect(store.teamDecisionError).toContain('不是多智能体会话')
       expect(invokeSpy).not.toHaveBeenCalled()
     })
   })

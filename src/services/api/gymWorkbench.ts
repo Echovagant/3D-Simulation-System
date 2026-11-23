@@ -9,8 +9,13 @@
  * 1. `/api/gym/sessions/{id}` **只有 DELETE，没有 GET 详情端点**——
  *    参数回显（生效参数 / 丢键 / 回落键 / 力上限）来自 create（201）
  *    与 reset（200）的响应体，调用方要自己留档。
- * 2. step 的动作不是任意 JSON，就是两个数：`{ forceX, forceZ }`（牛顿）。
+ * 2. step 的动作不是任意 JSON：单智能体是 `{ forceX, forceZ }`（牛顿），
+ *    多智能体是 `{ actions: [{ agentUuid, forceX, forceZ }] }`。
  *    越界力回 422 `gym_force_out_of_range`，message 即修复指令原文。
+ *
+ * 多智能体：create 可带 `agents: [{ uuid, target }]`；观测里多一个
+ * `agents` 数组（每个受控物体的位置/目标/距离/是否完成），单智能体字段保留为
+ * 第一个智能体的兼容视图。
  *
  * 所有端点都带 `X-Owner-Token`（软身份，与 LLM 托管同一套约定）：
  * 会话与审计日志按它分区，缺失即 401 `owner_token_required`。
@@ -39,6 +44,19 @@ export interface GymStepAction {
   forceZ: number
 }
 
+/** 多智能体的一步动作：每个受控物体一条 */
+export interface GymBatchAction {
+  agentUuid: string
+  forceX: number
+  forceZ: number
+}
+
+/** 多智能体会话里的一个受控物体：uuid + 它自己的目标点 */
+export interface GymAgentSpec {
+  uuid: string
+  target: GymTarget
+}
+
 /** 建会话的入参。scene 是完整的前端场景文档（与批量仿真同一口径） */
 export interface GymSessionCreateInput {
   scene: Record<string, unknown>
@@ -47,6 +65,8 @@ export interface GymSessionCreateInput {
   agentUuid?: string
   target?: GymTarget
   maxSteps?: number
+  /** 非空时进入多智能体模式（每个条目一个受控物体） */
+  agents?: GymAgentSpec[]
 }
 
 /** 实际生效的物理参数口径（create 与 reset 共用一份） */
@@ -66,6 +86,8 @@ export interface GymParamEcho {
   droppedParamKeys: string[]
   defaultedParamKeys: string[]
   forceLimit: number
+  /** 多智能体模式下每个 uuid 各自的力上限；单智能体模式为空对象 */
+  forceLimits?: Record<string, number>
 }
 
 /** 观测里的单个物体 */
@@ -75,9 +97,18 @@ export interface GymObservedObject {
   velocity: GymVec3
 }
 
-/** 当前观测：智能体、全场景物体、目标、步数与距离 */
+/** 多智能体观测：一个受控物体 + 它自己的目标与完成状态 */
+export interface GymAgentObservation extends GymObservedObject {
+  target: GymTarget
+  distance: number
+  done: boolean
+}
+
+/** 当前观测：智能体、全部受控智能体、全场景物体、目标、步数与距离 */
 export interface GymObservation {
   agent: GymObservedObject | null
+  /** 多智能体模式下的全部受控物体；单智能体模式也至少有一个（兼容视图） */
+  agents?: GymAgentObservation[]
   objects: GymObservedObject[]
   target: GymTarget
   step: number
@@ -115,6 +146,8 @@ export interface GymStepResponse {
 export interface GymSessionSummary {
   sessionId: string
   agentUuid: string
+  /** 多智能体会话的全部受控物体（单智能体时只有 primary 一个） */
+  agentUuids?: string[]
   step: number
   maxSteps: number
   terminated: boolean
@@ -127,6 +160,8 @@ export interface GymStepLogItem {
   ts: string
   ownerToken: string
   sessionId: string
+  /** 多智能体：这一行动作属于哪个受控物体；旧行为 null */
+  agentUuid: string | null
   roundIndex: number
   stepIndex: number
   forceX: number
@@ -175,6 +210,7 @@ export const createGymSession = (
       ...(input.agentUuid ? { agentUuid: input.agentUuid } : {}),
       ...(input.target ? { target: input.target } : {}),
       ...(input.maxSteps !== undefined ? { maxSteps: input.maxSteps } : {}),
+      ...(input.agents && input.agents.length > 0 ? { agents: input.agents } : {}),
     }),
   })
 
@@ -204,6 +240,18 @@ export const stepGymSession = (
     method: 'POST',
     headers: ownerHeaders(ownerToken),
     body: JSON.stringify({ forceX: action.forceX, forceZ: action.forceZ }),
+  })
+
+/** 多智能体批量推进：同一物理步内先施加全部冲量再推进 */
+export const stepGymSessionBatch = (
+  ownerToken: string,
+  sessionId: string,
+  actions: GymBatchAction[],
+): Promise<GymStepResponse> =>
+  apiRequest<GymStepResponse>(`${sessionPath(sessionId)}/step`, {
+    method: 'POST',
+    headers: ownerHeaders(ownerToken),
+    body: JSON.stringify({ actions }),
   })
 
 /** 取一个会话的动作审计日志（按 ts 升序，最新的在最后） */
