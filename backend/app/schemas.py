@@ -422,12 +422,30 @@ class GymTarget(ApiModel):
     z: float
 
 
+class GymAgentSpec(ApiModel):
+    """多智能体会话里的一个受控物体：uuid + 它自己的目标点。"""
+
+    uuid: str = Field(min_length=1, max_length=64)
+    target: GymTarget
+
+
+class GymAgentAction(ApiModel):
+    """批量动作里的一个智能体动作：施加在指定物体上的水平力（牛）。"""
+
+    agent_uuid: str = Field(min_length=1, max_length=64)
+    force_x: float = Field(allow_inf_nan=False)
+    force_z: float = Field(allow_inf_nan=False)
+
+
 class GymSessionCreateRequest(ApiModel):
     """建一个 Gym 会话。
 
     ``scene`` 是**完整的前端场景文档**（与批量仿真同一口径）；
     ``agentUuid`` 缺省时自动选第一个动态物体；
     ``target`` 缺省 (5, 0)。
+
+    ``agents`` 非空时进入**多智能体**模式：每个条目指定一个受控物体与目标，
+    单智能体的 ``agentUuid`` / ``target`` 退化为第一个智能体的兼容视图。
     """
 
     scene: dict[str, Any]
@@ -435,6 +453,7 @@ class GymSessionCreateRequest(ApiModel):
     agent_uuid: str | None = None
     target: GymTarget = Field(default_factory=lambda: GymTarget(x=5.0, z=0.0))
     max_steps: int = Field(default=300, ge=1, le=10000)
+    agents: list[GymAgentSpec] | None = None
 
 
 class GymSessionCreated(ApiModel):
@@ -451,6 +470,8 @@ class GymSessionCreated(ApiModel):
     defaulted_param_keys: list[str]
     # 力上限（N）= 加速度上限 × 运行时质量，客户端动作空间的唯一真相源
     force_limit: float
+    # 多智能体模式下每个 uuid 各自的力上限（单智能体模式为空）
+    force_limits: dict[str, float] = Field(default_factory=dict)
 
 
 class GymSessionSummary(ApiModel):
@@ -458,6 +479,8 @@ class GymSessionSummary(ApiModel):
 
     session_id: str
     agent_uuid: str
+    # 多智能体会话的全部受控物体（单智能体时只有 primary 一个）
+    agent_uuids: list[str] = Field(default_factory=list)
     step: int
     max_steps: int
     terminated: bool
@@ -476,17 +499,21 @@ class GymResetResponse(ApiModel):
     dropped_param_keys: list[str]
     defaulted_param_keys: list[str]
     force_limit: float
+    force_limits: dict[str, float] = Field(default_factory=dict)
 
 
 class GymStepRequest(ApiModel):
     """一步的动作：施加在智能体上的水平力（牛）。
 
+    单智能体模式用 ``forceX`` / ``forceZ``；多智能体模式用 ``actions``
+    （每个受控物体一条，同一物理步内全部施加后再推进）。
     服务端按 ``冲量 = 力 × dt`` 换算，与前端同一口径。
     非有限值在边界就拒：SQLite 会把 NaN 存成 NULL，撞审计表 NOT NULL。
     """
 
-    force_x: float = Field(allow_inf_nan=False)
-    force_z: float = Field(allow_inf_nan=False)
+    force_x: float | None = Field(default=None, allow_inf_nan=False)
+    force_z: float | None = Field(default=None, allow_inf_nan=False)
+    actions: list[GymAgentAction] | None = None
 
 
 class GymStepResponse(ApiModel):
@@ -500,12 +527,13 @@ class GymStepResponse(ApiModel):
 
 
 class GymStepLogItem(ApiModel):
-    """一步动作的审计留档。"""
+    """一步动作的审计留档。``agentUuid`` 为 None 表示旧行（多智能体上线前）。"""
 
     id: int
     ts: datetime
     owner_token: str
     session_id: str
+    agent_uuid: str | None = None
     round_index: int
     step_index: int
     force_x: float

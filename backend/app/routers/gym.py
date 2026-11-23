@@ -57,6 +57,11 @@ def create_gym_session(
         target_x=payload.target.x,
         target_z=payload.target.z,
         max_steps=payload.max_steps,
+        agents=(
+            [(item.uuid, item.target.x, item.target.z) for item in payload.agents]
+            if payload.agents
+            else None
+        ),
     )
     agent = session.agent
     if agent is None or agent.body is None:
@@ -108,7 +113,18 @@ async def step_gym_session(
     owner_token: str = Depends(require_owner_token),
     db: Session = Depends(get_session),
 ) -> GymStepResponse:
-    result = await gym_service.step(db, session_id, payload.force_x, payload.force_z, owner_token)
+    result = await gym_service.step(
+        db,
+        session_id,
+        payload.force_x,
+        payload.force_z,
+        owner_token,
+        actions=(
+            [(item.agent_uuid, item.force_x, item.force_z) for item in payload.actions]
+            if payload.actions is not None
+            else None
+        ),
+    )
     return GymStepResponse(**result)
 
 

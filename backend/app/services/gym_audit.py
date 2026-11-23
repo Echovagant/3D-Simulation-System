@@ -33,11 +33,13 @@ def record_step(
     applied: bool,
     latency_ms: int,
     error_code: str | None = None,
+    agent_uuid: str | None = None,
 ) -> GymStepLog:
     """写一行审计并立即 commit。失败抛 503，调用方不得推进物理。"""
     row = GymStepLog(
         owner_token=owner_token,
         session_id=session_id,
+        agent_uuid=agent_uuid,
         round_index=round_index,
         step_index=step_index,
         force_x=force_x,

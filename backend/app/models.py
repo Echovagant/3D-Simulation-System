@@ -402,6 +402,8 @@ class GymStepLog(Base):
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
     owner_token: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     session_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    # 多智能体：这一行动作属于哪个受控物体；旧行（多智能体上线前）为 NULL
+    agent_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     round_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     step_index: Mapped[int] = mapped_column(Integer, nullable=False)
     force_x: Mapped[float] = mapped_column(Float, nullable=False)
