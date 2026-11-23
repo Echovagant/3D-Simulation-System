@@ -214,6 +214,21 @@ interface SensorData {
   timestamp: number
 }
 
+/** 决策来源：规则式控制器，或外部大模型 */
+export type AiDecisionSource = 'rule' | 'llm'
+
+/** 决策那一刻的感知摘要——时间线上回答「它当时看到了什么」 */
+export interface AiDecisionPerception {
+  /** 感知半径（米，已乘难度系数） */
+  awareness: number
+  /** 最近障碍物距离（米）；视野内没有障碍物时是 999 */
+  nearestObstacleDistance: number
+  /** 视野内的障碍物数量 */
+  obstaclesInRange: number
+  /** 做决策时是否正与障碍物接触 */
+  blocked: boolean
+}
+
 // AI 代理单步决策
 export interface AiDecision {
   agentId: string
@@ -221,6 +236,14 @@ export interface AiDecision {
   parameters: Record<string, unknown> // 将 any 改为 unknown
   confidence: number
   timestamp: number
+  /** 决策发生时的仿真时间（秒）；旧数据没有这个字段 */
+  simTime?: number
+  /** 决策来源；旧数据没有这个字段，时间线按规则式展示 */
+  source?: AiDecisionSource
+  /** 决策时的感知摘要；旧数据没有这个字段 */
+  perception?: AiDecisionPerception
+  /** 智能体名字（决策时的快照）——智能体被删除后时间线仍能显示是谁做的决定 */
+  agentName?: string
 }
 
 // AI 相关类型（模块内导出，无冲突）

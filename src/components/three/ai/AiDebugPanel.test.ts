@@ -262,4 +262,48 @@ describe('AiDebugPanel —— 日志面板', () => {
     URL.createObjectURL = originalCreate
     URL.revokeObjectURL = originalRevoke
   })
+
+  it('日志 / 决策时间线可切换，日志区默认可见且原有内容不变', async () => {
+    const store = useAiStore()
+    const agent = store.createAgent('导航机器人', 'basic')
+    store.addAgentLog(agent.id, '出发', 'info')
+
+    const wrapper = mount(AiDebugPanel)
+    // 第一个 ai-log-wrap 是日志区；时间线也会带这个布局类
+    const logWrap = wrapper.findAll('.ai-log-wrap')[0]
+    expect(logWrap.attributes('style') ?? '').not.toContain('display: none')
+
+    await wrapper
+      .findAll('button')
+      .find((item) => item.text().trim() === '决策时间线')
+      ?.trigger('click')
+
+    // 时间线空状态可读；日志区只是隐藏，DOM 与滚动状态都还在
+    expect(wrapper.find('.dt-empty').exists()).toBe(true)
+    expect(logWrap.attributes('style')).toContain('display: none')
+
+    await wrapper
+      .findAll('button')
+      .find((item) => item.text().trim() === '日志')
+      ?.trigger('click')
+
+    expect(logWrap.attributes('style') ?? '').not.toContain('display: none')
+    expect(wrapper.text()).toContain('出发')
+  })
+
+  it('感知可视化开关默认关闭，点击后给出开启态反馈', async () => {
+    const wrapper = mount(AiDebugPanel)
+    const toggle = wrapper.find('.perception-toggle')
+
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+    expect(wrapper.text()).toContain('已关闭')
+
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-pressed')).toBe('true')
+    expect(wrapper.text()).toContain('已开启')
+
+    // 收尾：还原成默认关闭，避免影响同文件里的其它用例
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-pressed')).toBe('false')
+  })
 })

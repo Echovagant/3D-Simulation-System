@@ -465,6 +465,93 @@ describe('useAI —— 智能体跑在 Rapier 真物理上', () => {
   })
 })
 
+describe('感知可视化（只属于渲染层的叠加物）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    const three = useThree()
+    three.disposeThree()
+    three.initThree()
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  const perceptionGroupOfScene = (): THREE.Object3D | undefined => {
+    const scene = useThree().scene.value
+    return scene ? (scene.getObjectByName('ai-perception-overlay') ?? undefined) : undefined
+  }
+
+  it('默认关闭；打开后每个智能体一套叠加物，关闭后场景里不留叠加物', async () => {
+    const { api, store } = await setupArena(0)
+    const agent = store.agents[0]
+    const scene = useThree().scene.value!
+
+    expect(api.perceptionVisible.value).toBe(false)
+    expect(perceptionGroupOfScene()).toBeUndefined()
+
+    api.setPerceptionVisible(true)
+    expect(api.perceptionVisible.value).toBe(true)
+    const group = perceptionGroupOfScene()
+    expect(group).toBeTruthy()
+
+    // 半径环 / 目标连线 / 障碍连线 / 最近点标记 / 朝向短线，各一套
+    expect(scene.getObjectByName(`ai-perception-ring-${agent.id}`)).toBeTruthy()
+    expect(scene.getObjectByName(`ai-perception-goal-${agent.id}`)).toBeTruthy()
+    expect(scene.getObjectByName(`ai-perception-obstacle-${agent.id}`)).toBeTruthy()
+    expect(scene.getObjectByName(`ai-perception-marker-${agent.id}`)).toBeTruthy()
+    expect(scene.getObjectByName(`ai-perception-heading-${agent.id}`)).toBeTruthy()
+
+    // 半径环的半径就是智能体当前的感知半径（中等难度 ×1）
+    const ring = scene.getObjectByName(`ai-perception-ring-${agent.id}`) as THREE.Object3D
+    const awareness = Number(agent.parameters.awarenessRange)
+    expect(ring.scale.x).toBeCloseTo(awareness, 5)
+    expect(ring.scale.z).toBeCloseTo(awareness, 5)
+
+    api.setPerceptionVisible(false)
+    expect(perceptionGroupOfScene()).toBeUndefined()
+    expect(scene.getObjectByName(`ai-perception-ring-${agent.id}`)).toBeUndefined()
+  })
+
+  it('叠加物每帧跟随智能体移动', async () => {
+    const { api, store } = await setupArena(0)
+    const agent = store.agents[0]
+    agent.status = 'running'
+    const mesh = findAgentMesh(agent.id)!
+    api.setPerceptionVisible(true)
+    const scene = useThree().scene.value!
+
+    api.executeAgentDecision(
+      makeDecision(agent.id, 'move', { direction: [1, 0, 0], speed: 5 }),
+    )
+    advance(api, 0.5)
+
+    const ring = scene.getObjectByName(`ai-perception-ring-${agent.id}`) as THREE.Object3D
+    expect(ring.position.x).toBeCloseTo(mesh.position.x, 5)
+    expect(ring.position.z).toBeCloseTo(mesh.position.z, 5)
+  })
+
+  it('叠加物不带物理描述，也不会被导出的场景文档带走', async () => {
+    const { api } = await setupArena(0.5)
+    api.setPerceptionVisible(true)
+    const group = perceptionGroupOfScene()
+    expect(group).toBeTruthy()
+
+    let hasPhysicsData = false
+    group!.traverse((object) => {
+      if (object.userData.physics) hasPhysicsData = true
+    })
+    expect(hasPhysicsData).toBe(false)
+
+    const document = api.exportArenaSceneDocument()
+    expect(document.objects.length).toBeGreaterThan(0)
+    expect(document.objects.some((object) => object.uuid.includes('perception'))).toBe(false)
+  })
+})
+
 describe('useAI —— LLM 拍数计数（面板上「LLM 到底有没有在起作用」的那几个数字）', () => {
   beforeEach(() => {
     setActivePinia(createPinia())

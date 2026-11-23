@@ -68,6 +68,25 @@ const MAX_OBSTACLES = 12
 /** 视野里没有障碍物时的距离读数 */
 const NO_OBSTACLE_DISTANCE = 999
 
+/** 感知叠加层的根节点名字（测试与排查时按名字定位） */
+const PERCEPTION_GROUP_NAME = 'ai-perception-overlay'
+/** 感知半径环的线段数 */
+const PERCEPTION_RING_SEGMENTS = 48
+/** 地面上的叠加线高度（略高于地面顶面 y = 0，避免 z-fighting） */
+const PERCEPTION_GROUND_Y = 0.03
+/** 目标连线颜色（绿） */
+const PERCEPTION_GOAL_COLOR = 0x22c55e
+/** 障碍连线的常规颜色（琥珀） */
+const PERCEPTION_OBSTACLE_COLOR = 0xf59e0b
+/** 接触障碍物时障碍连线的颜色（红） */
+const PERCEPTION_BLOCKED_COLOR = 0xef4444
+/** 朝向短线颜色 */
+const PERCEPTION_HEADING_COLOR = 0xe2e8f0
+/** 朝向短线长度（米） */
+const PERCEPTION_HEADING_LENGTH = 1.4
+/** 最近障碍点标记的半径（米） */
+const PERCEPTION_MARKER_RADIUS = 0.16
+
 /** 智能体配色（按类型区分） */
 const AGENT_COLORS: Record<string, number> = {
   basic: 0xffd700,
@@ -146,6 +165,25 @@ interface ObstacleSense {
 }
 
 /**
+ * 单个智能体的感知叠加物（只属于渲染层）。
+ *
+ * ⚠️ 这些对象不挂到智能体网格上、不带 `userData.physics`：
+ * 它们不参与物理、不算进感知，也不会被场景导出带走。
+ */
+interface PerceptionOverlay {
+  /** 地面上的感知半径环（半径由缩放表达） */
+  ring: THREE.LineLoop
+  /** 智能体 → 目标点 */
+  goalLine: THREE.Line
+  /** 智能体 → 最近障碍点 */
+  obstacleLine: THREE.Line
+  /** 最近障碍点上的小标记 */
+  marker: THREE.Mesh
+  /** 朝向短线 */
+  headingLine: THREE.Line
+}
+
+/**
  * agentId → 场景中的智能体网格。
  *
  * ⚠️ 这个映射**刻意不放进 aiStore**：aiStore 的状态结构是与页面、文档共用的契约，
@@ -168,6 +206,21 @@ const llmInFlight = new Set<string>()
 const llmFallbacks = new Set<string>()
 /** 上一次发起 LLM 请求的时间戳（毫秒） */
 let lastLlmRequestAt = 0
+
+/**
+ * 感知可视化开关。
+ *
+ * ⚠️ 放在模块作用域：调试面板与页面各自会调一次 useAI()，
+ * 开关必须两边共用同一份，否则面板打开了、渲染那边却不知道。
+ */
+const perceptionVisible = ref(false)
+/** 感知叠加层根节点（只属于渲染层；关闭时置空） */
+let perceptionGroup: THREE.Group | null = null
+/** agentId → 该智能体的感知叠加物 */
+const perceptionOverlays = new Map<string, PerceptionOverlay>()
+/** 更新连线时复用的临时向量，避免每帧为每个智能体新建对象 */
+const perceptionFrom = new THREE.Vector3()
+const perceptionTo = new THREE.Vector3()
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max)
@@ -298,6 +351,231 @@ export function useAI() {
       if (touching) return true
     }
     return false
+  }
+
+  // ===================== 感知可视化（只属于渲染层） =====================
+
+  /** 两顶点的线段几何体——之后每帧原地改顶点，不重建几何体 */
+  const createSegmentGeometry = (): THREE.BufferGeometry => {
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3))
+    return geometry
+  }
+
+  /** 半径为 1 的圆周顶点——实际半径用 `scale` 表达 */
+  const createCircleGeometry = (segments = PERCEPTION_RING_SEGMENTS): THREE.BufferGeometry => {
+    const points = new Float32Array(segments * 3)
+    for (let i = 0; i < segments; i += 1) {
+      const angle = (i / segments) * Math.PI * 2
+      points[i * 3] = Math.cos(angle)
+      points[i * 3 + 1] = 0
+      points[i * 3 + 2] = Math.sin(angle)
+    }
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(points, 3))
+    return geometry
+  }
+
+  const createPerceptionOverlay = (agentId: string, color: number): PerceptionOverlay => {
+    const ring = new THREE.LineLoop(
+      createCircleGeometry(),
+      new THREE.LineBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+      }),
+    )
+    ring.name = `ai-perception-ring-${agentId}`
+    ring.position.y = PERCEPTION_GROUND_Y
+    ring.frustumCulled = false
+
+    const goalLine = new THREE.Line(
+      createSegmentGeometry(),
+      new THREE.LineBasicMaterial({
+        color: PERCEPTION_GOAL_COLOR,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+      }),
+    )
+    goalLine.name = `ai-perception-goal-${agentId}`
+    goalLine.frustumCulled = false
+
+    const obstacleLine = new THREE.Line(
+      createSegmentGeometry(),
+      new THREE.LineBasicMaterial({
+        color: PERCEPTION_OBSTACLE_COLOR,
+        transparent: true,
+        opacity: 0.9,
+        depthWrite: false,
+      }),
+    )
+    obstacleLine.name = `ai-perception-obstacle-${agentId}`
+    obstacleLine.frustumCulled = false
+
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(PERCEPTION_MARKER_RADIUS, 12, 8),
+      new THREE.MeshBasicMaterial({ color: PERCEPTION_OBSTACLE_COLOR, depthWrite: false }),
+    )
+    marker.name = `ai-perception-marker-${agentId}`
+    marker.frustumCulled = false
+
+    const headingLine = new THREE.Line(
+      createSegmentGeometry(),
+      new THREE.LineBasicMaterial({
+        color: PERCEPTION_HEADING_COLOR,
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false,
+      }),
+    )
+    headingLine.name = `ai-perception-heading-${agentId}`
+    headingLine.frustumCulled = false
+
+    return { ring, goalLine, obstacleLine, marker, headingLine }
+  }
+
+  /** 原地改写线段两端点（不新建几何体，也不重算包围球——它们不参与视锥剔除） */
+  const setPerceptionSegment = (
+    line: THREE.Line,
+    from: THREE.Vector3,
+    to: THREE.Vector3,
+  ): void => {
+    const attribute = line.geometry.getAttribute('position') as THREE.BufferAttribute
+    attribute.setXYZ(0, from.x, from.y, from.z)
+    attribute.setXYZ(1, to.x, to.y, to.z)
+    attribute.needsUpdate = true
+  }
+
+  const disposePerceptionOverlay = (overlay: PerceptionOverlay): void => {
+    const lines: THREE.Line[] = [
+      overlay.ring,
+      overlay.goalLine,
+      overlay.obstacleLine,
+      overlay.headingLine,
+    ]
+    for (const line of lines) {
+      line.geometry.dispose()
+      ;(line.material as THREE.Material).dispose()
+    }
+    overlay.marker.geometry.dispose()
+    ;(overlay.marker.material as THREE.Material).dispose()
+  }
+
+  /** 摘掉全部感知叠加物并释放几何体/材质 */
+  const disposePerceptionOverlays = (): void => {
+    for (const overlay of perceptionOverlays.values()) disposePerceptionOverlay(overlay)
+    perceptionOverlays.clear()
+    if (perceptionGroup) {
+      perceptionGroup.parent?.remove(perceptionGroup)
+      perceptionGroup = null
+    }
+  }
+
+  /**
+   * 让叠加物跟上智能体的当前位置。
+   *
+   * 每帧由 `updateAgents` 调用；开关关闭、场景不存在时只做清理。
+   * 这里读的是**与感知/决策同一套**数据（`readAgentParams` + `senseObstacles`），
+   * 所以画出来的环就是智能体真正在用的感知半径。
+   */
+  const syncPerceptionOverlays = (): void => {
+    const currentScene = three.scene.value
+    if (!perceptionVisible.value || !currentScene) {
+      disposePerceptionOverlays()
+      return
+    }
+
+    if (!perceptionGroup) {
+      perceptionGroup = new THREE.Group()
+      perceptionGroup.name = PERCEPTION_GROUP_NAME
+      // 明确标记：这不是场景内容，导出/物理都不该带上它
+      perceptionGroup.userData.perceptionOverlay = true
+    }
+    const group = perceptionGroup
+    if (group.parent !== currentScene) currentScene.add(group)
+
+    // 智能体被删除 → 对应的叠加物一起摘掉
+    for (const [agentId, overlay] of perceptionOverlays) {
+      if (agentRuntimes.has(agentId)) continue
+      group.remove(
+        overlay.ring,
+        overlay.goalLine,
+        overlay.obstacleLine,
+        overlay.marker,
+        overlay.headingLine,
+      )
+      disposePerceptionOverlay(overlay)
+      perceptionOverlays.delete(agentId)
+    }
+
+    for (const [agentId, runtime] of agentRuntimes) {
+      const object = agentObjects.get(agentId)
+      const agent = aiStore.agents.find((item) => item.id === agentId)
+      if (!object || !agent) continue
+
+      let overlay = perceptionOverlays.get(agentId)
+      if (!overlay) {
+        overlay = createPerceptionOverlay(
+          agentId,
+          AGENT_COLORS[agent.type] ?? AGENT_COLORS.basic,
+        )
+        group.add(
+          overlay.ring,
+          overlay.goalLine,
+          overlay.obstacleLine,
+          overlay.marker,
+          overlay.headingLine,
+        )
+        perceptionOverlays.set(agentId, overlay)
+      }
+
+      const { awareness } = readAgentParams(agent)
+      const position = object.position
+
+      // a) 地面感知半径环
+      overlay.ring.position.set(position.x, PERCEPTION_GROUND_Y, position.z)
+      overlay.ring.scale.set(Math.max(awareness, 0.001), 1, Math.max(awareness, 0.001))
+      overlay.ring.visible = awareness > 0.1
+
+      // b) 智能体 → 目标点（绿）
+      perceptionFrom.set(position.x, PERCEPTION_GROUND_Y, position.z)
+      perceptionTo.set(runtime.goal.x, PERCEPTION_GROUND_Y, runtime.goal.z)
+      setPerceptionSegment(overlay.goalLine, perceptionFrom, perceptionTo)
+
+      // c) 智能体 → 最近障碍点（琥珀；接触中为红），并在最近点放标记
+      const sense = senseObstacles(position, awareness)
+      const hasNearest = sense.nearestPoint !== null
+      const obstacleColor = runtime.blocked ? PERCEPTION_BLOCKED_COLOR : PERCEPTION_OBSTACLE_COLOR
+      ;(overlay.obstacleLine.material as THREE.LineBasicMaterial).color.setHex(obstacleColor)
+      ;(overlay.marker.material as THREE.MeshBasicMaterial).color.setHex(obstacleColor)
+      overlay.obstacleLine.visible = hasNearest
+      overlay.marker.visible = hasNearest
+      if (sense.nearestPoint) {
+        perceptionTo.set(
+          sense.nearestPoint.x,
+          Math.max(sense.nearestPoint.y, PERCEPTION_GROUND_Y),
+          sense.nearestPoint.z,
+        )
+        setPerceptionSegment(overlay.obstacleLine, perceptionFrom, perceptionTo)
+        overlay.marker.position.copy(perceptionTo)
+      }
+
+      // d) 朝向短线
+      perceptionTo.set(
+        position.x + Math.sin(runtime.heading) * PERCEPTION_HEADING_LENGTH,
+        PERCEPTION_GROUND_Y,
+        position.z + Math.cos(runtime.heading) * PERCEPTION_HEADING_LENGTH,
+      )
+      setPerceptionSegment(overlay.headingLine, perceptionFrom, perceptionTo)
+    }
+  }
+
+  /** 打开/关闭感知可视化；关掉时立刻释放叠加物，不留几何体/材质 */
+  const setPerceptionVisible = (visible: boolean): void => {
+    perceptionVisible.value = Boolean(visible)
+    syncPerceptionOverlays()
   }
 
   /** 构建智能体的场景网格 */
@@ -503,6 +781,8 @@ export function useAI() {
 
     rebuildObstacles()
     refreshBindings()
+    // 智能体增删后，感知叠加层也要跟着对齐（关闭状态时这里是空操作）
+    syncPerceptionOverlays()
   }
 
   /**
@@ -625,6 +905,9 @@ export function useAI() {
       physics.updatePhysics(fixedTimeStep)
       syncAfterStep()
     })
+
+    // 叠加物每帧跟随智能体，与物理步长无关（暂停时也保持在当前位置）
+    syncPerceptionOverlays()
   }
 
   /** 读取智能体的真实状态——坐标来自场景对象，感知来自物理引擎 */
@@ -739,7 +1022,23 @@ export function useAI() {
     aiStore.addAgentLog(agentId, `决定: ${action} ${formatLogParameters(parameters)}`, 'info')
     // 记下这次决策的时刻——反应时间靠它算出下一次该什么时候重新决策
     runtime.lastDecisionAt = Date.now()
-    return { agentId, action, parameters, confidence, timestamp: runtime.lastDecisionAt }
+    return {
+      agentId,
+      action,
+      parameters,
+      confidence,
+      timestamp: runtime.lastDecisionAt,
+      // 时间线要展示的元数据：仿真时间、来源、当时的感知摘要
+      simTime: aiStore.simulationTime,
+      source: 'rule',
+      agentName: agent.name,
+      perception: {
+        awareness,
+        nearestObstacleDistance: sense.distance,
+        obstaclesInRange: sense.count,
+        blocked,
+      },
+    }
   }
 
   /**
@@ -853,9 +1152,34 @@ export function useAI() {
     }
   }
 
-  /** LLM 给的动作 → 仓库统一的决策结构 */
-  const toAiDecision = (agentId: string, action: LlmAction): AiDecision => {
-    const base = { agentId, confidence: 0.8, timestamp: Date.now() }
+  /**
+   * LLM 给的动作 → 仓库统一的决策结构。
+   *
+   * `snapshot` 是发出请求时抓到的那份感知快照，随决策一起带进时间线，
+   * 这样「模型当时看到了什么」与「模型据此做了什么」能对上。
+   */
+  const toAiDecision = (
+    agentId: string,
+    action: LlmAction,
+    snapshot?: AgentSnapshot,
+  ): AiDecision => {
+    const perception: AiDecision['perception'] = snapshot
+      ? {
+          awareness: snapshot.awarenessRange,
+          nearestObstacleDistance: snapshot.nearestObstacleDistance,
+          obstaclesInRange: snapshot.obstaclesInRange,
+          blocked: snapshot.collided,
+        }
+      : undefined
+    const base = {
+      agentId,
+      confidence: 0.8,
+      timestamp: Date.now(),
+      simTime: aiStore.simulationTime,
+      source: 'llm' as const,
+      agentName: aiStore.agents.find((item) => item.id === agentId)?.name,
+      perception,
+    }
     if (action.action === 'move' && action.direction) {
       // 难度同样作用在模型给的速度上（但不许超过系统的速度上限）
       const speed = Math.min((action.speed ?? 5) * difficultyFactors().speed, LLM_MAX_SPEED)
@@ -938,7 +1262,8 @@ export function useAI() {
           return
         }
         llm.clearDegraded()
-        llmDecisions.set(agentId, toAiDecision(agentId, action))
+        // 快照是发请求时抓的，与这次动作一起进时间线
+        llmDecisions.set(agentId, toAiDecision(agentId, action, snapshot))
       })
       .catch(() => {
         llmInFlight.delete(agentId)
@@ -1059,6 +1384,11 @@ export function useAI() {
       runtime.lastAction = undefined
       runtime.lastParameters = undefined
     }
+
+    // 智能体回到出生点后，先释放旧的感知叠加物再按新位置重建——
+    // 重置是新一轮实验，不留上一轮的几何体/材质引用
+    disposePerceptionOverlays()
+    syncPerceptionOverlays()
   }
 
   /** 清场：停掉决策循环，把智能体、障碍物、围墙从场景与物理世界里摘干净 */
@@ -1088,6 +1418,9 @@ export function useAI() {
     llmInFlight.clear()
     llmFallbacks.clear()
     lastLlmRequestAt = 0
+    // 感知叠加层只属于渲染层：卸载时关掉并释放，开关回到默认关闭
+    perceptionVisible.value = false
+    disposePerceptionOverlays()
     accumulator.reset()
   }
 
@@ -1220,6 +1553,10 @@ export function useAI() {
 
   return {
     decisionQueue,
+    /** 感知可视化开关（模块级共享）：环 / 目标连线 / 障碍连线 / 朝向 */
+    perceptionVisible,
+    /** 打开或关闭感知可视化 */
+    setPerceptionVisible,
     generateAgentDecision,
     executeAgentDecision,
     getAgentCurrentState,

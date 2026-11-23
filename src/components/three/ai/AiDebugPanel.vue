@@ -26,6 +26,19 @@
       </button>
     </div>
 
+    <!-- 感知可视化开关：3D 视口里画出感知环、目标连线与最近障碍连线 -->
+    <button
+      @click="togglePerception"
+      class="perception-toggle"
+      :class="{ 'perception-toggle-on': perceptionVisible }"
+      :aria-pressed="perceptionVisible"
+      title="在 3D 视口里显示每个智能体的感知半径、目标连线与最近障碍连线"
+    >
+      <i class="fa fa-eye ai-mr-1"></i>
+      感知可视化
+      <span class="perception-toggle-state">{{ perceptionVisible ? '已开启' : '已关闭' }}</span>
+    </button>
+
     <!-- 仿真信息 -->
     <div class="ai-fs-xs ai-t ai-mb-3 ai-grid ai-grid-2 ai-gap-2">
       <div>
@@ -61,8 +74,35 @@
     <!-- 物理模式：如实说明碰撞由 Rapier 刚体引擎求解 -->
     <p class="physics-mode">物理模式：Rapier 刚体物理（质量 · 摩擦 · 弹性 · 固定步长 1/60 秒）</p>
 
+    <!-- 日志 / 决策时间线切换：日志区的筛选、虚拟滚动与导出行为保持不变 -->
+    <div class="panel-tabs" role="tablist" aria-label="调试视图切换">
+      <button
+        type="button"
+        role="tab"
+        class="panel-tab"
+        :class="{ 'panel-tab-active': panelTab === 'logs' }"
+        :aria-selected="panelTab === 'logs'"
+        @click="panelTab = 'logs'"
+      >
+        日志
+      </button>
+      <button
+        type="button"
+        role="tab"
+        class="panel-tab"
+        :class="{ 'panel-tab-active': panelTab === 'timeline' }"
+        :aria-selected="panelTab === 'timeline'"
+        @click="panelTab = 'timeline'"
+      >
+        决策时间线
+      </button>
+    </div>
+
     <!-- 日志显示 -->
-    <div class="ai-flex-1 ai-clip ai-flex ai-flex-col ai-log-wrap">
+    <div
+      v-show="panelTab === 'logs'"
+      class="ai-flex-1 ai-clip ai-flex ai-flex-col ai-log-wrap"
+    >
       <div class="ai-fs-xs ai-t-muted ai-mb-1 ai-flex ai-justify-between ai-items-center ai-gap-2">
         <span>代理日志</span>
         <div class="ai-flex ai-items-center ai-gap-2">
@@ -147,6 +187,13 @@
         </div>
       </div>
     </div>
+
+    <!-- 决策时间线：展示最近 100 条决策（时间、智能体、来源、动作、感知摘要） -->
+    <DecisionTimelinePanel
+      v-show="panelTab === 'timeline'"
+      :decisions="decisionQueue"
+      class="ai-flex-1 ai-clip ai-flex ai-flex-col ai-log-wrap"
+    />
   </div>
 </template>
 
@@ -157,6 +204,7 @@ import { useAI } from '@/composables/useAI'
 import { serializeAgentLogs, exportFileStamp } from '@/utils/agentLogExport'
 import { computeAgentMetrics, formatMetricsSummary, type AgentMetrics } from '@/utils/agentMetrics'
 import { buildAgentRunRecord } from '@/utils/agentRunRecord'
+import DecisionTimelinePanel from './DecisionTimelinePanel.vue'
 
 const aiStore = useAiStore()
 const ai = useAI()
@@ -199,6 +247,19 @@ const simulationTime = computed(() => aiStore.simulationTime)
 const environmentSettings = computed(() => aiStore.environmentSettings)
 const activeAgentsCount = computed(() => aiStore.activeAgents.length)
 const logFilter = ref('all')
+
+/** 当前调试视图：日志 / 决策时间线（默认日志，现有日志行为不变） */
+const panelTab = ref<'logs' | 'timeline'>('logs')
+
+/** 感知可视化开关——与渲染层共用同一个模块级状态 */
+const perceptionVisible = ai.perceptionVisible
+
+/** 决策队列（最近决策）——时间线面板直接消费 */
+const decisionQueue = ai.decisionQueue
+
+const togglePerception = (): void => {
+  ai.setPerceptionVisible(!perceptionVisible.value)
+}
 
 /**
  * 全部日志——store 里就是**一张按时间排好的全局表**，代理是谁记在条目上。
@@ -471,6 +532,72 @@ const formatDifficulty = (difficulty: string) => {
   line-height: 1.5;
   color: var(--text-2);
   opacity: 0.85;
+}
+
+/* 感知可视化开关：关闭时是安静的次级按钮，开启时点亮琥珀 */
+.perception-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 0.75rem;
+  padding: 0.375rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--text-2);
+  background: var(--ink-700);
+  border: 1px solid var(--bg-inset);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.perception-toggle:hover {
+  background: var(--bg-hover);
+}
+
+/* 开启态：边框与文字走强调色，和「已开启」文案一起给出明确反馈 */
+.perception-toggle-on {
+  color: var(--accent-2);
+  border-color: rgba(255, 161, 23, 0.55);
+  background: rgba(255, 161, 23, 0.12);
+}
+
+.perception-toggle-state {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: inherit;
+  opacity: 0.8;
+}
+
+/* 日志 / 决策时间线切换：分段按钮，选中项用琥珀底 */
+.panel-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  padding: 0.125rem;
+  background: var(--bg-panel-raised);
+  border-radius: 6px;
+}
+
+.panel-tab {
+  flex: 1;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-2);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.panel-tab:hover {
+  color: var(--text-1);
+}
+
+.panel-tab-active {
+  color: var(--bg-canvas);
+  background: var(--accent-2);
 }
 
 /**
