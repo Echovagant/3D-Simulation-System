@@ -6,12 +6,12 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/vue"><img alt="Vue 3.5.44" src="https://img.shields.io/badge/Vue-3.5.44-42b883?logo=vuedotjs&logoColor=35495e"></a>
-  <a href="https://threejs.org/"><img alt="Three.js 0.180.0" src="https://img.shields.io/badge/Three.js-0.180.0-000000?logo=threedotjs&logoColor=000000"></a>
-  <a href="https://rapier.rs/"><img alt="Rapier3D 0.21.0" src="https://img.shields.io/badge/Rapier3D-0.19.3-f47d21?logo=rust&logoColor=000000"></a>
-  <a href="https://vite.dev/"><img alt="Vite 6.4.6" src="https://img.shields.io/badge/Vite-6.4.6-646cff?logo=vite&logoColor=646cff"></a>
+  <a href="https://threejs.org/"><img alt="Three.js 0.187.0" src="https://img.shields.io/badge/Three.js-0.187.0-000000?logo=threedotjs&logoColor=000000"></a>
+  <a href="https://rapier.rs/"><img alt="Rapier3D 0.21.0" src="https://img.shields.io/badge/Rapier3D-0.21.0-f47d21?logo=rust&logoColor=000000"></a>
+  <a href="https://vite.dev/"><img alt="Vite 8.3.8" src="https://img.shields.io/badge/Vite-8.3.8-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
-  <img alt="54 test files / 494 cases" src="https://img.shields.io/badge/test-54%20files%20%2F%20494%20cases-16a34a?logo=vitest&logoColor=fd9714">
-  <img alt="12 build gates" src="https://img.shields.io/badge/build%20gates-12%20passed-16a34a?logo=githubactions&logoColor=2088ff">
+  <img alt="61 test files / 563 cases" src="https://img.shields.io/badge/test-61%20files%20%2F%20563%20cases-16a34a?logo=vitest&logoColor=fd9714">
+  <img alt="13 build gates" src="https://img.shields.io/badge/build%20gates-13%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-FF6101?logo=apache&logoColor=FF6101"></a>
 </p>
 
@@ -24,8 +24,8 @@
 <table>
   <tr>
     <td align="center"><b>33.05 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
-    <td align="center"><b>494</b><br><sub>测试用例 · 54 个文件</sub></td>
-    <td align="center"><b>12</b><br><sub>构建闸门 · 全绿</sub></td>
+    <td align="center"><b>563</b><br><sub>测试用例 · 61 个文件</sub></td>
+    <td align="center"><b>13</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
 </table>
@@ -166,16 +166,16 @@
 | 领域 | 选型 | 版本 |
 | --- | --- | --- |
 | 框架 | Vue | 3.5.44 |
-| 构建 / 语言 | Vite · TypeScript | 6.4.6 · 5.8.3 |
-| 渲染 | Three.js | 0.180.0 |
+| 构建 / 语言 | Vite · TypeScript | 8.3.8 · 5.8.3 |
+| 渲染 | Three.js | 0.187.0 |
 | 物理 | Rapier3D（WASM） | 0.21.0 |
-| 状态 / 路由 | Pinia · Vue Router | 3.0.3 · 4.5.1 |
+| 状态 / 路由 | Pinia · Vue Router | 4.1.0 · 5.5.1 |
 | 测试 | Vitest + jsdom | 5.0.5 / 30.1.3 |
-| 文档 / 图标 | marked · DOMPurify · Font Awesome Free | 16.3.0 / 3.4.17 / 6.7.2 |
+| 图标 | Font Awesome Free | 6.7.2 |
 | 后端 | FastAPI · SQLAlchemy · Alembic · ARQ | 0.158 / 2.1 / 1.20 / 0.28 |
 
 > 全站**深色工具风**：一套令牌（[`src/assets/styles/tokens.css`](src/assets/styles/tokens.css)，
-> 语义与约束见 [`DESIGN.md`](DESIGN.md））撑起导航轨、面板与三级文字，
+> 语义与约束见 [`DESIGN.md`](DESIGN.md)）撑起导航轨、面板与三级文字，
 > 六个页面同一套观感。**没有接 Tailwind**——模板里的工具类不生效，
 > 仓库有闸门盯着死类名数量不增长。
 
@@ -188,7 +188,7 @@ cd 3D-Simulation-System
 npm install
 
 npm run dev        # 开发服务器
-npm run build      # 类型检查 + 构建 + 测试 + 12 道闸门
+npm run build      # 类型检查 + 构建 + 测试 + 13 道闸门
 npm run preview    # 预览生产产物
 ```
 
@@ -197,8 +197,8 @@ npm run preview    # 预览生产产物
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 开发服务器 |
-| `npm run build` | 类型检查 + 构建 + 测试 + 12 道闸门 |
-| `npm test` | Vitest 全量用例（54 个测试文件 / 494 个用例） |
+| `npm run build` | 类型检查 + 构建 + 测试 + 13 道闸门 |
+| `npm test` | Vitest 全量用例（61 个测试文件 / 563 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
 | `npm run verify:api-contract` | 校验 API 契约文档与后端代码一致 |
@@ -366,12 +366,12 @@ flowchart LR
 
 「一次仿真到底发生了什么」写成了一份可核对的规格：[**仿真过程规格**](docs/simulation-spec.md)——
 世界、时间、状态、一致性、意图五层共 34 条约束，每条都标出它在源码里的实现位置与验证它的测试。
-文档里写下的每个数值都由 `verify:spec` 闸门自动与源码对账（当前 **112 项**），
+文档里写下的每个数值都由 `verify:spec` 闸门自动与源码对账（当前 **117 项**），
 改了代码没改规格，构建会直接失败。
 
 ## 质量保障
 
-`npm run build` 会依次跑完类型检查、构建、全部测试，并用 **12 道构建闸门**守住不回退：
+`npm run build` 会依次跑完类型检查、构建、全部测试，并用 **13 道构建闸门**守住不回退：
 入口体积、README 数字与产物对账、**仿真规格与源码逐项对账**、资产来源与协议、仓库里不许有疑似密钥、零引用依赖、
 **深色界面的配色必须达到 WCAG AA**、**死 Tailwind 类名不得超过 74 处** 等。任何一道不过，构建就失败。
 
@@ -386,7 +386,7 @@ flowchart LR
 渲染器一律显式请求高性能 GPU（`powerPreference: 'high-performance'`）——**双显卡笔记本**上
 浏览器默认可能把 WebGL 上下文交给核显，帧率直接掉一半；显式请求能显著提高拿到独显的概率。
 
-后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（242 个用例）。
+后端另有一道独立的 Python 闸门：**ruff 静态检查 + 格式检查 + mypy 类型检查 + pytest**（274 个用例）。
 CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 `requires-python` 声明的下限是真的被验证过的，不是写在纸上的。
 
@@ -420,7 +420,7 @@ CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 ## 贡献
 
 欢迎提 Issue 与 PR。动手前先读 [`DESIGN.md`](DESIGN.md)，
-**改完必须跑 `npm run build`**，12 道闸门全绿才算完成。
+**改完必须跑 `npm run build`**，13 道闸门全绿才算完成。
 
 ## 许可证
 
