@@ -11,7 +11,7 @@
   <a href="https://vite.dev/"><img alt="Vite 8.3.8" src="https://img.shields.io/badge/Vite-8.3.8-646cff?logo=vite&logoColor=646cff"></a>
   <a href="https://www.typescriptlang.org/"><img alt="TypeScript 5.8.3" src="https://img.shields.io/badge/TypeScript-5.8.3-3178c6?logo=typescript&logoColor=3178c6"></a>
   <img alt="67 test files / 598 cases" src="https://img.shields.io/badge/test-67%20files%20%2F%20598%20cases-16a34a?logo=vitest&logoColor=fd9714">
-  <img alt="14 build gates" src="https://img.shields.io/badge/build%20gates-14%20passed-16a34a?logo=githubactions&logoColor=2088ff">
+  <img alt="15 build gates" src="https://img.shields.io/badge/build%20gates-15%20passed-16a34a?logo=githubactions&logoColor=2088ff">
   <a href="LICENSE"><img alt="License Apache-2.0" src="https://img.shields.io/badge/License-Apache--2.0-FF6101?logo=apache&logoColor=FF6101"></a>
 </p>
 
@@ -25,7 +25,7 @@
   <tr>
     <td align="center"><b>33.05 KB</b><br><sub>入口 chunk · 上限 1.5 MB</sub></td>
     <td align="center"><b>598</b><br><sub>测试用例 · 67 个文件</sub></td>
-    <td align="center"><b>14</b><br><sub>构建闸门 · 全绿</sub></td>
+    <td align="center"><b>15</b><br><sub>构建闸门 · 全绿</sub></td>
     <td align="center"><b>4</b><br><sub>后端闸门 · ruff/mypy/pytest</sub></td>
   </tr>
 </table>
@@ -188,7 +188,7 @@ cd 3D-Simulation-System
 npm install
 
 npm run dev        # 开发服务器
-npm run build      # 类型检查 + 构建 + 测试 + 14 道闸门
+npm run build      # 类型检查 + 构建 + 测试 + 15 道闸门
 npm run preview    # 预览生产产物
 ```
 
@@ -197,7 +197,7 @@ npm run preview    # 预览生产产物
 | 命令 | 作用 |
 | --- | --- |
 | `npm run dev` | 开发服务器 |
-| `npm run build` | 类型检查 + 构建 + 测试 + 14 道闸门 |
+| `npm run build` | 类型检查 + 构建 + 测试 + 15 道闸门 |
 | `npm test` | Vitest 全量用例（67 个测试文件 / 598 个用例） |
 | `npm run verify:all` | 单独跑全部闸门 |
 | `npm run verify:backend` | 后端闸门：ruff + 格式 + mypy + pytest |
@@ -371,7 +371,7 @@ flowchart LR
 
 ## 质量保障
 
-`npm run build` 会依次跑完类型检查、构建、全部测试，并用 **14 道构建闸门**守住不回退：
+`npm run build` 会依次跑完类型检查、构建、全部测试，并用 **15 道构建闸门**守住不回退：
 入口体积、README 数字与产物对账、**仿真规格与源码逐项对账**、资产来源与协议、仓库里不许有疑似密钥、零引用依赖、
 **深色界面的配色必须达到 WCAG AA**、**死 Tailwind 类名不得超过 74 处** 等。任何一道不过，构建就失败。
 
@@ -420,7 +420,7 @@ CI 在 Python 3.12 / 3.13 / 3.14 三个版本上各跑一遍——
 ## 贡献
 
 欢迎提 Issue 与 PR。动手前先读 [`DESIGN.md`](DESIGN.md)，
-**改完必须跑 `npm run build`**，14 道闸门全绿才算完成。
+**改完必须跑 `npm run build`**，15 道闸门全绿才算完成。
 
 ## 许可证
 
