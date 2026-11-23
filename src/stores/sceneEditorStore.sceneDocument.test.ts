@@ -224,3 +224,74 @@ describe('场景文档的加载', () => {
     expect(store.objects[0].threeObject?.position.y).toBe(6)
   })
 })
+
+describe('编辑历史（撤销 / 重做）', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  it('添加物体后可撤销，撤销后可重做', async () => {
+    const store = useSceneEditorStore()
+    const before = store.snapshotForHistory()
+
+    store.addObject(newObject('u1'))
+    store.pushHistory('添加立方体', before)
+    expect(store.objects).toHaveLength(1)
+    expect(store.canUndo).toBe(true)
+    expect(store.canRedo).toBe(false)
+
+    expect(await store.undo()).toBe(true)
+    expect(store.objects).toHaveLength(0)
+    expect(store.canRedo).toBe(true)
+
+    expect(await store.redo()).toBe(true)
+    expect(store.objects.map((obj) => obj.uuid)).toEqual(['u1'])
+    expect(store.canUndo).toBe(true)
+  })
+
+  it('删除物体后可撤销，物体连同位置一起回来', async () => {
+    const store = useSceneEditorStore()
+    store.addObject({ ...newObject('u1'), position: { x: 2, y: 3, z: 4 } })
+
+    const before = store.snapshotForHistory()
+    store.removeObject('u1')
+    store.pushHistory('删除立方体', before)
+    expect(store.objects).toHaveLength(0)
+
+    expect(await store.undo()).toBe(true)
+    expect(store.objects).toHaveLength(1)
+    expect(store.objects[0].position).toEqual({ x: 2, y: 3, z: 4 })
+    expect(store.objects[0].threeObject?.position.x).toBe(2)
+  })
+
+  it('撤销会连同场地尺寸一起恢复', async () => {
+    const store = useSceneEditorStore()
+    store.setWorldSize(60)
+    const before = store.snapshotForHistory()
+
+    store.setWorldSize(20)
+    store.pushHistory('切换场地尺寸', before)
+    expect(store.worldSize).toBe(20)
+
+    expect(await store.undo()).toBe(true)
+    expect(store.worldSize).toBe(60)
+  })
+
+  it('没有历史时 undo / redo 返回 false，不抛错', async () => {
+    const store = useSceneEditorStore()
+    expect(await store.undo()).toBe(false)
+    expect(await store.redo()).toBe(false)
+  })
+
+  it('载入场景会清空历史，避免撤销到上一个场景', async () => {
+    const store = useSceneEditorStore()
+    store.addObject(newObject('u1'))
+    store.pushHistory('添加')
+    const saved = await store.saveScene('场景 A')
+
+    await store.loadScene(saved)
+    expect(store.canUndo).toBe(false)
+    expect(store.canRedo).toBe(false)
+  })
+})

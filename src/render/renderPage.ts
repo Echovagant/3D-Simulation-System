@@ -116,6 +116,18 @@ declare global {
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
 
+/**
+ * 渲染页的场地边长：优先用场景文档里的 `worldSize`，旧文档回落到 10。
+ *
+ * 编辑器已经能切 20/40/60；渲染页如果还固定 10，导出的场景里
+ * 放在 x=15 的物体会直接掉出地面——「导出的 JSON 不能用」的一半原因就在这。
+ */
+export const resolveRenderWorldSize = (sceneDocument: unknown): number => {
+  const raw = (sceneDocument as { worldSize?: unknown } | null | undefined)?.worldSize
+  if (isFiniteNumber(raw) && raw >= 10 && raw <= 200) return raw
+  return RENDER_GROUND.halfExtents.x * 2
+}
+
 /** 把任意输入读成 {x,y,z}；缺字段或是非有限数字都直接报错，不做静默兜底 */
 const parseVec3 = (raw: unknown, field: string): Vec3 => {
   if (!raw || typeof raw !== 'object') {
@@ -206,6 +218,8 @@ export interface RenderObjectSpec {
   rotation: Vec3
   scale: Vec3
   bodyType: 'dynamic' | 'fixed' | 'kinematic'
+  /** 场景文档里显式指定的颜色（十六进制）；没有时按调色板轮换 */
+  color?: number
 }
 
 const isRenderablePrimitive = (type: unknown): type is 'cube' | 'sphere' | 'ramp' =>
@@ -242,6 +256,7 @@ export const normalizeRenderScene = (raw: unknown): RenderObjectSpec[] => {
     const rawType = physics.type
     const bodyType: RenderObjectSpec['bodyType'] =
       rawType === 'static' ? 'fixed' : rawType === 'kinematic' ? 'kinematic' : 'dynamic'
+    const color = isFiniteNumber(obj.color) ? obj.color : undefined
 
     if (isModel) {
       if (typeof obj.modelId !== 'string') continue
@@ -260,6 +275,7 @@ export const normalizeRenderScene = (raw: unknown): RenderObjectSpec[] => {
           z: isFiniteNumber(scale.z) ? scale.z : 1,
         },
         bodyType,
+        ...(color !== undefined ? { color } : {}),
       })
       continue
     }
@@ -277,6 +293,7 @@ export const normalizeRenderScene = (raw: unknown): RenderObjectSpec[] => {
         z: isFiniteNumber(scale.z) ? scale.z : 1,
       },
       bodyType,
+      ...(color !== undefined ? { color } : {}),
     })
   }
   return specs
@@ -342,16 +359,13 @@ export const createRenderController = (options: RenderControllerOptions): Render
   world.integrationParameters.dt = RENDER_PHYSICS.fixedTimeStep
   const eventQueue = new rapier.EventQueue(true)
 
-  // 地面：固定刚体 + cuboid(5, 0.1, 5)
+  // 地面：固定刚体 + cuboid(half, 0.1, half)；half 跟着场景文档的场地边长走
+  const groundHalf = resolveRenderWorldSize(options.sceneDocument) / 2
   const groundBody = world.createRigidBody(
     rapier.RigidBodyDesc.fixed().setTranslation(0, RENDER_GROUND.bodyY, 0),
   )
   world.createCollider(
-    rapier.ColliderDesc.cuboid(
-      RENDER_GROUND.halfExtents.x,
-      RENDER_GROUND.halfExtents.y,
-      RENDER_GROUND.halfExtents.z,
-    ),
+    rapier.ColliderDesc.cuboid(groundHalf, RENDER_GROUND.halfExtents.y, groundHalf),
     groundBody,
   )
 
@@ -372,6 +386,7 @@ export const createRenderController = (options: RenderControllerOptions): Render
     rotation?: Vec3
     scale: Vec3
     bodyType: RenderObjectSpec['bodyType']
+    color?: number
   }): RenderItem => {
     // 几何体基准尺寸与场景编辑器一致：
     // 立方体是 BoxGeometry(1,1,1)（半长 0.5），球体是 SphereGeometry(0.5)（半径 0.5）。
@@ -383,9 +398,11 @@ export const createRenderController = (options: RenderControllerOptions): Render
           ? buildWedgeGeometry()
           : new THREE.SphereGeometry(0.5, 32, 32)
     const material = new THREE.MeshStandardMaterial({
-      color: OBJECT_COLORS[items.length % OBJECT_COLORS.length],
+      color: spec.color ?? OBJECT_COLORS[items.length % OBJECT_COLORS.length],
       metalness: 0.3,
       roughness: 0.4,
+      // 楔形共享顶点会把棱角法线平均掉；逐面着色才能看出实体
+      flatShading: spec.kind === 'ramp',
     })
     const mesh = new THREE.Mesh(geometry, material)
     mesh.castShadow = true

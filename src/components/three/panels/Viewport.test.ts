@@ -261,6 +261,90 @@ describe('Viewport 拾取', () => {
     expect(store.selectedObjectUuid).toBeNull()
   })
 
+  it('按住物体拖动会改位置、选中它，并留下一条可撤销的历史', async () => {
+    const { scene, camera, cube } = buildPickScene()
+    const { container } = await mountViewport({ scene, camera })
+
+    const store = useSceneEditorStore()
+    store.addObject({
+      uuid: cube.uuid,
+      name: 'Cube',
+      type: 'cube',
+      position: { x: 0, y: 1, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      threeObject: cube,
+    })
+
+    const start = toClientCoords(new THREE.Vector3(0, 1, 0), camera)
+    const target = toClientCoords(new THREE.Vector3(2, 1, 0), camera)
+
+    container?.dispatchEvent(
+      new MouseEvent('pointerdown', {
+        clientX: start.clientX,
+        clientY: start.clientY,
+        button: 0,
+        bubbles: true,
+      }),
+    )
+    expect(store.selectedObjectUuid).toBe(cube.uuid)
+
+    window.dispatchEvent(
+      new MouseEvent('pointermove', {
+        clientX: target.clientX,
+        clientY: target.clientY,
+        bubbles: true,
+      }),
+    )
+    expect(store.objects[0].threeObject?.position.x).toBeGreaterThan(1)
+
+    window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+    expect(store.canUndo).toBe(true)
+    expect(store.simulationState.isPaused).toBe(false)
+  })
+
+  it('拖拽时按住 Shift 会把位置吸附到 0.5 米网格', async () => {
+    const { scene, camera, cube } = buildPickScene()
+    const { container } = await mountViewport({ scene, camera })
+
+    const store = useSceneEditorStore()
+    store.addObject({
+      uuid: cube.uuid,
+      name: 'Cube',
+      type: 'cube',
+      position: { x: 0, y: 1, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      threeObject: cube,
+    })
+
+    const start = toClientCoords(new THREE.Vector3(0, 1, 0), camera)
+    const target = toClientCoords(new THREE.Vector3(2.37, 1, 1.21), camera)
+
+    container?.dispatchEvent(
+      new MouseEvent('pointerdown', {
+        clientX: start.clientX,
+        clientY: start.clientY,
+        button: 0,
+        bubbles: true,
+      }),
+    )
+    window.dispatchEvent(
+      new MouseEvent('pointermove', {
+        clientX: target.clientX,
+        clientY: target.clientY,
+        shiftKey: true,
+        bubbles: true,
+      }),
+    )
+
+    const position = store.objects[0].threeObject?.position
+    expect((position?.x ?? 0) * 2).toBeCloseTo(Math.round((position?.x ?? 0) * 2), 6)
+    expect((position?.z ?? 0) * 2).toBeCloseTo(Math.round((position?.z ?? 0) * 2), 6)
+
+    window.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }))
+  })
+
   it('容器不在视口左上角时也能正确换算坐标', async () => {
     const { scene, camera, cube } = buildPickScene()
     const emitted: Array<THREE.Object3D | null> = []

@@ -12,6 +12,12 @@ import type { SceneDocument, SceneDocumentObject, SceneIndexEntry, SceneObject }
 import { useModelStore } from './modelStore'
 import { useSceneSyncStore } from './sceneSyncStore'
 import { createPrimitiveMesh, isPrimitiveType } from '@/utils/primitiveFactory'
+import {
+  DEFAULT_SCENE_WORLD_SIZE,
+  SCENE_FALL_LIMIT_Y,
+  normalizeWorldSize,
+  type SceneWorldSize,
+} from '@/config/sceneEditor'
 
 // 仿真侧状态：播放/暂停/速度，以及由固定步长累加器推进出来的仿真时钟
 export type SimulationState = {
@@ -84,10 +90,17 @@ const sceneKey = (sceneId: string): string => `${SCENE_KEY_PREFIX}${sceneId}`
  * 没有注册工厂时（例如在测试里、或在没有编辑器界面的地方调用），
  * loadScene 会退回到「只有 mesh、没有物理」的基本体，并在返回值里如实反映。
  */
+export type PrimitiveCreateOptions = {
+  color?: number
+  bodyType?: 'dynamic' | 'static' | 'kinematic'
+}
+
 export type PrimitiveFactory = {
-  createCube: () => boolean
-  createSphere: () => boolean
-  createRamp: () => boolean
+  createCube: (options?: PrimitiveCreateOptions) => boolean
+  createSphere: (options?: PrimitiveCreateOptions) => boolean
+  createRamp: (options?: PrimitiveCreateOptions) => boolean
+  /** 模型重建：走编辑器的导入链路才能连带刚体；没有这一项时退回「只有 mesh」 */
+  importModel?: (modelId: string) => Promise<boolean>
 }
 
 /** loadScene 的结构化结果：界面据此说清「成功到什么程度」，不再假成功 */
@@ -113,6 +126,23 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
 
   // 分离状态：场景状态
   const selectedObjectUuid = ref<string | null>(null)
+
+  /** 当前场地边长（米）。useSceneEditor 按它重建网格与物理地面 */
+  const worldSize = ref<SceneWorldSize>(DEFAULT_SCENE_WORLD_SIZE)
+  const setWorldSize = (value: unknown) => {
+    worldSize.value = normalizeWorldSize(value)
+  }
+
+  /**
+   * 编辑历史。存的是**完整场景文档快照**，不是增量命令：
+   * 恢复时走与「加载场景」完全相同的重建链路，不会出现「撤销之后物理还在」。
+   */
+  const historyPast = ref<SceneDocument[]>([])
+  const historyFuture = ref<SceneDocument[]>([])
+  const HISTORY_LIMIT = 40
+  let isRestoringHistory = false
+  const canUndo = computed(() => historyPast.value.length > 0)
+  const canRedo = computed(() => historyFuture.value.length > 0)
   /**
    * 场景物体列表。
    *
@@ -490,6 +520,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       rotation,
       scale,
       visible: obj.visible !== false,
+      ...(obj.color !== undefined ? { color: obj.color } : {}),
       physics: obj.physics
         ? {
             type: obj.physics.type,
@@ -501,7 +532,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   /**
-   * 构造场景文档（保存与导出共用同一份构造逻辑）。
+   * 构造场景文档（保存、导出、历史快照共用同一份构造逻辑）。
    */
   const buildSceneDocument = (sceneName: string, sceneId?: string): SceneDocument => {
     const now = new Date().toISOString()
@@ -511,7 +542,70 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       createdAt: now,
       updatedAt: now,
       version: 1,
+      worldSize: worldSize.value,
       objects: objects.value.map((obj) => toDocumentObject(obj)),
+    }
+  }
+
+  /**
+   * 记录一次「可撤销」的编辑。
+   *
+   * 调用方在**真正改动之前**调用；`snapshot` 可选，给「已经先拍了快照」的
+   * 拖拽路径复用（拖拽要在 pointerdown 时拍、第一次移动时才入栈）。
+   */
+  const pushHistory = (label = '编辑', snapshot?: SceneDocument) => {
+    if (isRestoringHistory) return
+    historyPast.value.push({
+      ...(snapshot ?? buildSceneDocument('编辑历史', '__history__')),
+      name: label,
+    })
+    if (historyPast.value.length > HISTORY_LIMIT) historyPast.value.shift()
+    historyFuture.value = []
+  }
+
+  const clearHistory = () => {
+    historyPast.value = []
+    historyFuture.value = []
+  }
+
+  const snapshotForHistory = (): SceneDocument =>
+    buildSceneDocument('编辑历史', '__history__')
+
+  /**
+   * 撤销 / 重做。
+   *
+   * 恢复走 `restoreDocument`：与加载场景同一条链路（清场 + 工厂重建 + 刚体重建），
+   * 所以撤销一个「刚体已经飞走」的物体时，物理侧也会回到快照状态。
+   */
+  const undo = async (): Promise<boolean> => {
+    if (historyPast.value.length === 0) return false
+    const target = historyPast.value[historyPast.value.length - 1]
+    const current = snapshotForHistory()
+    isRestoringHistory = true
+    try {
+      const result = await restoreDocument(target)
+      if (!result.ok) return false
+      historyPast.value = historyPast.value.slice(0, -1)
+      historyFuture.value = [current, ...historyFuture.value].slice(0, HISTORY_LIMIT)
+      return true
+    } finally {
+      isRestoringHistory = false
+    }
+  }
+
+  const redo = async (): Promise<boolean> => {
+    if (historyFuture.value.length === 0) return false
+    const target = historyFuture.value[0]
+    const current = snapshotForHistory()
+    isRestoringHistory = true
+    try {
+      const result = await restoreDocument(target)
+      if (!result.ok) return false
+      historyFuture.value = historyFuture.value.slice(1)
+      historyPast.value = [...historyPast.value, current].slice(-HISTORY_LIMIT)
+      return true
+    } finally {
+      isRestoringHistory = false
     }
   }
 
@@ -613,12 +707,21 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     const factory = primitiveFactory.value
     if (factory) {
       const before = objects.value.length
+      const options: PrimitiveCreateOptions = {
+        ...(objData.color !== undefined ? { color: objData.color } : {}),
+        bodyType:
+          objData.physics?.type === 'static'
+            ? 'static'
+            : objData.physics?.type === 'kinematic'
+              ? 'kinematic'
+              : 'dynamic',
+      }
       const created =
         objData.type === 'sphere'
-          ? factory.createSphere()
+          ? factory.createSphere(options)
           : objData.type === 'ramp'
-            ? factory.createRamp()
-            : factory.createCube()
+            ? factory.createRamp(options)
+            : factory.createCube(options)
 
       const restored = created ? objects.value[before] : undefined
       if (restored) {
@@ -645,8 +748,10 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     }
 
     // 兜底：没有物理桥（没有编辑器界面 / 物理还没起来）时，只还原 mesh
-    const mesh = createPrimitiveMesh(objData.type)
-    mesh.name = objData.name
+    const mesh = createPrimitiveMesh(objData.type, {
+      name: objData.name,
+      ...(objData.color !== undefined ? { color: objData.color } : {}),
+    })
     mesh.position.set(objData.position.x, objData.position.y, objData.position.z)
     mesh.rotation.set(objData.rotation.x, objData.rotation.y, objData.rotation.z)
     mesh.scale.set(objData.scale.x, objData.scale.y, objData.scale.z)
@@ -657,6 +762,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       type: objData.type,
       name: objData.name,
       threeObject: mesh,
+      color: objData.color,
+      physicsType: objData.physics?.type,
       position: objData.position,
       rotation: objData.rotation,
       scale: objData.scale,
@@ -674,6 +781,31 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   const restoreModel = async (objData: SceneDocumentObject): Promise<boolean> => {
     if (!objData.modelId) return false
 
+    // 编辑器动线：走导入链路，模型才能连带刚体与碰撞体重建。
+    // 只加载 mesh 再塞进 store 的话，模型存档一打开就是「不会下落、不会碰撞」的空壳。
+    const factory = primitiveFactory.value
+    if (factory?.importModel) {
+      const before = objects.value.length
+      const ok = await factory.importModel(objData.modelId)
+      const restored = ok ? objects.value[before] : undefined
+      if (restored) {
+        updateObject(restored.uuid, {
+          name: objData.name,
+          position: objData.position,
+          rotation: objData.rotation,
+          scale: objData.scale,
+          visible: objData.visible !== false,
+        })
+        setInitialTransform(restored.uuid, {
+          position: objData.position,
+          rotation: objData.rotation,
+          scale: objData.scale,
+        })
+        return true
+      }
+    }
+
+    // 兜底：没有编辑器界面（或没有导入方法）时只还原 mesh
     const modelStore = useModelStore()
     const model = await modelStore.loadModelById(objData.modelId)
     if (!model) return false
@@ -720,13 +852,14 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     return Boolean(scene.value && primitiveFactory.value)
   }
 
-  // 新增：加载场景
-  //
-  // 返回结构化结果而不是裸 boolean：加载「成功」却一个物体都没重建出来，
-  // 比失败更误导——界面打出「已加载」，画面却空着（实测踩过的假成功）。
-  const loadScene = async (sceneId: string): Promise<SceneLoadResult> => {
-    const doc = getSceneDocument(sceneId)
-    if (!doc) {
+  /**
+   * 用一份场景文档重建世界。
+   *
+   * 这是加载、撤销、重做、精选场景的**唯一重建链路**：
+   * 清场会同时销掉旧刚体，工厂重建会连带新刚体，不会留下两套物理。
+   */
+  const restoreDocument = async (doc: SceneDocument): Promise<SceneLoadResult> => {
+    if (!doc || !Array.isArray(doc.objects)) {
       return { ok: false, restored: 0, total: 0, reason: '场景文档不存在或已损坏' }
     }
 
@@ -740,18 +873,24 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
         return {
           ok: false,
           restored: 0,
-          total: doc.objects?.length ?? 0,
+          total: doc.objects.length,
           reason: '编辑器仍在初始化（物理引擎未就绪），请稍后重试',
         }
       }
     }
 
+    // clearScene 会停掉仿真并把 isPlaying 置 false：先记住用户意图，恢复后还原
+    const wasPlaying = simulationState.isPlaying
+
+    // 场地跟着文档走：旧文档没有 worldSize 时回到默认场地
+    setWorldSize(doc.worldSize)
+
     // 清空现有场景内容（物体 + 刚体），**渲染器保留**——页面还在渲染
     clearScene()
 
     let restored = 0
-    const total = doc.objects?.length ?? 0
-    for (const objData of doc.objects ?? []) {
+    const total = doc.objects.length
+    for (const objData of doc.objects) {
       if (objData.type === 'model') {
         if (await restoreModel(objData)) restored += 1
         continue
@@ -770,8 +909,31 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       }
     }
 
+    if (wasPlaying) simulationState.isPlaying = true
     return { ok: true, restored, total }
   }
+
+  /**
+   * 加载本地已保存的场景。
+   *
+   * 返回结构化结果而不是裸 boolean：加载「成功」却一个物体都没重建出来，
+   * 比失败更误导——界面打出「已加载」，画面却空着（实测踩过的假成功）。
+   */
+  const loadScene = async (sceneId: string): Promise<SceneLoadResult> => {
+    const doc = getSceneDocument(sceneId)
+    if (!doc) {
+      return { ok: false, restored: 0, total: 0, reason: '场景文档不存在或已损坏' }
+    }
+
+    const result = await restoreDocument(doc)
+    // 打开一个存档 = 新会话基线：撤销不能撤到上一个场景
+    if (result.ok) clearHistory()
+    return result
+  }
+
+  /** 直接加载一份场景文档（精选示例、导入预览用；不进本地索引） */
+  const loadSceneDocument = async (doc: SceneDocument): Promise<SceneLoadResult> =>
+    restoreDocument(doc)
 
   // 添加物体（保留原有并扩展，支持模型库对象）
   const addObject = (
@@ -783,6 +945,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       rotation: { x: number; y: number; z: number }
       scale: { x: number; y: number; z: number }
       visible?: boolean
+      color?: number
+      physicsType?: 'static' | 'dynamic' | 'kinematic'
       threeObject?: THREE.Object3D
       modelId?: string
     },
@@ -797,6 +961,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       rotation: objectData.rotation,
       scale: objectData.scale,
       visible: objectData.visible ?? true,
+      ...(objectData.color !== undefined ? { color: objectData.color } : {}),
       // three 对象必须在**写入 store 的那一刻**就 markRaw：
       // 只在读取处包一层 toRaw() 能修症状，但对象仍会被深度代理，性能问题还在。
       // 只标记 threeObject 本身，不标记整条 SceneObject（其余字段仍需可追踪）。
@@ -812,7 +977,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     const shape: 'box' | 'sphere' | 'mesh' =
       objectData.type === 'cube' ? 'box' : objectData.type === 'sphere' ? 'sphere' : 'mesh'
     object.physics = {
-      type: 'dynamic',
+      type: objectData.physicsType ?? 'dynamic',
       shape,
       mass,
     }
@@ -938,6 +1103,31 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       }
     }
   }
+  /**
+   * 召回掉出场地的物体：把 y 低于阈值的物体放回它的初始变换。
+   *
+   * 不自动执行——用户可能故意让物体掉下去；工具栏给一个显式按钮，
+   * 掉出去几个、召回了几个都如实回报。
+   */
+  const recallFallenObjects = (threshold: number = SCENE_FALL_LIMIT_Y): number => {
+    let recalled = 0
+    for (const obj of objects.value) {
+      const position = obj.threeObject?.position ?? obj.position
+      if (position.y >= threshold) continue
+
+      const initial = initialTransforms.get(obj.uuid)
+      if (!initial) continue
+
+      updateObject(obj.uuid, {
+        position: initial.position,
+        rotation: initial.rotation,
+        scale: initial.scale,
+      })
+      recalled += 1
+    }
+    return recalled
+  }
+
   /** 渲染器尺寸与相机比例随视口更新（Viewport 组件挂载与 resize 时调用） */
   const updateRendererSize = (width: number, height: number): void => {
     if (renderer.value && camera.value) {
@@ -1040,20 +1230,33 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     objects,
     currentScene,
     selectedObject,
+    worldSize,
 
     // 分离的状态对象
     simulationState,
     renderState,
 
+    // 编辑历史
+    canUndo,
+    canRedo,
+    pushHistory,
+    clearHistory,
+    snapshotForHistory,
+    undo,
+    redo,
+
     // 方法
     saveScene,
     loadScene,
+    loadSceneDocument,
     listScenes,
     getSceneDocument,
     deleteScene,
     importSceneDocument,
     buildSceneDocument,
     registerPrimitiveFactory,
+    setWorldSize,
+    recallFallenObjects,
     sceneIndexVersion,
     getCurrentScene,
     setCurrentScene,

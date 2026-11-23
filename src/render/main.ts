@@ -20,6 +20,7 @@ import { createModelLibrary } from '@/data/modelLibrary'
 import {
   createRenderController,
   normalizeRenderScene,
+  resolveRenderWorldSize,
   type RenderApi,
   type RenderObjectSpec,
 } from './renderPage'
@@ -41,7 +42,7 @@ const readInjectedScene = (): unknown => {
 }
 
 /** 搭相机、灯光、地面网格——与场景编辑器同一套摆法 */
-const buildStage = (): {
+const buildStage = (worldSize: number): {
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
   renderer: THREE.WebGLRenderer
@@ -62,26 +63,35 @@ const buildStage = (): {
   renderer.setPixelRatio(1)
   renderer.shadowMap.enabled = true
 
-  // 灯光
+  // 灯光（阴影范围跟着场地走，否则 40×40 场景只有中心一小块有阴影）
   scene.add(new THREE.AmbientLight(0xffffff, 0.5))
   const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-  directionalLight.position.set(5, 10, 7.5)
+  directionalLight.position.set(worldSize * 0.25, worldSize * 0.55, worldSize * 0.35)
   directionalLight.castShadow = true
-  directionalLight.shadow.mapSize.width = 1024
-  directionalLight.shadow.mapSize.height = 1024
+  directionalLight.shadow.mapSize.width = 2048
+  directionalLight.shadow.mapSize.height = 2048
+  const shadowHalf = worldSize / 2 + 2
+  directionalLight.shadow.camera.left = -shadowHalf
+  directionalLight.shadow.camera.right = shadowHalf
+  directionalLight.shadow.camera.top = shadowHalf
+  directionalLight.shadow.camera.bottom = -shadowHalf
+  directionalLight.shadow.camera.far = worldSize * 4
+  directionalLight.shadow.camera.updateProjectionMatrix()
   scene.add(directionalLight)
 
   // 辅助线
-  scene.add(new THREE.GridHelper(10, 10))
+  const grid = new THREE.GridHelper(worldSize, worldSize)
+  grid.position.y = 0.001
+  scene.add(grid)
   scene.add(new THREE.AxesHelper(5))
-  const secondaryAxes = new THREE.AxesHelper(10)
+  const secondaryAxes = new THREE.AxesHelper(Math.max(10, worldSize / 4))
   secondaryAxes.material.opacity = 0.3
   secondaryAxes.material.transparent = true
   scene.add(secondaryAxes)
 
   // 地面网格：平面在 y=0，与物理地面的碰撞体顶面齐平
   const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(10, 10),
+    new THREE.PlaneGeometry(worldSize, worldSize),
     new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8, metalness: 0.2 }),
   )
   ground.rotation.x = -Math.PI / 2
@@ -95,7 +105,9 @@ const bootstrap = async (): Promise<void> => {
   const container = document.getElementById('render-root')
   if (!container) throw new Error('渲染页缺少 #render-root 容器')
 
-  const { scene, camera, renderer } = buildStage()
+  const sceneDocument = readInjectedScene()
+  const worldSize = resolveRenderWorldSize(sceneDocument)
+  const { scene, camera, renderer } = buildStage(worldSize)
   container.appendChild(renderer.domElement)
 
   const resize = (): void => {
@@ -112,7 +124,6 @@ const bootstrap = async (): Promise<void> => {
 
   // 模型：GLB 异步加载必须在 ready 之前完成（录制器等 ready 才开始逐帧驱动）。
   // 模型目录用静态数据（modelLibrary），渲染页不依赖 pinia。
-  const sceneDocument = readInjectedScene()
   const specs = normalizeRenderScene(sceneDocument)
   const modelCatalog = createModelLibrary()
   const loader = new GLTFLoader()

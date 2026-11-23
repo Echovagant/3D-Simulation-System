@@ -32,6 +32,9 @@
           @viewport-click="handleViewportClick"
           @update-camera="handleUpdateCamera"
         />
+        <p class="viewport-hint">
+          左键点选 · 按住拖动 · Shift 吸附网格 · Ctrl+Z 撤销 · Delete 删除
+        </p>
       </div>
 
       <!-- 右栏：属性编辑与场景管理两条动线分 tab，v-show 保持挂载（选中状态不丢） -->
@@ -70,8 +73,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, provide, watch } from 'vue'
+import { ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import type { ScenePrimitiveSpec } from '@/types'
+import type { PrimitiveCreateOptions } from '@/stores/sceneEditorStore'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import ThreeScene from '@/components/three/core/ThreeScene.vue'
@@ -102,14 +106,16 @@ const router = useRouter()
 
 // 场景方法
 const sceneMethods = ref<{
-  addCube: () => boolean
-  addSphere: () => boolean
-  addRamp: () => boolean
+  addCube: (options?: PrimitiveCreateOptions) => boolean
+  addSphere: (options?: PrimitiveCreateOptions) => boolean
+  addRamp: (options?: PrimitiveCreateOptions) => boolean
   addPrimitive: (spec: ScenePrimitiveSpec) => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   // 物理推进函数接收 rAF 的时间戳：固定步长累加器靠它算真实时间
   updatePhysics: (timestamp?: number) => void
+  setWorldSize: (size: number) => boolean
+  stepOnce: () => boolean
 }>({
   addCube: () => false,
   addSphere: () => false,
@@ -118,28 +124,34 @@ const sceneMethods = ref<{
   importModel: async () => false,
   getIsSceneInitialized: () => false,
   updatePhysics: () => {},
+  setWorldSize: () => false,
+  stepOnce: () => false,
 })
 
 // 提供方法给Toolbar组件
-provide('addCube', () => sceneMethods.value.addCube())
-provide('addSphere', () => sceneMethods.value.addSphere())
-provide('addRamp', () => sceneMethods.value.addRamp())
+provide('addCube', (options?: PrimitiveCreateOptions) => sceneMethods.value.addCube(options))
+provide('addSphere', (options?: PrimitiveCreateOptions) => sceneMethods.value.addSphere(options))
+provide('addRamp', (options?: PrimitiveCreateOptions) => sceneMethods.value.addRamp(options))
 provide(
   'addPrimitive',
   (spec: ScenePrimitiveSpec) => sceneMethods.value.addPrimitive(spec),
 )
 provide('importModel', (modelId: string) => sceneMethods.value.importModel(modelId))
 provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized())
+provide('setWorldSize', (size: number) => sceneMethods.value.setWorldSize(size))
+provide('stepOnce', () => sceneMethods.value.stepOnce())
 
 // 接收ThreeScene暴露的方法
 const exposeMethods = (methods: {
-  addCube: () => boolean
-  addSphere: () => boolean
-  addRamp: () => boolean
+  addCube: (options?: PrimitiveCreateOptions) => boolean
+  addSphere: (options?: PrimitiveCreateOptions) => boolean
+  addRamp: (options?: PrimitiveCreateOptions) => boolean
   addPrimitive: (spec: ScenePrimitiveSpec) => boolean
   importModel: (modelId: string) => Promise<boolean>
   getIsSceneInitialized: () => boolean
   updatePhysics: (timestamp?: number) => void
+  setWorldSize: (size: number) => boolean
+  stepOnce: () => boolean
 }) => {
   sceneMethods.value = methods
   // 基本体工厂依赖这些方法（建体要真能建出来），到这里才具备条件：
@@ -178,17 +190,8 @@ const retryInit = () => {
   threeScene.value?.reinit()
 }
 
-// 处理视口点击事件：把命中的对象映射到 store 管理的对象，并维护选中高亮
+// 处理视口点击事件：把命中的对象映射到 store 管理的对象
 const handleViewportClick = (object: THREE.Object3D | null) => {
-  // 先复位所有物体的高亮
-  sceneStore.objects.forEach((item) => {
-    const mesh = item.threeObject
-    if (mesh && mesh instanceof THREE.Mesh) {
-      const material = mesh.material as THREE.MeshStandardMaterial
-      if (material.emissive) material.emissive.set(0x000000)
-    }
-  })
-
   if (!object) {
     sceneStore.setSelectedObject(null)
     return
@@ -202,21 +205,35 @@ const handleViewportClick = (object: THREE.Object3D | null) => {
 
   // 只有 store 里真实存在的对象才能被选中（命中地面/辅助线时不产生选中）
   const matched = sceneStore.objects.find((item) => item.uuid === rootObject.uuid)
-  if (!matched) {
-    sceneStore.setSelectedObject(null)
-    return
-  }
-
-  // 设置选中对象
-  sceneStore.setSelectedObject(matched.uuid)
-
-  // 高亮选中对象
-  const mesh = matched.threeObject
-  if (mesh && mesh instanceof THREE.Mesh) {
-    const material = mesh.material as THREE.MeshStandardMaterial
-    if (material.emissive) material.emissive.set(0xffff00)
-  }
+  sceneStore.setSelectedObject(matched?.uuid ?? null)
 }
+
+/**
+ * 选中高亮的唯一写入点。
+ *
+ * 视口拖拽在 pointerdown 就会改选中（不依赖浏览器补发 click），
+ * 高亮必须跟着 store 的选中状态走，而不是只在点击回调里刷一次。
+ */
+const applySelectionHighlight = () => {
+  const highlight = (object: THREE.Object3D | undefined, color: number) => {
+    if (!object) return
+    object.traverse((child) => {
+      const mesh = child as THREE.Mesh
+      if (!mesh.isMesh) return
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+      materials.forEach((material) => {
+        const standard = material as THREE.MeshStandardMaterial
+        standard.emissive?.set(color)
+      })
+    })
+  }
+
+  sceneStore.objects.forEach((item) => highlight(item.threeObject, 0x000000))
+  const selected = sceneStore.selectedObject
+  if (selected) highlight(selected.threeObject, 0xffff00)
+}
+
+watch(() => sceneStore.selectedObjectUuid, applySelectionHighlight)
 
 // 视口把真实的宽高比交回来
 //
@@ -259,8 +276,53 @@ watch(
   },
 )
 
+// 场地尺寸是 store 里的意图：变了就交给 useSceneEditor 重建网格与物理地面
+watch(
+  () => sceneStore.worldSize,
+  (size) => {
+    sceneMethods.value.setWorldSize(size)
+  },
+)
+
+/** 输入框里按 Ctrl+Z 应该撤销文字，不是撤销场景 */
+const isTypingTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false
+  return (
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT' ||
+    target.isContentEditable
+  )
+}
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (isTypingTarget(event.target)) return
+
+  const modifier = event.ctrlKey || event.metaKey
+  if (modifier && event.key.toLowerCase() === 'z') {
+    event.preventDefault()
+    void (event.shiftKey ? sceneStore.redo() : sceneStore.undo())
+    return
+  }
+  if (modifier && event.key.toLowerCase() === 'y') {
+    event.preventDefault()
+    void sceneStore.redo()
+    return
+  }
+  if ((event.key === 'Delete' || event.key === 'Backspace') && sceneStore.selectedObject) {
+    event.preventDefault()
+    sceneStore.pushHistory('删除物体')
+    sceneStore.removeSelectedObject()
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
 // 当组件卸载时清理状态
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeydown)
   // 未被消费的「待导入模型」不能留到下次进入编辑器时被意外导入
   modelStore.selectedModelId = null
 })
@@ -294,6 +356,23 @@ onUnmounted(() => {
   flex: 1 1 auto;
   position: relative;
   height: 100%;
+}
+
+/* 操作提示：贴在视口左下角，不拦截鼠标事件 */
+.viewport-hint {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  margin: 0;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background-color: rgba(16, 20, 26, 0.62);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 1.4;
+  pointer-events: none;
+  user-select: none;
 }
 
 .editor-side {

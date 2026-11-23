@@ -25,13 +25,17 @@ interface PhysicsData {
   isFalling?: boolean
 }
 
-/** 程序化摆放的基础体规格（LLM 场景生成等路径共用） */
+/** 程序化摆放的基础体规格（LLM 场景生成、精选场景等路径共用） */
 export interface ScenePrimitiveSpec {
   name: string
   type: 'cube' | 'sphere' | 'ramp'
   position: { x: number; y: number; z: number }
   rotation?: { x: number; y: number; z: number }
   scale?: { x: number; y: number; z: number }
+  /** 十六进制颜色；不传则从编辑器调色板轮换 */
+  color?: number
+  /** 刚体类型：默认 dynamic；static 用于搭建固定地形/道具 */
+  bodyType?: 'dynamic' | 'static' | 'kinematic'
 }
 
 // 场景对象类型
@@ -44,6 +48,8 @@ export interface SceneObject {
   rotation: { x: number; y: number; z: number }
   scale: { x: number; y: number; z: number }
   visible: boolean
+  /** 基础体颜色（十六进制）；模型不写这一项 */
+  color?: number
   threeObject?: Object3D
   physics?: PhysicsData
 }
@@ -58,7 +64,7 @@ export interface SceneObject {
 /**
  * 场景文档里的单个物体。
  *
- * `type` 必须是**可重建的类型**：目前只有 'cube' / 'sphere' / 'model'
+ * `type` 必须是**可重建的类型**：目前 'cube' / 'sphere' / 'ramp' / 'model'
  * 能被 loadScene 真正还原。新增可重建类型时，loadScene 的分支必须同步更新，
  * 否则会出现「存得进、读不出」。
  */
@@ -71,6 +77,8 @@ export interface SceneDocumentObject {
   rotation: { x: number; y: number; z: number }
   scale: { x: number; y: number; z: number }
   visible: boolean
+  /** 基础体颜色（十六进制） */
+  color?: number
   /** 静态物理描述（没有刚体的物体不写这一项） */
   physics?: {
     type: 'static' | 'dynamic' | 'kinematic'
@@ -87,6 +95,8 @@ export interface SceneDocument {
   updatedAt: string
   version: 1
   gravity?: { x: number; y: number; z: number }
+  /** 场地边长（米）。旧文档没有这一项时按编辑器默认场地处理 */
+  worldSize?: number
   objects: SceneDocumentObject[]
 }
 

@@ -8,6 +8,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick, type Ref } from 'vue'
 import * as THREE from 'three'
 import type { Scene, Camera, WebGLRenderer, Object3D } from 'three'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
+import type { SceneDocument } from '@/types'
 
 // 定义相机更新事件的数据类型
 interface CameraUpdateData {
@@ -60,6 +61,34 @@ const isRendering = ref(false)
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 let animationFrameId: number | null = null
+
+/**
+ * 拖拽状态。
+ *
+ * 拾取与相机旋转共用左键：只有**按住物体**时才进入拖拽，并在捕获阶段
+ * 阻断 pointerdown 的传播——OrbitControls 收不到这一下，就不会一边拖物体一边转相机。
+ */
+interface ObjectDragState {
+  uuid: string
+  object: THREE.Object3D
+  pointerId: number
+  startClientX: number
+  startClientY: number
+  /** 物体在拖拽平面上的高度（沿地面水平拖动） */
+  planeY: number
+  /** 按下点与物体中心的偏移，避免物体瞬间跳到指针下 */
+  offset: THREE.Vector3
+  beforeDocument: SceneDocument
+  moved: boolean
+  wasPaused: boolean
+}
+
+let dragState: ObjectDragState | null = null
+const DRAG_THRESHOLD_PX = 4
+/** 最近一次左键按下的位置：用来区分「点击」与「转完相机后补发的 click」 */
+let pressStart: { x: number; y: number } | null = null
+/** 刚拖过相机/物体：抑制随后补发的 click，避免转完视角把选中清掉 */
+let suppressNextClick = false
 
 // Pinia store 是全局单例，直接取用（与 Toolbar.vue 的写法一致）
 const sceneEditorStore = useSceneEditorStore()
@@ -225,6 +254,12 @@ const stopRendering = () => {
 const handleClick = (event: MouseEvent) => {
   if (!props.scene || !props.camera || !props.renderer) return
 
+  // 转相机或拖物体后浏览器补发的 click 不是「点选」，不能拿它改选中
+  if (suppressNextClick) {
+    suppressNextClick = false
+    return
+  }
+
   // 计算鼠标在标准化设备坐标中的位置（-1到1）
   // 必须用容器的边界矩形换算，clientWidth/clientHeight 会忽略容器在视口中的偏移
   if (!containerRef.value) return
@@ -246,6 +281,185 @@ const handleClick = (event: MouseEvent) => {
   // 触发点击事件
   const clickedObject = intersects.length > 0 ? intersects[0].object : null
   emit('viewport-click', clickedObject)
+}
+
+/** 从命中的子对象往上找到 store 里登记的根对象（模型是 Group，命中是子 mesh） */
+const findStoreRoot = (object: Object3D): Object3D | null => {
+  let root: Object3D = object
+  while (root.parent && root.parent !== props.scene) root = root.parent
+  return sceneEditorStore.objects.some((item) => item.uuid === root.uuid) ? root : null
+}
+
+/** 把屏幕坐标换成命中结果；只检测 store 管理的对象，地面/辅助线永远选不中 */
+const pickAtClient = (
+  clientX: number,
+  clientY: number,
+): { root: Object3D; point: THREE.Vector3 } | null => {
+  if (!containerRef.value || !props.camera) return null
+  const rect = containerRef.value.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return null
+
+  mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1
+  raycaster.setFromCamera(mouse, props.camera)
+
+  const pickable = sceneEditorStore.objects
+    .filter((item) => item.visible !== false && item.threeObject)
+    .map((item) => item.threeObject as Object3D)
+  const intersects = pickable.length > 0 ? raycaster.intersectObjects(pickable, true) : []
+  if (intersects.length === 0) return null
+
+  const root = findStoreRoot(intersects[0].object)
+  if (!root) return null
+  return { root, point: intersects[0].point.clone() }
+}
+
+/** 射线与「过 planeY 的水平面」的交点；相机与地面平行时可能没有交点 */
+const intersectHorizontalPlane = (
+  clientX: number,
+  clientY: number,
+  planeY: number,
+): THREE.Vector3 | null => {
+  if (!containerRef.value || !props.camera) return null
+  const rect = containerRef.value.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return null
+
+  mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1
+  mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1
+  raycaster.setFromCamera(mouse, props.camera)
+
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY)
+  const point = new THREE.Vector3()
+  return raycaster.ray.intersectPlane(plane, point) ? point : null
+}
+
+const clamp = (value: number, min: number, max: number): number =>
+  Math.min(max, Math.max(min, value))
+
+/**
+ * 按住物体开始拖拽。
+ *
+ * 在**捕获阶段**调用并阻断传播：OrbitControls 挂在 canvas 上，
+ * 它收不到 pointerdown 就不会启动相机旋转。
+ */
+const handlePointerDown = (event: PointerEvent) => {
+  if (event.button !== 0) return
+
+  // 记录按下点：无论后面是「拖物体」还是「交给 OrbitControls 转相机」，
+  // 松手后的 click 都要靠它判断是不是一次真正的点选
+  pressStart = { x: event.clientX, y: event.clientY }
+  suppressNextClick = false
+
+  const hit = pickAtClient(event.clientX, event.clientY)
+  if (!hit) return
+
+  event.stopPropagation()
+  event.preventDefault()
+
+  // 立即选中：不用等浏览器补发 click，拖动过程中属性面板就能看到
+  sceneEditorStore.setSelectedObject(hit.root.uuid)
+
+  dragState = {
+    uuid: hit.root.uuid,
+    object: hit.root,
+    pointerId: event.pointerId,
+    startClientX: event.clientX,
+    startClientY: event.clientY,
+    planeY: hit.root.position.y,
+    offset: new THREE.Vector3(
+      hit.root.position.x - hit.point.x,
+      0,
+      hit.root.position.z - hit.point.z,
+    ),
+    beforeDocument: sceneEditorStore.snapshotForHistory(),
+    moved: false,
+    wasPaused: sceneEditorStore.simulationState.isPaused,
+  }
+
+  // 拖拽期间停物理：否则刚体每帧把 mesh 拉回去，拖起来像在跟弹簧较劲
+  sceneEditorStore.simulationState.isPaused = true
+  if (containerRef.value) {
+    containerRef.value.style.cursor = 'grabbing'
+    try {
+      containerRef.value.setPointerCapture(event.pointerId)
+    } catch {
+      // jsdom / 老浏览器不支持指针捕获：window 监听仍能收到 move/up
+    }
+  }
+
+  window.addEventListener('pointermove', handlePointerMove, { passive: false })
+  window.addEventListener('pointerup', handlePointerUp)
+  window.addEventListener('pointercancel', handlePointerUp)
+}
+
+const handlePointerMove = (event: PointerEvent) => {
+  const state = dragState
+  if (!state) return
+
+  if (!state.moved) {
+    const distance = Math.hypot(
+      event.clientX - state.startClientX,
+      event.clientY - state.startClientY,
+    )
+    if (distance < DRAG_THRESHOLD_PX) return
+
+    // 第一次真正移动才入历史栈：单击选中不会留下一条空撤销
+    sceneEditorStore.pushHistory('拖动物体', state.beforeDocument)
+    state.moved = true
+  }
+
+  event.preventDefault()
+
+  const point = intersectHorizontalPlane(event.clientX, event.clientY, state.planeY)
+  if (!point) return
+
+  // 留 0.4 米边距：物体中心不能被拖到地面边缘之外
+  const half = Math.max(1, sceneEditorStore.worldSize / 2 - 0.4)
+  // 按住 Shift 吸附到 0.5 米网格：教学/展厅里要精确对齐时不用去属性面板敲数字
+  const snap = (value: number): number => (event.shiftKey ? Math.round(value * 2) / 2 : value)
+  sceneEditorStore.updateObject(state.uuid, {
+    position: {
+      x: clamp(snap(point.x + state.offset.x), -half, half),
+      y: state.planeY,
+      z: clamp(snap(point.z + state.offset.z), -half, half),
+    },
+  })
+}
+
+const handlePointerUp = () => {
+  const state = dragState
+  if (!state) return
+  dragState = null
+
+  // 恢复用户原来的暂停状态：本来暂停就继续暂停，本来在跑就继续跑
+  sceneEditorStore.simulationState.isPaused = state.wasPaused
+  if (containerRef.value) {
+    containerRef.value.style.cursor = ' '
+    try {
+      containerRef.value.releasePointerCapture(state.pointerId)
+    } catch {
+      // 没捕获成功时释放会抛错：忽略
+    }
+  }
+
+  window.removeEventListener('pointermove', handlePointerMove)
+  window.removeEventListener('pointerup', handlePointerUp)
+  window.removeEventListener('pointercancel', handlePointerUp)
+}
+
+/** 松手时记录这一次按下有没有移动过：移动过就抑制随后补发的 click */
+const handleContainerPointerUp = (event: PointerEvent) => {
+  if (event.button !== 0 || !pressStart) return
+  const distance = Math.hypot(event.clientX - pressStart.x, event.clientY - pressStart.y)
+  if (distance > DRAG_THRESHOLD_PX) suppressNextClick = true
+  pressStart = null
+}
+
+/** 悬停到可拖拽物体上时把光标换成抓取手型 */
+const handleHover = (event: PointerEvent) => {
+  if (dragState || !containerRef.value) return
+  const hit = pickAtClient(event.clientX, event.clientY)
+  containerRef.value.style.cursor = hit ? 'grab' : ''
 }
 
 /**
@@ -302,8 +516,17 @@ onMounted(() => {
     // 启动渲染循环
     startRendering()
 
-    // 绑定点击事件
+    // 绑定点击事件（选中/取消选中）
     container.addEventListener('click', handleClick)
+    // 拖拽：捕获阶段拦下按在物体上的 pointerdown，避免 OrbitControls 同时转相机
+    container.addEventListener('pointerdown', handlePointerDown, true)
+    container.addEventListener('pointerup', handleContainerPointerUp)
+    container.addEventListener('pointermove', handleHover)
+    pressStart = null
+    suppressNextClick = false
+    container.addEventListener('pointerleave', () => {
+      if (!dragState && containerRef.value) containerRef.value.style.cursor = ''
+    })
 
     // 监听尺寸变化（使用ResizeObserver替代useThree.size，避免依赖）。
     // ⚠️ 回调防抖：侧边栏 hover 展开是 CSS 过渡，宽度每帧都在变——
@@ -338,6 +561,18 @@ onUnmounted(() => {
   const container = containerRef.value
   if (container) {
     container.removeEventListener('click', handleClick)
+    container.removeEventListener('pointerdown', handlePointerDown, true)
+    container.removeEventListener('pointerup', handleContainerPointerUp)
+    container.removeEventListener('pointermove', handleHover)
+  }
+
+  // 拖到一半卸载：把 window 上的临时监听与暂停状态收干净
+  if (dragState) {
+    dragState = null
+    sceneEditorStore.simulationState.isPaused = false
+    window.removeEventListener('pointermove', handlePointerMove)
+    window.removeEventListener('pointerup', handlePointerUp)
+    window.removeEventListener('pointercancel', handlePointerUp)
   }
 
   // 停止尺寸监听

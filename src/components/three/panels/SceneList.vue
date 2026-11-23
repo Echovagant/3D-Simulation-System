@@ -20,6 +20,42 @@
 
     <p v-if="statusMessage" class="scene-status">{{ statusMessage }}</p>
 
+    <!-- 精选场景：不依赖后端，随时可载入；云端在线时可一键同步到云端 -->
+    <div class="scene-showcase">
+      <div class="scene-remote-head">
+        <h4>精选场景</h4>
+        <button
+          v-if="sync.state === 'online'"
+          class="scene-refresh"
+          :disabled="syncingShowcases"
+          title="把精选场景写入云端，换设备也能打开"
+          @click="syncShowcasesToCloud"
+        >
+          {{ syncingShowcases ? '同步中…' : '同步到云端' }}
+        </button>
+      </div>
+      <p class="scene-hint">
+        开箱即用的示例作品：教学实验、具身智能训练场、企业陈列、城市天际线。
+      </p>
+
+      <ul class="scene-items">
+        <li v-for="scene in SHOWCASE_SCENES" :key="scene.id" class="showcase-item">
+          <button
+            class="scene-open"
+            :disabled="isLoading || loadingShowcaseId !== ''"
+            @click="loadShowcase(scene)"
+          >
+            <span class="showcase-head">
+              <span class="scene-name">{{ scene.name }}</span>
+              <span class="scene-badge">{{ scene.audience }}</span>
+            </span>
+            <span class="showcase-desc">{{ scene.description }}</span>
+            <span class="scene-meta">{{ scene.document.objects.length }} 个物体 · 精选示例</span>
+          </button>
+        </li>
+      </ul>
+    </div>
+
     <!-- 云端场景：后端在场时才有。换一台设备保存的场景，从这里就能打开。 -->
     <div v-if="sync.state === 'online'" class="scene-remote">
       <div class="scene-remote-head">
@@ -34,7 +70,10 @@
       <ul v-else class="scene-items">
         <li v-for="scene in sync.remoteScenes" :key="scene.id" class="scene-item">
           <button class="scene-open" :disabled="isLoading" @click="openRemoteScene(scene)">
-            <span class="scene-name">{{ scene.name }}</span>
+            <span class="showcase-head">
+              <span class="scene-name">{{ scene.name }}</span>
+              <span v-if="scene.name.startsWith('精选 ·')" class="scene-badge">精选</span>
+            </span>
             <span class="scene-meta">
               {{ scene.objectCount }} 个物体 · {{ formatTime(scene.createdAt) }} · 云端
             </span>
@@ -55,16 +94,22 @@
 <script setup lang="ts">
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { SceneIndexEntry } from '@/types'
-import { useSceneEditorStore } from '@/stores/sceneEditorStore'
+import {
+  useSceneEditorStore,
+  type PrimitiveCreateOptions,
+} from '@/stores/sceneEditorStore'
 import { useSceneSyncStore } from '@/stores/sceneSyncStore'
 import { getScene, type SceneSummary } from '@/services/api/scenes'
 import { reportError } from '@/services/api/telemetry'
+import { SHOWCASE_SCENES, type ShowcaseScene } from '@/data/showcaseScenes'
 
 const store = useSceneEditorStore()
 const sync = useSceneSyncStore()
 
 const scenes = ref<SceneIndexEntry[]>([])
 const isLoading = ref(false)
+const loadingShowcaseId = ref('')
+const syncingShowcases = ref(false)
 const statusMessage = ref('')
 /** 后端探测过没有——没探测过就别急着说「云端不可用」 */
 const probeDone = ref(false)
@@ -75,9 +120,13 @@ const probeDone = ref(false)
  * 刚体与碰撞体归 useSceneEditor 所有，store 不能自己造刚体——
  * 加载场景时正是靠这两个方法把基本体连同物理一起重建出来。
  */
-const addCube = inject<() => boolean>('addCube', () => false)
-const addSphere = inject<() => boolean>('addSphere', () => false)
-const addRamp = inject<() => boolean>('addRamp', () => false)
+const addCube = inject<(options?: PrimitiveCreateOptions) => boolean>('addCube', () => false)
+const addSphere = inject<(options?: PrimitiveCreateOptions) => boolean>('addSphere', () => false)
+const addRamp = inject<(options?: PrimitiveCreateOptions) => boolean>('addRamp', () => false)
+const importModel = inject<(modelId: string) => Promise<boolean>>(
+  'importModel',
+  async () => false,
+)
 
 const refresh = () => {
   scenes.value = store.listScenes()
@@ -115,6 +164,51 @@ const openScene = async (sceneId: string) => {
     statusMessage.value = '加载场景失败'
   } finally {
     isLoading.value = false
+  }
+}
+
+/** 载入精选场景：不进「我的场景」索引，想保存再由用户自己点保存 */
+const loadShowcase = async (scene: ShowcaseScene) => {
+  if (loadingShowcaseId.value) return
+  isLoading.value = true
+  loadingShowcaseId.value = scene.id
+  statusMessage.value = ''
+
+  try {
+    // 可撤销：载入前拍快照，误点可以 Ctrl+Z 回去
+    store.pushHistory(`载入精选：${scene.name}`)
+    const result = await store.loadSceneDocument(scene.document)
+    statusMessage.value = result.ok
+      ? `已载入 ${scene.name}（${result.restored}/${result.total} 个物体）`
+      : `载入失败：${result.reason ?? '场景无法重建'}`
+  } catch (error) {
+    console.warn('[SceneList] 载入精选场景失败', error)
+    reportError(error, '/scene-editor')
+    statusMessage.value = '载入精选场景失败'
+  } finally {
+    loadingShowcaseId.value = ''
+    isLoading.value = false
+  }
+}
+
+/** 把精选场景推送（幂等覆盖）到云端 */
+const syncShowcasesToCloud = async () => {
+  if (syncingShowcases.value) return
+  syncingShowcases.value = true
+  statusMessage.value = ''
+
+  let pushed = 0
+  try {
+    for (const scene of SHOWCASE_SCENES) {
+      if (await sync.pushScene(scene.document)) pushed += 1
+    }
+    await sync.refresh()
+    statusMessage.value =
+      pushed === SHOWCASE_SCENES.length
+        ? `已同步 ${pushed} 个精选场景到云端`
+        : `已同步 ${pushed}/${SHOWCASE_SCENES.length} 个（其余失败，后端可能不可用）`
+  } finally {
+    syncingShowcases.value = false
   }
 }
 
@@ -175,9 +269,10 @@ onMounted(async () => {
   refresh()
   // 注册基本体工厂：让「加载出来的基本体」重新获得刚体与碰撞体
   store.registerPrimitiveFactory({
-    createCube: () => addCube(),
-    createSphere: () => addSphere(),
-    createRamp: () => addRamp(),
+    createCube: (options) => addCube(options),
+    createSphere: (options) => addSphere(options),
+    createRamp: (options) => addRamp(options),
+    importModel: (modelId) => importModel(modelId),
   })
 
   // 后端是可选增强：探不通就安静降级，不打扰用户
@@ -288,6 +383,40 @@ watch(
   background-color: var(--bg-inset);
   border-radius: 4px;
   padding: 6px 8px;
+}
+
+.scene-showcase {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.showcase-item {
+  margin-bottom: 6px;
+}
+
+.showcase-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.showcase-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
+
+.scene-badge {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background-color: var(--accent-soft);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .scene-remote {

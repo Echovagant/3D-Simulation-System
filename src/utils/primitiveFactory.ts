@@ -31,10 +31,16 @@ export const WEDGE_VERTICES: readonly number[] = [
   -0.5, 0.5, 0.5,
 ]
 
-/** 楔形索引：2 个三角帽 + 3 个矩形面（各 2 三角）= 8 三角；绕组全部朝外 */
+/**
+ * 楔形索引：2 个三角帽 + 3 个矩形面（各 2 三角）= 8 三角。
+ *
+ * ⚠️ 绕组必须全部朝外（逆时针看过去）。曾经前帽写成 `3,5,4`，
+ * 算出的法线朝 -z——从 +z 方向看时整个前帽被背面剔除，视觉上就是
+ * 「空心斜面」。任何改动都要用 primitiveFactory.test.ts 的逐面法线断言兜住。
+ */
 export const WEDGE_INDICES: readonly number[] = [
   0, 2, 1,
-  3, 5, 4,
+  3, 4, 5,
   0, 1, 3,
   1, 4, 3,
   0, 3, 2,
@@ -43,16 +49,25 @@ export const WEDGE_INDICES: readonly number[] = [
   2, 5, 4,
 ]
 
+/**
+ * 楔形渲染几何。
+ *
+ * 顶点是共享的（索引复用），因此 `computeVertexNormals()` 会在棱上把相邻面的
+ * 法线平均掉——斜面看起来像被「抹圆」。材质侧再用 `flatShading: true`
+ * 强制逐面法线，棱角才立得住。
+ */
+export const createWedgeGeometry = (): THREE.BufferGeometry => {
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute([...WEDGE_VERTICES], 3))
+  geometry.setIndex([...WEDGE_INDICES])
+  geometry.computeVertexNormals()
+  return geometry
+}
+
 const sharedGeometries: Record<PrimitiveType, THREE.BufferGeometry> = {
   cube: new THREE.BoxGeometry(1, 1, 1),
   sphere: new THREE.SphereGeometry(0.5, 32, 32),
-  ramp: (() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([...WEDGE_VERTICES], 3))
-    geometry.setIndex([...WEDGE_INDICES])
-    geometry.computeVertexNormals()
-    return geometry
-  })(),
+  ramp: createWedgeGeometry(),
 }
 
 /** 取共享几何体（碰撞体的基准尺寸也按它换算：立方体半长 0.5、球体半径 0.5） */

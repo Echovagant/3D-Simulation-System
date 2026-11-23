@@ -9,21 +9,21 @@
       >
         <i class="fas" :class="isPlaying ? 'fa-pause' : 'fa-play'"></i>
       </button>
-      <InfoTip
-        label="关于暂停模拟"
-        text="播放中物理每一步都会改写位置，手工摆的位置会被覆盖。要稳定摆放，先点「暂停模拟」——暂停只停物理，不停渲染。"
-      />
+      <button
+        class="toolbar-btn"
+        :disabled="!isSceneInitialized"
+        title="单步推进（暂停状态下逐帧观察）"
+        @click="handleStepOnce"
+      >
+        <i class="fas fa-forward-step"></i>
+      </button>
       <button
         class="toolbar-btn"
         @click="handleResetSimulation"
-        title="重置模拟"
+        title="重置模拟（回到物体初始位置）"
       >
-        <i class="fas fa-redo"></i>
+        <i class="fas fa-undo-alt"></i>
       </button>
-      <InfoTip
-        label="关于重置模拟"
-        text="「重置模拟」复位的是物体创建时的初始变换，不是你最后摆的位置；想让某个位置成为「初始位置」，重新摆一次再重置。"
-      />
     </div>
 
     <!-- 物体添加按钮组 -->
@@ -70,16 +70,36 @@
       </button>
     </div>
 
-    <!-- 物体操作按钮组 -->
+    <!-- 编辑与历史 -->
     <div class="toolbar-group">
+      <button
+        class="toolbar-btn"
+        :disabled="!store.canUndo"
+        title="撤销（Ctrl+Z）"
+        @click="handleUndo"
+      >
+        <i class="fas fa-undo"></i>
+      </button>
+      <button
+        class="toolbar-btn"
+        :disabled="!store.canRedo"
+        title="重做（Ctrl+Y / Ctrl+Shift+Z）"
+        @click="handleRedo"
+      >
+        <i class="fas fa-redo"></i>
+      </button>
       <button
         class="toolbar-btn"
         @click="handleRemoveSelected"
         :disabled="!hasSelectedObject"
-        title="删除选中对象"
+        title="删除选中对象（Delete）"
       >
         <i class="fas fa-trash"></i>
       </button>
+    </div>
+
+    <!-- 存取与场景文件 -->
+    <div class="toolbar-group">
       <button
         class="toolbar-btn"
         @click="handleSaveScene"
@@ -96,7 +116,48 @@
       >
         <i class="fas fa-file-export"></i>
       </button>
+      <button
+        class="toolbar-btn"
+        @click="handleImportClick"
+        :disabled="!isSceneInitialized"
+        title="导入场景 JSON"
+      >
+        <i class="fas fa-file-import"></i>
+      </button>
+      <button
+        class="toolbar-btn"
+        @click="handleRecallFallen"
+        :disabled="store.objects.length === 0"
+        title="召回掉出场地的物体（放回初始位置）"
+      >
+        <i class="fas fa-arrow-up-from-bracket"></i>
+      </button>
     </div>
+
+    <!-- 场地尺寸 -->
+    <div class="toolbar-group toolbar-world">
+      <label class="world-label" for="world-size">场地</label>
+      <select
+        id="world-size"
+        class="world-select"
+        :value="store.worldSize"
+        :disabled="!isSceneInitialized"
+        title="切换编辑场地大小"
+        @change="handleWorldSizeChange"
+      >
+        <option v-for="size in SCENE_WORLD_SIZES" :key="size" :value="size">
+          {{ size }} × {{ size }}
+        </option>
+      </select>
+    </div>
+
+    <input
+      ref="fileInput"
+      class="toolbar-file-input"
+      type="file"
+      accept=".json,application/json"
+      @change="handleImportFile"
+    />
 
     <!-- 状态提示 -->
     <div class="toolbar-status" v-if="statusMessage">
@@ -118,7 +179,8 @@ import { inject, computed, ref, watch } from 'vue';
 import { useSceneEditorStore } from '@/stores/sceneEditorStore';
 import { useModelStore } from '@/stores/modelStore';
 import { reportError } from '@/services/api/telemetry';
-import InfoTip from '@/components/common/InfoTip.vue';
+import { parseSceneDocumentJson } from '@/utils/sceneDocument';
+import { SCENE_WORLD_SIZES } from '@/config/sceneEditor';
 import ImportModelDialog from './ImportModelDialog.vue';
 import AiSceneDialog from './AiSceneDialog.vue';
 
@@ -133,12 +195,14 @@ const addSphere = inject('addSphere') ?? (() => false);
 const addRamp = inject('addRamp') ?? (() => false);
 const importModel = inject('importModel') ?? (async () => false);
 const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
+const stepOnce = inject('stepOnce') ?? (() => false);
 
 // 状态
 const statusMessage = ref('');
 const importingModel = ref(false);
 const showImportDialog = ref(false);
 const showAiSceneDialog = ref(false);
+const fileInput = ref(null);
 
 // 计算属性
 const isSceneInitialized = computed(() => getIsSceneInitialized());
@@ -168,34 +232,70 @@ const handleResetSimulation = () => {
   showTempMessage('重置物理模拟');
 };
 
+// 添加基本体：先拍快照，成功后才入历史栈（失败不留空撤销）
+const addWithHistory = (label, create) => {
+  const before = store.snapshotForHistory();
+  const success = create();
+  if (success) store.pushHistory(label, before);
+  return success;
+};
+
 // 添加立方体
 const handleAddCube = () => {
-  const success = addCube();
-  if (success) {
-    showTempMessage('立方体添加成功');
-  } else {
-    showTempMessage('立方体添加失败', 3000);
-  }
+  const success = addWithHistory('添加立方体', () => addCube());
+  showTempMessage(success ? '立方体添加成功' : '立方体添加失败', success ? 2000 : 3000);
 };
 
 // 添加球体
 const handleAddSphere = () => {
-  const success = addSphere();
-  if (success) {
-    showTempMessage('球体添加成功');
-  } else {
-    showTempMessage('球体添加失败', 3000);
-  }
+  const success = addWithHistory('添加球体', () => addSphere());
+  showTempMessage(success ? '球体添加成功' : '球体添加失败', success ? 2000 : 3000);
 };
 
 // 添加斜面
 const handleAddRamp = () => {
-  const success = addRamp();
-  if (success) {
-    showTempMessage('斜面添加成功');
+  const success = addWithHistory('添加斜面', () => addRamp());
+  showTempMessage(success ? '斜面添加成功' : '斜面添加失败', success ? 2000 : 3000);
+};
+
+// 单步推进一帧物理
+const handleStepOnce = () => {
+  const ok = stepOnce();
+  showTempMessage(ok ? '已单步推进一帧' : '场景尚未就绪', ok ? 1500 : 3000);
+};
+
+// 撤销 / 重做
+const handleUndo = async () => {
+  const ok = await store.undo();
+  showTempMessage(ok ? '已撤销' : '没有可撤销的操作', ok ? 1500 : 3000);
+};
+
+const handleRedo = async () => {
+  const ok = await store.redo();
+  showTempMessage(ok ? '已重做' : '没有可重做的操作', ok ? 1500 : 3000);
+};
+
+// 召回掉出场地的物体
+const handleRecallFallen = () => {
+  const before = store.snapshotForHistory();
+  const count = store.recallFallenObjects();
+  if (count > 0) {
+    store.pushHistory('召回掉落物体', before);
+    showTempMessage(`已召回 ${count} 个掉出场地的物体`);
   } else {
-    showTempMessage('斜面添加失败', 3000);
+    showTempMessage('没有掉出场地的物体', 2500);
   }
+};
+
+// 切换场地大小
+const handleWorldSizeChange = (event) => {
+  const size = Number(event.target.value);
+  if (!Number.isFinite(size) || size === store.worldSize) return;
+
+  const before = store.snapshotForHistory();
+  store.pushHistory('切换场地尺寸', before);
+  store.setWorldSize(size);
+  showTempMessage(`场地已切换为 ${size} × ${size}`);
 };
 
 // 导入模型：编辑器内直接选（不再跳模型库页）。
@@ -212,15 +312,17 @@ const handleRemoveSelected = () => {
 
   const objectName = store.selectedObject?.name || '对象';
 
-  const before = store.objects.length;
+  const beforeCount = store.objects.length;
+  const snapshot = store.snapshotForHistory();
   try {
     store.removeSelectedObject();
   } catch {
     // 删除失败时走下面的“未删除”分支，不谎报成功
   }
-  const after = store.objects.length;
+  const afterCount = store.objects.length;
 
-  if (after < before) {
+  if (afterCount < beforeCount) {
+    store.pushHistory(`删除 ${objectName}`, snapshot);
     showTempMessage(`已删除 ${objectName}`);
   } else {
     showTempMessage('未选中可删除的对象', 3000);
@@ -263,6 +365,48 @@ const handleExportScene = () => {
   }
 };
 
+// 导入场景 JSON：文件选择 → 运行时校验 → 本地库 → 重建世界
+const handleImportClick = () => {
+  if (!isSceneInitialized.value) return;
+  fileInput.value?.click();
+};
+
+const handleImportFile = async (event) => {
+  const input = event.target;
+  const file = input.files?.[0];
+  if (!file) return;
+
+  const snapshot = store.snapshotForHistory();
+  try {
+    const parsed = parseSceneDocumentJson(await file.text());
+    if (!parsed.ok) {
+      showTempMessage(`导入失败：${parsed.error}`, 6000);
+      return;
+    }
+
+    // 先收进本地库（出现在「我的场景」），再重建世界
+    store.importSceneDocument(parsed.document);
+    const result = await store.loadSceneDocument(parsed.document);
+    if (!result.ok) {
+      showTempMessage(`导入失败：${result.reason ?? '场景无法重建'}`, 6000);
+      return;
+    }
+
+    store.pushHistory(`导入场景 ${parsed.document.name}`, snapshot);
+    showTempMessage(
+      `已导入「${parsed.document.name}」：${result.restored}/${result.total} 个物体`,
+      4000,
+    );
+  } catch (error) {
+    console.warn('[Toolbar] 导入场景失败', error);
+    reportError(error, '/scene-editor');
+    showTempMessage('导入失败：文件读取错误', 5000);
+  } finally {
+    // 清空 value：同一个文件改完再导入也能触发 change
+    input.value = '';
+  }
+};
+
 // 导入「模型库交接过来的模型」
 //
 // 模型库把选中的模型写进 modelStore.selectedModelId，再跳回场景编辑器；
@@ -286,8 +430,10 @@ watch(
     }
 
     importingModel.value = true;
+    const snapshot = store.snapshotForHistory();
     try {
       const success = await importModel(modelId);
+      if (success) store.pushHistory(`导入模型 ${modelInfo.name}`, snapshot);
       showTempMessage(
         success ? `模型 "${modelInfo.name}" 导入成功` : `模型 "${modelInfo.name}" 导入失败`,
         success ? 2000 : 3000,
@@ -353,6 +499,37 @@ watch(
 
 .toolbar-btn i {
   font-size: 16px;
+}
+
+.toolbar-world {
+  align-items: center;
+  gap: 6px;
+}
+
+.world-label {
+  color: var(--text-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.world-select {
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background-color: var(--bg-inset);
+  color: var(--text-1);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.world-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-file-input {
+  display: none;
 }
 
 .toolbar-status {

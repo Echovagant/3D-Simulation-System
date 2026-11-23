@@ -4,10 +4,15 @@ import { ref, watch, type Ref, onUnmounted } from 'vue'
 import { useSceneEditorStore } from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
-import { WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
-import { createRandom, DEFAULT_SEED } from '../utils/prng'
+import { createWedgeGeometry, WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
 import type { ScenePrimitiveSpec } from '@/types'
 import { simulationConfig } from '../config/simulation'
+import {
+  PRIMITIVE_PALETTE,
+  normalizeWorldSize,
+  type SceneWorldSize,
+} from '../config/sceneEditor'
+import { planSpawnPosition } from '../utils/spawnPlanner'
 import { RENDER_POWER_PREFERENCE } from '../config/rendering'
 import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
 import type {
@@ -20,15 +25,16 @@ import type {
 } from '@dimforge/rapier3d'
 
 /**
- * 随机出生点：种子化 PRNG。
- * 同一颗种子 + 同一序号 = 同一出生位置——「随机」只是别叠在一起，
- * 不是实验条件里的不可控项。
+ * 出生序号与调色板指针。
+ *
+ * 用黄金角螺旋而不是「拿递增序号当随机种子」：后者相邻种子产出的第一个
+ * 随机数只差 0.0004，所有物体实际都落在同一个点。
  */
 let spawnSeq = 0
-const seededSpawn = (): { x: number; y: number; z: number } => {
-  const random = createRandom(DEFAULT_SEED + spawnSeq++)
-  return { x: (random() - 0.5) * 5, y: 2, z: (random() - 0.5) * 5 }
-}
+let colorSeq = 0
+
+/** 当前场地边长（由 store 注入，切换时重建地面与网格） */
+let currentWorldSize: SceneWorldSize = normalizeWorldSize(undefined)
 
 /**
  * 场景编辑器的组装层：three 场景、物理世界、物体账本与事件桥都在这里。
@@ -92,14 +98,8 @@ interface Item {
 const sharedGeometries: Record<'cube' | 'sphere' | 'ramp', THREE.BufferGeometry> = {
   cube: new THREE.BoxGeometry(1, 1, 1),
   sphere: new THREE.SphereGeometry(0.5, 32, 32),
-  ramp: (() => {
-    // 楔形顶点/索引来自 primitiveFactory 的同一份数据：编辑器、渲染页、物理 trimesh 三处共用
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([...WEDGE_VERTICES], 3))
-    geometry.setIndex([...WEDGE_INDICES])
-    geometry.computeVertexNormals()
-    return geometry
-  })(),
+  // 楔形顶点/索引来自 primitiveFactory 的同一份数据：编辑器、渲染页、物理 trimesh 三处共用
+  ramp: createWedgeGeometry(),
 }
 
 export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) {
@@ -142,6 +142,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   let controls: OrbitControls | null = null
   let groundMesh: THREE.Mesh | null = null
   let groundRigidBody: RigidBody | null = null
+  let gridHelper: THREE.GridHelper | null = null
+  let sunLight: THREE.DirectionalLight | null = null
 
   // 状态回调
   const onInitSuccess = ref<() => void>(() => {})
@@ -196,11 +198,14 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       renderer.shadowMap.enabled = true // 启用阴影
       // 不在这里添加renderer到DOM，让Viewport组件负责
 
+      // 场地大小由 store 持有：场景文档里带 worldSize 时，加载后跟着变
+      currentWorldSize = normalizeWorldSize(store.worldSize)
+
       // 添加光源
-      addLights()
+      addLights(currentWorldSize)
 
       // 添加辅助工具
-      addHelpers()
+      addHelpers(currentWorldSize)
 
       // 初始化控制器
       initControls()
@@ -209,7 +214,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       initPhysicsWorld()
 
       // 创建地面
-      createGround()
+      createGround(currentWorldSize)
 
       // 绑定事件
       bindEvents()
@@ -234,27 +239,43 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     return initEditor()
   }
 
+  /** 阴影相机范围跟着场地走：默认 ±5 的阴影相机在 40×40 场地上只覆盖中心一小块 */
+  const fitShadowCamera = (light: THREE.DirectionalLight, size: number): void => {
+    const half = size / 2 + 2
+    light.shadow.camera.left = -half
+    light.shadow.camera.right = half
+    light.shadow.camera.top = half
+    light.shadow.camera.bottom = -half
+    light.shadow.camera.near = 0.5
+    light.shadow.camera.far = size * 4
+    light.shadow.camera.updateProjectionMatrix()
+  }
+
   // 添加光源
-  const addLights = (): void => {
+  const addLights = (size: number): void => {
     if (!scene) return
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55)
     scene.add(ambientLight)
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-    directionalLight.position.set(5, 10, 7.5)
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.1)
+    directionalLight.position.set(size * 0.25, size * 0.55, size * 0.35)
     directionalLight.castShadow = true
-    directionalLight.shadow.mapSize.width = 1024
-    directionalLight.shadow.mapSize.height = 1024
+    directionalLight.shadow.mapSize.width = 2048
+    directionalLight.shadow.mapSize.height = 2048
+    fitShadowCamera(directionalLight, size)
     scene.add(directionalLight)
+    scene.add(directionalLight.target)
+    sunLight = directionalLight
   }
 
   // 添加辅助工具
-  const addHelpers = (): void => {
+  const addHelpers = (size: number): void => {
     if (!scene) return
 
-    // 添加网格辅助线
-    const gridHelper = new THREE.GridHelper(10, 10)
+    // 网格与地面同高，抬高 1 毫米避免 z-fighting（否则网格会随机闪烁）
+    gridHelper = new THREE.GridHelper(size, size, 0x5f6b7a, 0x363b44)
+    gridHelper.position.y = 0.001
     scene.add(gridHelper)
 
     // 添加主要坐标系（更明显的坐标轴）
@@ -262,7 +283,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     scene.add(axesHelper)
 
     // 添加次级坐标系（使用不同颜色和透明度的材质）
-    const secondaryAxesHelper = new THREE.AxesHelper(10)
+    const secondaryAxesHelper = new THREE.AxesHelper(Math.max(10, size / 4))
     secondaryAxesHelper.material.opacity = 0.3
     secondaryAxesHelper.material.transparent = true
     scene.add(secondaryAxesHelper)
@@ -275,6 +296,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.05
+    controls.minDistance = 1
+    controls.maxDistance = currentWorldSize * 2.5
   }
 
   // 初始化物理世界
@@ -287,16 +310,28 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     eventQueue = new rapier.EventQueue(true)
   }
 
-  // 创建地面
-  const createGround = (): void => {
+  // 创建地面（边长 = 场地边长；网格、可见地面、物理地面共用同一口径）
+  const createGround = (size: number): void => {
     if (!scene || !rapier || !physicsWorld) return
 
+    // 先把旧地面清干净：切场地时若不销账，旧碰撞体会留在物理世界里
+    if (groundMesh) {
+      scene.remove(groundMesh)
+      groundMesh.geometry.dispose()
+      ;(groundMesh.material as THREE.Material).dispose()
+      groundMesh = null
+    }
+    if (groundRigidBody) {
+      physicsWorld.removeRigidBody(groundRigidBody)
+      groundRigidBody = null
+    }
+
     // 创建地面网格
-    const groundGeometry = new THREE.PlaneGeometry(10, 10)
+    const groundGeometry = new THREE.PlaneGeometry(size, size)
     const groundMaterial = new THREE.MeshStandardMaterial({
-      color: 0x888888,
-      roughness: 0.8,
-      metalness: 0.2,
+      color: 0x7d8590,
+      roughness: 0.9,
+      metalness: 0.05,
     })
 
     groundMesh = new THREE.Mesh(groundGeometry, groundMaterial)
@@ -307,14 +342,66 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     // 创建地面刚体
     //
     // ⚠️ 刚体要往下挪 0.1：上面的地面**网格**是 PlaneGeometry，平面就在 y=0；
-    // 而 cuboid(5, 0.1, 5) 建在原点时顶面在 y=+0.1，物体就会停在半空中悬着 10 厘米。
+    // 而 cuboid(half, 0.1, half) 建在原点时顶面在 y=+0.1，物体就会停在半空中悬着 10 厘米。
     // 刚体下移 0.1 之后，碰撞体顶面与可见地面齐平（y=0）。
+    const half = size / 2
     const groundBodyDesc = rapier.RigidBodyDesc.fixed().setTranslation(0, -0.1, 0)
     groundRigidBody = physicsWorld.createRigidBody(groundBodyDesc)
 
     // 创建碰撞体
-    const groundColliderDesc = rapier.ColliderDesc.cuboid(5, 0.1, 5)
+    const groundColliderDesc = rapier.ColliderDesc.cuboid(half, 0.1, half)
     physicsWorld.createCollider(groundColliderDesc, groundRigidBody)
+  }
+
+  /**
+   * 切换场地边长：重建网格、阴影范围、可见地面与物理地面。
+   *
+   * ⚠️ 这个函数**不写 store**（store 是意图，这里是实现）。界面改 store，
+   * 由 SceneEditor 的 watch 统一调过来，避免两边互相写导致回声。
+   */
+  const setWorldSize = (rawSize: number): boolean => {
+    const size = normalizeWorldSize(rawSize)
+    currentWorldSize = size
+
+    if (!scene) return false
+
+    if (gridHelper) {
+      scene.remove(gridHelper)
+      gridHelper.geometry.dispose()
+      ;(gridHelper.material as THREE.Material).dispose()
+      gridHelper = null
+    }
+    // 重建网格（同时保证网格与地面同尺寸）
+    gridHelper = new THREE.GridHelper(size, size, 0x5f6b7a, 0x363b44)
+    gridHelper.position.y = 0.001
+    scene.add(gridHelper)
+
+    if (sunLight) {
+      sunLight.position.set(size * 0.25, size * 0.55, size * 0.35)
+      fitShadowCamera(sunLight, size)
+    }
+
+    if (controls) controls.maxDistance = size * 2.5
+
+    createGround(size)
+    return true
+  }
+
+  /**
+   * 暂停状态下单步推进一帧物理（教学演示用）。
+   *
+   * 与 updatePhysics 的区别：这里**不累加真实时间、不看播放状态**，
+   * 点一次就严格推进一步固定步长。
+   */
+  const stepOnce = (): boolean => {
+    if (!physicsWorld || !eventQueue || !isSceneInitialized) return false
+
+    physicsWorld.integrationParameters.dt = fixedTimeStep
+    physicsWorld.step(eventQueue)
+    store.simulationState.currentTime += fixedTimeStep
+    store.simulationState.frameCount += 1
+    syncPhysicsToObjects()
+    return true
   }
 
   // 绑定事件
@@ -576,12 +663,13 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     rigidBody: RigidBody,
     collider: Collider,
     shape: 'box' | 'sphere' | 'mesh',
+    bodyType: 'dynamic' | 'static' | 'kinematic' = 'dynamic',
   ): void => {
     object.userData.physics = {
       ...(object.userData.physics ?? {}),
       body: rigidBody,
       collider,
-      type: 'dynamic',
+      type: bodyType,
       shape,
       mass: 1,
     }
@@ -598,16 +686,25 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       rotation?: { x: number; y: number; z: number }
       scale?: { x: number; y: number; z: number }
     },
+    options: {
+      color?: number
+      bodyType?: 'dynamic' | 'static' | 'kinematic'
+    } = {},
   ): THREE.Mesh | null => {
     if (!isSceneInitialized || !physicsWorld || !rapier) {
       return null
     }
 
+    const bodyType = options.bodyType ?? 'dynamic'
+
     // 材质每对象独立（高亮靠 material.emissive，共享会串色）
     const material = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(Math.random() * 0xffffff),
+      // 不再用纯随机色：高饱和随机色放一起会脏，精选场景也没法配色
+      color: options.color ?? PRIMITIVE_PALETTE[colorSeq++ % PRIMITIVE_PALETTE.length],
       metalness: 0.3,
       roughness: 0.4,
+      // 楔形共享顶点会把棱角法线平均掉，逐面着色才能看出实体
+      flatShading: type === 'ramp',
     })
 
     // 创建3D物体
@@ -618,8 +715,16 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     if (transform?.position) {
       mesh.position.set(transform.position.x, transform.position.y, transform.position.z)
     } else {
-      // 随机出生点走种子化 PRNG：同一序号同一位置，不参与「实验条件不可控」
-      const spawn = seededSpawn()
+      // 黄金角螺旋出生点：与已有物体保持间距，且同一个序号永远落在同一处
+      const spawn = planSpawnPosition({
+        index: spawnSeq,
+        worldSize: currentWorldSize,
+        occupied: store.objects
+          .map((item) => item.threeObject)
+          .filter((object): object is THREE.Object3D => Boolean(object))
+          .map((object) => ({ x: object.position.x, z: object.position.z })),
+      })
+      spawnSeq += 1
       mesh.position.set(spawn.x, spawn.y, spawn.z)
     }
     if (transform?.rotation) {
@@ -634,14 +739,30 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     let rigidBody: RigidBody | null = null
 
     try {
-      // 创建动态刚体
-      const rigidBodyDesc = rapier.RigidBodyDesc.dynamic().setTranslation(
+      // 刚体类型：默认动态；精选场景/教学地形用 static 搭固定结构
+      const bodyDesc =
+        bodyType === 'static'
+          ? rapier.RigidBodyDesc.fixed()
+          : bodyType === 'kinematic'
+            ? rapier.RigidBodyDesc.kinematicPositionBased()
+            : rapier.RigidBodyDesc.dynamic()
+      const rigidBodyDesc = bodyDesc.setTranslation(
         mesh.position.x,
         mesh.position.y,
         mesh.position.z,
       )
 
       rigidBody = physicsWorld.createRigidBody(rigidBodyDesc)
+      // 旋转也必须一起写进刚体：只转 mesh 的话，第一帧物理同步就会把它掰回默认朝向。
+      // 默认朝向（0,0,0）不用写：测试替身不一定实现 setRotation，而真实 Rapier 里
+      // 建体时的默认四元数本来就是单位四元数。
+      if (mesh.rotation.x !== 0 || mesh.rotation.y !== 0 || mesh.rotation.z !== 0) {
+        const quaternion = new THREE.Quaternion().setFromEuler(mesh.rotation)
+        rigidBody.setRotation(
+          { x: quaternion.x, y: quaternion.y, z: quaternion.z, w: quaternion.w },
+          true,
+        )
+      }
       rigidBodies.set(mesh.uuid, rigidBody)
 
       // 创建碰撞体
@@ -675,6 +796,12 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         colliderShapes.set(mesh.uuid, { kind: 'ball', radius: size })
       }
 
+      // 调用方给了缩放（AI 生成、场景恢复、精选场景）：碰撞体必须立刻按同一缩放重建，
+      // 否则视觉放大了 3 倍、碰撞还停在基准尺寸。
+      if (transform?.scale) {
+        applyScaleToCollider(mesh.uuid, transform.scale)
+      }
+
       // 设置userData以便反向查找
       ;(rigidBody as RapierRigidBody).userData = { object: mesh }
       attachRigidBodyToUserData(
@@ -682,6 +809,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         rigidBody,
         collider,
         type === 'cube' ? 'box' : type === 'ramp' ? 'mesh' : 'sphere',
+        bodyType,
       )
 
       // 将物体添加到场景中
@@ -695,6 +823,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         type,
         name: mesh.name,
         threeObject: mesh,
+        color: material.color.getHex(),
+        physicsType: bodyType,
         position: {
           x: mesh.position.x,
           y: mesh.position.y,
@@ -728,33 +858,69 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     }
   }
 
+  interface PrimitiveCreateOptions {
+    color?: number
+    bodyType?: 'dynamic' | 'static' | 'kinematic'
+  }
+
   // 添加立方体
-  const addCube = (): boolean => {
-    const cube = createGeometry('cube', sharedGeometries.cube, 0.5, 'Cube')
+  const addCube = (options: PrimitiveCreateOptions = {}): boolean => {
+    const cube = createGeometry(
+      'cube',
+      sharedGeometries.cube,
+      0.5,
+      'Cube',
+      undefined,
+      options,
+    )
     return cube !== null
   }
 
   // 添加球体
-  const addSphere = (): boolean => {
-    const sphere = createGeometry('sphere', sharedGeometries.sphere, 0.5, 'Sphere')
+  const addSphere = (options: PrimitiveCreateOptions = {}): boolean => {
+    const sphere = createGeometry(
+      'sphere',
+      sharedGeometries.sphere,
+      0.5,
+      'Sphere',
+      undefined,
+      options,
+    )
     return sphere !== null
   }
 
   // 添加斜面（楔形）：教学场景「斜面滑块/滚动」的基础地形件
-  const addRamp = (): boolean => {
-    const ramp = createGeometry('ramp', sharedGeometries.ramp, 1, 'Ramp')
+  const addRamp = (options: PrimitiveCreateOptions = {}): boolean => {
+    const ramp = createGeometry(
+      'ramp',
+      sharedGeometries.ramp,
+      1,
+      'Ramp',
+      undefined,
+      options,
+    )
     return ramp !== null
   }
 
-  // 程序化摆放基础体（LLM 场景生成等需要精确变换的路径）：
-  // 与工具栏按钮的随机出生不同，位置/旋转/缩放完全按调用方给定
+  // 程序化摆放基础体（LLM 场景生成、场景恢复等需要精确变换的路径）：
+  // 与工具栏按钮的随机出生不同，位置/旋转/缩放/颜色完全按调用方给定
   const addPrimitive = (spec: ScenePrimitiveSpec): boolean => {
     const size = spec.type === 'ramp' ? 1 : 0.5
-    const mesh = createGeometry(spec.type, sharedGeometries[spec.type], size, spec.name, {
-      position: spec.position,
-      rotation: spec.rotation,
-      scale: spec.scale,
-    })
+    const mesh = createGeometry(
+      spec.type,
+      sharedGeometries[spec.type],
+      size,
+      spec.name,
+      {
+        position: spec.position,
+        rotation: spec.rotation,
+        scale: spec.scale,
+      },
+      {
+        color: spec.color,
+        bodyType: spec.bodyType ?? 'dynamic',
+      },
+    )
     return mesh !== null
   }
 
@@ -799,8 +965,15 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         model.updateMatrixWorld(true)
       }
 
-      // 设置模型位置（随机出生点同样种子化，与基本体的口径一致）
-      const spawn = seededSpawn()
+      // 设置模型位置（与基本体共用同一套黄金角螺旋出生点）
+      const spawn = planSpawnPosition({
+        index: spawnSeq++,
+        worldSize: currentWorldSize,
+        occupied: store.objects
+          .map((item) => item.threeObject)
+          .filter((object): object is THREE.Object3D => Boolean(object))
+          .map((object) => ({ x: object.position.x, z: object.position.z })),
+      })
       model.position.set(spawn.x, spawn.y, spawn.z)
       model.castShadow = true
 
@@ -820,10 +993,21 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       // 创建碰撞体
       const colliderDesc = rapier.ColliderDesc.cuboid(halfExtents.x, halfExtents.y, halfExtents.z)
       const collider = physicsWorld.createCollider(colliderDesc, rigidBody)
-      // 登记碰撞体基准尺寸：模型缩放同样要作用到碰撞体上
+      // 登记碰撞体**基准尺寸**（缩放为 1 时的半长）：模型导入时会先做一次
+      // 尺度归一，包围盒量到的是归一后的世界尺寸——要除掉当前 scale 才是基准。
+      // 否则属性面板把 scale 从 0.4 改成 1 时，碰撞体会被二次缩小。
+      const baseScale = {
+        x: Math.abs(model.scale.x) || 1,
+        y: Math.abs(model.scale.y) || 1,
+        z: Math.abs(model.scale.z) || 1,
+      }
       colliderShapes.set(model.uuid, {
         kind: 'cuboid',
-        halfExtents: { x: halfExtents.x, y: halfExtents.y, z: halfExtents.z },
+        halfExtents: {
+          x: halfExtents.x / baseScale.x,
+          y: halfExtents.y / baseScale.y,
+          z: halfExtents.z / baseScale.z,
+        },
       })
 
       // 设置userData
@@ -935,6 +1119,17 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     }
 
     // 清理Three.js对象
+    if (groundMesh) {
+      groundMesh.geometry.dispose()
+      ;(groundMesh.material as THREE.Material).dispose()
+      groundMesh = null
+    }
+    if (gridHelper) {
+      gridHelper.geometry.dispose()
+      ;(gridHelper.material as THREE.Material).dispose()
+      gridHelper = null
+    }
+    sunLight = null
     if (scene) {
       scene.clear()
       scene = null
@@ -972,6 +1167,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     addPrimitive,
     importModel,
     updatePhysics,
+    setWorldSize,
+    stepOnce,
     getIsSceneInitialized: () => isSceneInitialized,
     // 刚体账本：刚体生命周期的唯一所有者在这里，外部只能读、不能改
     removeRigidBodyByUuid,

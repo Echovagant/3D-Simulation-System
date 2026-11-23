@@ -390,6 +390,8 @@ describe('固定步长推进物理', () => {
     const uuid = store.objects[0].uuid
     const mesh = meshOf(store)
     const body = mesh.userData.physics.body
+    // 出生高度是可配置的（避免新物体叠在一起），断言要相对初始高度，而不是写死某个 y
+    const initialY = body.translation().y
 
     await startPlaying(store)
 
@@ -397,7 +399,7 @@ describe('固定步长推进物理', () => {
     editor.updatePhysics(100)
 
     // 刚体被重力积分下去了，mesh 必须走到同一个位置
-    expect(body.translation().y).toBeLessThan(2)
+    expect(body.translation().y).toBeLessThan(initialY)
     expect(mesh.position.y).toBeCloseTo(body.translation().y, 10)
     expect(uuid).toBeTruthy()
   })
