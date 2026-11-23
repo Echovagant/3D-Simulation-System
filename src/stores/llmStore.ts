@@ -345,7 +345,7 @@ export const useLlmStore = defineStore('llm', () => {
     if (!current) return ''
     return current === expected ? '' : expected === 'subscription'
       ? '这把是按量计费的 Key，当前条目要的是订阅 Key——两者不通用，请换条目或换 Key。'
-      : '这把是订阅 Key，当前条目要的是按量计费的 Key——两者不通用，请换条目或换 Key。'
+      : '这把是订阅 Key，当前条目要的是按量计费的 Key——两者不通用。订阅 Key 请按区域选条目：国内用「MiniMax（国内版 · 订阅）」，海外用「MiniMax（订阅）」。'
   })
 
   /** 清掉当前提供商的 key */

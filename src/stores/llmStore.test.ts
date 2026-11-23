@@ -391,6 +391,15 @@ describe('LLM store · 凭证类型与模型列表', () => {
     expect(store.keyKindMismatch).toContain('不通用')
   })
 
+  it('订阅 Key 贴到按量计费条目时，提示按区域换到订阅条目', () => {
+    const store = useLlmStore()
+    // 默认第一条是海外按量计费条目：国内订阅 Key 贴进来最常踩这个坑
+    store.selectProvider('minimax')
+    store.applyKey(SUBSCRIPTION_KEY)
+
+    expect(store.keyKindMismatch).toContain('国内版 · 订阅')
+  })
+
   it('凭证对得上时没有提示', () => {
     const store = useLlmStore()
     store.selectProvider('minimax-subscription')
