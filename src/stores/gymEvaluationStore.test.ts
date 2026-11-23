@@ -353,6 +353,19 @@ describe('写失败不抛给界面', () => {
     expect(store.lastError).toContain('写入失败')
   })
 
+  it('finishRun 保留 finalDistance（界面策略对比要用）', () => {
+    const store = useGymEvaluationStore()
+    store.finishRun({
+      ...makeRunInput('带距离'),
+      results: [makeResult({ finalDistance: 0.42 })],
+    })
+
+    expect(store.lastResults[0].finalDistance).toBe(0.42)
+    // 留档里也要在：重开页面后策略对比仍能读到距离
+    const stored = JSON.parse(localStorage.getItem(GYM_EVAL_RESULTS_KEY) as string)
+    expect(stored[0].results[0].finalDistance).toBe(0.42)
+  })
+
   it('写失败时记录运行返回 null，但 lastResults 已经更新', () => {
     const store = useGymEvaluationStore()
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {

@@ -649,4 +649,96 @@ describe('gymWorkbenchStore', () => {
       expect(invokeSpy).not.toHaveBeenCalled()
     })
   })
+
+  describe('buildProposalContext（上下文预览）', () => {
+    it('没有会话 / 观测：返回可读原因，不请求模型', async () => {
+      installFetch()
+      const store = useGymWorkbenchStore()
+      const invokeSpy = stubInvokeOk('{"forceX": 1, "forceZ": 0}')
+
+      const noSession = await store.buildProposalContext()
+      expect(noSession.ok).toBe(false)
+      if (!noSession.ok) expect(noSession.error).toContain('还没有选中会话')
+
+      // 有会话但没观测（模拟被清空）：也要给出可读原因
+      store.currentSessionId = 'sess-1'
+      store.lastObservation = null
+      const noObservation = await store.buildProposalContext()
+      expect(noObservation.ok).toBe(false)
+      if (!noObservation.ok) expect(noObservation.error).toContain('还没有观测')
+
+      expect(invokeSpy).not.toHaveBeenCalled()
+    })
+
+    it('有会话与观测：快照、messages、provider/model、forceLimit 完整', async () => {
+      installFetch()
+      knowledgeNow = [
+        {
+          id: 9,
+          title: '力控经验',
+          content: '接近目标时减小力度，避免冲过头。',
+          tags: 'gym, 力控',
+          importance: 0.8,
+          createdAt: '2026-11-23T10:00:00',
+          updatedAt: '2026-11-23T10:00:00',
+          lastAccessedAt: '2026-11-23T10:00:00',
+        },
+      ]
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      const llmStore = useLlmStore()
+
+      const built = await store.buildProposalContext()
+
+      expect(built.ok).toBe(true)
+      if (!built.ok) return
+      const { context } = built
+      expect(context.snapshot.distance).toBe(3)
+      expect(context.snapshot.forceLimit).toBe(30)
+      expect(context.forceLimit).toBe(30)
+      expect(context.provider).toBe(llmStore.provider.name)
+      expect(context.model).toBe(llmStore.model)
+      expect(context.references).toEqual([
+        { id: 9, title: '力控经验', content: '接近目标时减小力度，避免冲过头。' },
+      ])
+      expect(context.messages.map((message) => message.role)).toEqual(['system', 'user'])
+      expect(context.messages[0].content).toContain('references')
+      const payload = JSON.parse(context.messages[1].content) as {
+        force_limit: number
+        safe_force_limit: number
+        references: Array<{ title: string }>
+      }
+      expect(payload.force_limit).toBe(30)
+      expect(payload.safe_force_limit).toBeCloseTo(24, 8)
+      expect(payload.references[0].title).toBe('力控经验')
+    })
+
+    it('预览只读：不调用模型，也不发 step', async () => {
+      const fetchMock = installFetch()
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      const invokeSpy = stubInvokeOk('{"forceX": 5, "forceZ": 0}')
+      const stepsBefore = countStepCalls(fetchMock)
+
+      await store.buildProposalContext()
+
+      expect(invokeSpy).not.toHaveBeenCalled()
+      expect(countStepCalls(fetchMock)).toBe(stepsBefore)
+      expect(store.lastProposal).toBeNull()
+    })
+
+    it('资料检索失败不影响预览：资料为空数组', async () => {
+      installFetch()
+      knowledgeFails = true
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+
+      const built = await store.buildProposalContext()
+
+      expect(built.ok).toBe(true)
+      if (!built.ok) return
+      expect(built.context.references).toEqual([])
+      expect(built.context.messages[0].content).not.toContain('references')
+    })
+  })
 })

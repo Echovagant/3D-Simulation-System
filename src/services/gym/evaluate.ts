@@ -28,6 +28,53 @@ import type {
   GymTaskSuite,
 } from '@/stores/gymEvaluationStore'
 
+/** 策略对比里的一行指标：数值 + 相对基准策略的差值（Δ = 当前 - 基准） */
+export interface GymPolicyComparison {
+  policyId: GymEvalPolicyId
+  /** 该策略的运行数（含失败） */
+  runs: number
+  runsDelta: number
+  /** 0~1；分母是该策略全部运行 */
+  successRate: number
+  successRateDelta: number
+  /** 平均步数只统计无错误的运行 */
+  avgSteps: number
+  avgStepsDelta: number
+  /** 平均 reward 只统计无错误的运行 */
+  avgReward: number
+  avgRewardDelta: number
+  /** 平均最终距离只统计「无错误且记录了最终距离」的运行；没有数据时为 null */
+  avgFinalDistance: number | null
+  avgFinalDistanceDelta: number | null
+  /** 带 error 的运行数 */
+  errors: number
+  errorsDelta: number
+}
+
+/** 逐任务矩阵里的一格：某个任务在某策略下的结果 */
+export interface GymTaskComparisonCell {
+  policyId: GymEvalPolicyId
+  success: boolean
+  steps: number
+  error: string | null
+}
+
+/** 逐任务矩阵的一行：一个任务在各策略下的结果（缺失时为 null） */
+export interface GymTaskComparisonRow {
+  taskId: string
+  taskName: string
+  /** 与 comparison.policies 顺序一致 */
+  cells: Array<GymTaskComparisonCell | null>
+}
+
+/** 策略对比的完整结果 */
+export interface GymEvalComparison {
+  /** 作为 Δ 基准的第一个策略；没有任何策略时为 null */
+  baselinePolicyId: GymEvalPolicyId | null
+  policies: GymPolicyComparison[]
+  matrix: GymTaskComparisonRow[]
+}
+
 /** 目标圈半径（米），与后端 gym_service.GOAL_RADIUS 同口径 */
 export const GYM_EVAL_GOAL_RADIUS = 0.5
 
@@ -211,6 +258,8 @@ const runSingle = async (
     steps,
     totalReward,
     wallClockMs: Date.now() - startedAt,
+    // 失败时 finalDistance 仍是 Infinity：落成 null，界面显示为「—」
+    finalDistance: Number.isFinite(finalDistance) ? finalDistance : null,
     error,
   }
 }
@@ -264,6 +313,89 @@ export const summarizeGymEvalResults = (
     avgReward: average(healthy.map((result) => result.totalReward)),
     avgLatencyMs: average(healthy.map((result) => result.wallClockMs)),
     byPolicy: policyIds.map((policyId) => summarizePolicy(policyId, results)),
+  }
+}
+
+const averageOrNull = (values: number[]): number | null =>
+  values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length
+
+/**
+ * 策略对比（纯函数）。
+ *
+ * 口径与 `summarizeGymEvalResults` 保持一致：成功率分母是全部运行（失败也算没成功），
+ * 平均步数 / reward / 最终距离只统计无错误的运行。差值 Δ = 当前策略 - 第一个策略，
+ * 基准策略自己的 Δ 恒为 0。逐任务矩阵按任务首次出现的顺序排，单元格缺失（该任务
+ * 没有这个策略的结果）时为 null，便于看出差异来自哪个任务。
+ */
+export const compareGymEvalResults = (
+  results: GymEvalRunResult[],
+  policies: GymEvalPolicyId[],
+): GymEvalComparison => {
+  const policyIds = [
+    ...new Set([...policies, ...results.map((result) => result.policyId)]),
+  ]
+
+  const baseRows = policyIds.map((policyId) => {
+    const runs = results.filter((result) => result.policyId === policyId)
+    const healthy = runs.filter((result) => result.error === null)
+    const successes = runs.filter((result) => result.success).length
+    const distances = healthy
+      .map((result) => result.finalDistance)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    return {
+      policyId,
+      runs: runs.length,
+      successRate: runs.length > 0 ? successes / runs.length : 0,
+      avgSteps: average(healthy.map((result) => result.steps)),
+      avgReward: average(healthy.map((result) => result.totalReward)),
+      avgFinalDistance: averageOrNull(distances),
+      errors: runs.length - healthy.length,
+    }
+  })
+
+  const baseline = baseRows[0]
+  const comparisonRows: GymPolicyComparison[] = baseRows.map((row) => ({
+    ...row,
+    runsDelta: baseline ? row.runs - baseline.runs : 0,
+    successRateDelta: baseline ? row.successRate - baseline.successRate : 0,
+    avgStepsDelta: baseline ? row.avgSteps - baseline.avgSteps : 0,
+    avgRewardDelta: baseline ? row.avgReward - baseline.avgReward : 0,
+    avgFinalDistanceDelta:
+      baseline && row.avgFinalDistance !== null && baseline.avgFinalDistance !== null
+        ? row.avgFinalDistance - baseline.avgFinalDistance
+        : null,
+    errorsDelta: baseline ? row.errors - baseline.errors : 0,
+  }))
+
+  // 逐任务矩阵：任务顺序按明细里首次出现排，策略列顺序与上面一致
+  const taskOrder: Array<{ taskId: string; taskName: string }> = []
+  const seenTasks = new Set<string>()
+  for (const result of results) {
+    if (seenTasks.has(result.taskId)) continue
+    seenTasks.add(result.taskId)
+    taskOrder.push({ taskId: result.taskId, taskName: result.taskName })
+  }
+
+  const matrix: GymTaskComparisonRow[] = taskOrder.map((task) => ({
+    ...task,
+    cells: policyIds.map((policyId) => {
+      const matched = results.find(
+        (result) => result.taskId === task.taskId && result.policyId === policyId,
+      )
+      if (!matched) return null
+      return {
+        policyId,
+        success: matched.success,
+        steps: matched.steps,
+        error: matched.error,
+      }
+    }),
+  }))
+
+  return {
+    baselinePolicyId: policyIds[0] ?? null,
+    policies: comparisonRows,
+    matrix,
   }
 }
 

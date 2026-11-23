@@ -182,6 +182,8 @@ describe('evaluateTaskSuite —— 正常路径', () => {
       success: true,
       steps: 1,
       totalReward: 10,
+      // 策略对比要用最终距离：必须从最后一步观测带回来
+      finalDistance: 0.2,
       error: null,
     })
     expect(deleteGymSession).toHaveBeenCalledWith('owner-1', 'sess-1')

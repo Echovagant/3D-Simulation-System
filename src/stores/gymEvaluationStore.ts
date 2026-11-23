@@ -61,6 +61,8 @@ export interface GymEvalRunResult {
   steps: number
   totalReward: number
   wallClockMs: number
+  /** 终局时的水平距离（米）；运行失败没有有效观测时为 null */
+  finalDistance?: number | null
   /** 非空表示这次运行失败（后端不可达 / 422 / 清理失败等） */
   error: string | null
 }
@@ -185,6 +187,10 @@ const sanitizeSuite = (raw: unknown): GymTaskSuite | null => {
 
 const sanitizeResult = (raw: unknown): GymEvalRunResult | null => {
   if (!isRecord(raw) || !isPolicyId(raw.policyId)) return null
+  const finalDistance =
+    typeof raw.finalDistance === 'number' && Number.isFinite(raw.finalDistance)
+      ? Math.max(0, raw.finalDistance)
+      : null
   return {
     taskId: typeof raw.taskId === 'string' ? raw.taskId : '',
     taskName: sanitizeName(raw.taskName, '未命名任务'),
@@ -193,6 +199,7 @@ const sanitizeResult = (raw: unknown): GymEvalRunResult | null => {
     steps: clampInt(raw.steps, 0, 1_000_000, 0),
     totalReward: finiteOr(raw.totalReward, 0),
     wallClockMs: Math.max(0, finiteOr(raw.wallClockMs, 0)),
+    finalDistance,
     error: typeof raw.error === 'string' && raw.error ? raw.error : null,
   }
 }

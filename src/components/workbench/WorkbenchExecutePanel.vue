@@ -132,6 +132,15 @@
           <button
             type="button"
             class="wb-preset-btn"
+            title="查看下一次提议会发送的观测、注入资料与提示词（只读，不调用模型）"
+            :disabled="store.deciding || store.stepping"
+            @click="openContextPreview"
+          >
+            预览上下文
+          </button>
+          <button
+            type="button"
+            class="wb-preset-btn"
             title="把当前提议的力再发一步"
             :disabled="!store.lastProposal || store.deciding || store.stepping"
             @click="onSendProposal"
@@ -193,17 +202,27 @@
         </dl>
       </div>
     </template>
+
+    <ContextPreviewDialog v-if="contextPreviewOpen" @close="contextPreviewOpen = false" />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useGymWorkbenchStore } from '@/stores/gymWorkbenchStore'
+import ContextPreviewDialog from './ContextPreviewDialog.vue'
 
 const store = useGymWorkbenchStore()
 
 const actionJson = ref('{ "forceX": 5, "forceZ": 0 }')
 const localError = ref('')
+/** 上下文预览弹窗开关 */
+const contextPreviewOpen = ref(false)
+
+const openContextPreview = (): void => {
+  localError.value = ''
+  contextPreviewOpen.value = true
+}
 
 const shortId = (id: string): string => id.slice(0, 8)
 

@@ -41,12 +41,14 @@ import {
 } from '@/services/api/memory'
 import { listKnowledge } from '@/services/api/knowledge'
 import {
+  buildGymDecisionMessages,
   buildGymDecisionSnapshot,
   GYM_DEFAULT_FORCE_LIMIT,
   KNOWLEDGE_DECISION_LIMIT,
   KNOWLEDGE_DECISION_QUERY,
   proposeForceAction,
   type ForceProposalSource,
+  type GymDecisionSnapshot,
   type GymKnowledgeReference,
 } from '@/services/llm/gymDecision'
 import { useLlmStore } from './llmStore'
@@ -84,6 +86,27 @@ export interface GymTeamRun {
   references: Array<{ id: number; title: string }>
   executed: boolean
 }
+
+/**
+ * 下一次提议真正会发送的内容（预览与实际请求共用一份构造，避免漂移）。
+ */
+export interface GymProposalContext {
+  /** 观测快照（喂给模型的全部感知数据） */
+  snapshot: GymDecisionSnapshot
+  /** 检索到的注入资料；检索不到时为空数组 */
+  references: GymKnowledgeReference[]
+  /** 由 buildGymDecisionMessages 生成，顺序固定为 system → user */
+  messages: Array<{ role: 'system' | 'user'; content: string }>
+  /** 当前服务商 / 模型（实际出网时用的那一家） */
+  provider: string
+  model: string
+  /** 本次生效的力上限（牛），安全线取它的 80% */
+  forceLimit: number
+}
+
+export type GymProposalContextResult =
+  | { ok: true; context: GymProposalContext }
+  | { ok: false; error: string }
 
 /**
  * 把异常翻译成一句能直接显示的话。
@@ -367,6 +390,41 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   }
 
   /**
+   * 构造下一次提议真正会发送的上下文（预览与 autoDecide 共用）。
+   *
+   * 只读：会检索资料索引，但不调用 LLM、不发 step。没有会话 / 观测时
+   * 返回可读原因，界面据此给提示。
+   */
+  const buildProposalContext = async (): Promise<GymProposalContextResult> => {
+    if (!currentSessionId.value) {
+      return { ok: false, error: '还没有选中会话——先在会话面板建一个或选一个' }
+    }
+    const observation = lastObservation.value
+    if (!observation) {
+      return { ok: false, error: '当前会话还没有观测——先建会话或重置回合，再预览上下文' }
+    }
+
+    const forceLimit = currentParams.value?.forceLimit ?? GYM_DEFAULT_FORCE_LIMIT
+    const snapshot = buildGymDecisionSnapshot({
+      observation,
+      lastStep: lastStep.value,
+      forceLimit,
+    })
+    const references = await fetchDecisionReferences()
+    return {
+      ok: true,
+      context: {
+        snapshot,
+        references,
+        messages: buildGymDecisionMessages(snapshot, references),
+        provider: llmStore.provider.name,
+        model: llmStore.model,
+        forceLimit: snapshot.forceLimit,
+      },
+    }
+  }
+
+  /**
    * LLM 自动决策：把当前观测交给模型提议一个力动作，提议成功就自动发 step。
    *
    * 失败链路（未配 key / 冷却 / 次数上限 / 畸形输出）如实写进 decisionError，
@@ -374,34 +432,25 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
    * stepError / repairHint（422 修复指令原样透传），两处错误互不覆盖。
    * 提议成功与否都留档在 lastProposal 里，执行面板据此展示预览与状态。
    *
-   * 出网前先检索资料索引（gym 标签），把命中的领域资料作为 references
-   * 注入提示词；检索失败不拦决策，只是这次没有参考资料。
+   * 上下文统一由 buildProposalContext 构造：预览看到什么，这里就发什么；
+   * 出网前先检索资料索引（gym 标签），检索失败不拦决策，只是这次没有参考资料。
    */
   const autoDecide = async (): Promise<boolean> => {
-    if (!currentSessionId.value) {
-      decisionError.value = '还没有选中会话——先在会话面板建一个或选一个'
-      return false
-    }
-    const observation = lastObservation.value
-    if (!observation) {
-      decisionError.value = '当前会话还没有观测——先建会话或重置回合，再请求提议'
-      return false
-    }
     deciding.value = true
     decisionError.value = ''
     try {
-      const snapshot = buildGymDecisionSnapshot({
-        observation,
-        lastStep: lastStep.value,
-        forceLimit: currentParams.value?.forceLimit ?? GYM_DEFAULT_FORCE_LIMIT,
-      })
-      const references = await fetchDecisionReferences()
-      const proposal = await proposeForceAction(snapshot, {
+      const built = await buildProposalContext()
+      if (!built.ok) {
+        decisionError.value = built.error
+        return false
+      }
+      const { context } = built
+      const proposal = await proposeForceAction(context.snapshot, {
         invoke: llmStore.invoke,
-        provider: llmStore.provider.name,
-        model: llmStore.model,
+        provider: context.provider,
+        model: context.model,
         baseUrl: llmStore.baseUrl,
-        references,
+        references: context.references,
       })
       if (!proposal.ok) {
         decisionError.value = proposal.error
@@ -413,7 +462,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
         raw: proposal.raw,
         clamped: proposal.clamped,
         original: proposal.original,
-        references: references.map(({ id, title }) => ({ id, title })),
+        references: context.references.map(({ id, title }) => ({ id, title })),
         executed: false,
       }
       const ok = await stepCurrent(proposal.action.forceX, proposal.action.forceZ, 'llm')
@@ -720,6 +769,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
     createSession,
     selectSession,
     stepCurrent,
+    buildProposalContext,
     autoDecide,
     autoDecideTeam,
     resetCurrent,

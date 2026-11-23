@@ -10,6 +10,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia, type Pinia } from 'pinia'
 import BatchEvaluationDialog from './BatchEvaluationDialog.vue'
 import { useGymEvaluationStore } from '@/stores/gymEvaluationStore'
+import { summarizeGymEvalResults } from '@/services/gym/evaluate'
+import type { GymEvalRunResult } from '@/stores/gymEvaluationStore'
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   ({
@@ -136,6 +138,52 @@ describe('BatchEvaluationDialog', () => {
     await cancelButton!.trigger('click')
 
     expect(wrapper.find('.bev-task-editor').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('有结果：渲染策略对比指标、Δ 与逐任务矩阵', async () => {
+    installOnlineFetch()
+    const pinia = createPinia()
+    seedSuite(pinia)
+    const evaluation = useGymEvaluationStore()
+    const results: GymEvalRunResult[] = [
+      {
+        taskId: 'task-1',
+        taskName: '任务 1',
+        policyId: 'constant',
+        success: true,
+        steps: 12,
+        totalReward: 2,
+        wallClockMs: 100,
+        finalDistance: 0.3,
+        error: null,
+      },
+      {
+        taskId: 'task-1',
+        taskName: '任务 1',
+        policyId: 'proportional',
+        success: true,
+        steps: 8,
+        totalReward: 3,
+        wallClockMs: 90,
+        finalDistance: 0.2,
+        error: null,
+      },
+    ]
+    evaluation.lastResults = results
+    evaluation.lastSummary = summarizeGymEvalResults(results, ['constant', 'proportional'])
+
+    const wrapper = mountDialog(pinia)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('策略对比')
+    expect(wrapper.text()).toContain('平均最终距离')
+    expect(wrapper.text()).toContain('Δ')
+    expect(wrapper.text()).toContain('逐任务对比')
+    // 比例控制相对恒定推到基准的 Δ：步数 -4、成功率 ±0%
+    expect(wrapper.text()).toContain('-4')
+    expect(wrapper.find('.bev-matrix-table').exists()).toBe(true)
 
     wrapper.unmount()
   })

@@ -261,6 +261,75 @@
               </div>
             </div>
 
+            <!-- 策略对比：并排指标 + Δ，再按任务拆开看差异来自哪条 -->
+            <div v-if="comparison" class="bev-compare">
+              <div class="bev-results-head">
+                <h4 class="bev-section-title">策略对比</h4>
+                <span class="bev-hint">
+                  Δ = 当前策略 − 基准（{{ policyLabel(comparison.baselinePolicyId) }}）
+                </span>
+              </div>
+
+              <table class="bev-table bev-compare-table">
+                <thead>
+                  <tr>
+                    <th>指标</th>
+                    <th v-for="row in comparison.policies" :key="row.policyId">
+                      {{ policyLabel(row.policyId) }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="metric in compareMetrics" :key="metric.key">
+                    <td>{{ metric.label }}</td>
+                    <td
+                      v-for="(row, index) in comparison.policies"
+                      :key="row.policyId"
+                      class="bev-compare-cell"
+                    >
+                      <span>{{ metric.value(row) }}</span>
+                      <span
+                        v-if="index > 0"
+                        class="bev-delta"
+                        :class="metric.deltaClass(row)"
+                      >
+                        Δ {{ metric.delta(row) }}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <h5 class="bev-matrix-title">逐任务对比（成功 / 步数 / 错误）</h5>
+              <table class="bev-table bev-matrix-table">
+                <thead>
+                  <tr>
+                    <th>任务</th>
+                    <th v-for="row in comparison.policies" :key="row.policyId">
+                      {{ policyLabel(row.policyId) }}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="task in comparison.matrix" :key="task.taskId">
+                    <td>{{ task.taskName }}</td>
+                    <td v-for="(cell, index) in task.cells" :key="index" class="bev-matrix-cell">
+                      <template v-if="!cell">—</template>
+                      <template v-else-if="cell.error">
+                        <span class="bev-bad" :title="cell.error">错误</span>
+                      </template>
+                      <template v-else>
+                        <span :class="cell.success ? 'bev-ok' : 'bev-bad'">
+                          {{ cell.success ? '成功' : '失败' }}
+                        </span>
+                        <span class="bev-cell-steps">{{ cell.steps }} 步</span>
+                      </template>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
             <table class="bev-table">
               <thead>
                 <tr>
@@ -317,8 +386,8 @@
             </table>
 
             <p class="bev-hint">
-              平均值只统计无错误的运行；成功率分母包含失败运行。success = 终局（terminated）
-              或最终距离 ≤ 0.5m。
+              平均值只统计无错误的运行；成功率分母包含失败运行。success = 最终距离 ≤ 0.5m
+              （terminated 也可能是坠落失败，不能只看它）。
             </p>
           </div>
         </section>
@@ -337,7 +406,12 @@
  * 后端不在时只禁用「开始评测」：套件编辑与导入导出是纯本地能力，照常可用。
  */
 import { computed, onMounted, reactive, ref } from 'vue'
-import { evaluateTaskSuite, serializeGymEvalResultsCsv } from '@/services/gym/evaluate'
+import {
+  compareGymEvalResults,
+  evaluateTaskSuite,
+  serializeGymEvalResultsCsv,
+  type GymPolicyComparison,
+} from '@/services/gym/evaluate'
 import {
   useGymEvaluationStore,
   type GymEvalPolicyId,
@@ -365,6 +439,16 @@ const importInput = ref<HTMLInputElement | null>(null)
 const currentScene = computed(() => workbench.currentScene)
 const currentSuite = computed(() => evaluation.currentSuite)
 const summary = computed(() => evaluation.lastSummary)
+
+/**
+ * 策略对比：只展示本次运行实际参与的策略（汇总里的 byPolicy 顺序），
+ * 差值以第一个策略为基准；没有结果时为 null，整个区块不渲染。
+ */
+const comparison = computed(() => {
+  if (!summary.value || evaluation.lastResults.length === 0) return null
+  const policyIds = summary.value.byPolicy.map((row) => row.policyId)
+  return compareGymEvalResults(evaluation.lastResults, policyIds)
+})
 
 const selectedPolicies = ref<GymEvalPolicyId[]>(['constant', 'proportional'])
 const runCount = computed(
@@ -425,6 +509,90 @@ const formatDuration = (ms: number): string => {
   if (!Number.isFinite(ms) || ms < 0) return '—'
   return ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`
 }
+
+const formatDistance = (meters: number | null): string => {
+  if (meters === null || !Number.isFinite(meters)) return '—'
+  return `${formatNumber(meters)} m`
+}
+
+/** 带符号的数字：+1.5 / -2 / ±0（差值展示用） */
+const signedNumber = (value: number, digits = 3): string => {
+  if (!Number.isFinite(value)) return '—'
+  const rounded = Number(value.toFixed(digits))
+  if (rounded === 0) return '±0'
+  return `${rounded > 0 ? '+' : ''}${rounded}`
+}
+
+/** 成功率差值按百分点展示：+12.5% */
+const signedPercent = (value: number): string => {
+  if (!Number.isFinite(value)) return '—'
+  const points = Math.round(value * 1000) / 10
+  if (points === 0) return '±0%'
+  return `${points > 0 ? '+' : ''}${points}%`
+}
+
+const signedOrDash = (value: number | null): string =>
+  value === null || !Number.isFinite(value) ? '—' : signedNumber(value)
+
+/** 差值着色只表达方向（正 / 负），不暗示哪个更好 */
+const deltaClassOf = (value: number | null): string => {
+  if (value === null || !Number.isFinite(value) || value === 0) return ''
+  return value > 0 ? 'up' : 'down'
+}
+
+interface CompareMetric {
+  key: string
+  label: string
+  value: (row: GymPolicyComparison) => string
+  delta: (row: GymPolicyComparison) => string
+  deltaClass: (row: GymPolicyComparison) => string
+}
+
+/** 策略对比的六个指标（顺序固定，与需求一致） */
+const compareMetrics = computed<CompareMetric[]>(() => [
+  {
+    key: 'runs',
+    label: '运行数',
+    value: (row) => String(row.runs),
+    delta: (row) => signedNumber(row.runsDelta, 0),
+    deltaClass: (row) => deltaClassOf(row.runsDelta),
+  },
+  {
+    key: 'successRate',
+    label: '成功率',
+    value: (row) => formatPercent(row.successRate),
+    delta: (row) => signedPercent(row.successRateDelta),
+    deltaClass: (row) => deltaClassOf(row.successRateDelta),
+  },
+  {
+    key: 'avgSteps',
+    label: '平均步数',
+    value: (row) => formatNumber(row.avgSteps),
+    delta: (row) => signedNumber(row.avgStepsDelta),
+    deltaClass: (row) => deltaClassOf(row.avgStepsDelta),
+  },
+  {
+    key: 'avgReward',
+    label: '平均 reward',
+    value: (row) => formatNumber(row.avgReward),
+    delta: (row) => signedNumber(row.avgRewardDelta),
+    deltaClass: (row) => deltaClassOf(row.avgRewardDelta),
+  },
+  {
+    key: 'avgFinalDistance',
+    label: '平均最终距离',
+    value: (row) => formatDistance(row.avgFinalDistance),
+    delta: (row) => signedOrDash(row.avgFinalDistanceDelta),
+    deltaClass: (row) => deltaClassOf(row.avgFinalDistanceDelta),
+  },
+  {
+    key: 'errors',
+    label: '错误数',
+    value: (row) => String(row.errors),
+    delta: (row) => signedNumber(row.errorsDelta, 0),
+    deltaClass: (row) => deltaClassOf(row.errorsDelta),
+  },
+])
 
 /** 场景是 JSON 文档：克隆一份，避免套件与当前会话共享同一个响应式对象 */
 const cloneScene = (scene: Record<string, unknown>): Record<string, unknown> => {
@@ -636,7 +804,17 @@ const exportResultsJson = (): void => {
       : null,
     policies: selectedPolicies.value,
     summary: evaluation.lastSummary,
-    results,
+    // 导出格式保持原样：finalDistance 只用于界面上的策略对比，不写进 JSON
+    results: results.map((result) => ({
+      taskId: result.taskId,
+      taskName: result.taskName,
+      policyId: result.policyId,
+      success: result.success,
+      steps: result.steps,
+      totalReward: result.totalReward,
+      wallClockMs: result.wallClockMs,
+      error: result.error,
+    })),
   }
   downloadText(
     JSON.stringify(payload, null, 2),
@@ -1196,6 +1374,52 @@ const runEvaluation = async (): Promise<void> => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: var(--text-3);
+}
+
+/* 策略对比：指标并排 + 差值，下面是逐任务矩阵 */
+.bev-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  background: var(--bg-inset);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.bev-compare-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.bev-delta {
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+.bev-delta.up {
+  color: var(--accent);
+}
+
+.bev-delta.down {
+  color: var(--accent-2);
+}
+
+.bev-matrix-title {
+  margin: 4px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.bev-matrix-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.bev-cell-steps {
+  margin-left: 6px;
+  font-size: 10px;
   color: var(--text-3);
 }
 

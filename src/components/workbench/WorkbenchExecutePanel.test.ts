@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import WorkbenchExecutePanel from './WorkbenchExecutePanel.vue'
@@ -10,7 +10,18 @@ import type { GymObservation } from '@/services/api/gymWorkbench'
 /**
  * 执行面板的多 Agent 协同区：
  * 多智能体观测渲染协同块与逐智能体状态，单智能体仍渲染原来的 LLM 提议块。
+ * 另外覆盖「预览上下文」弹窗：只读展示下一次提议会发送的内容。
  */
+
+const jsonResponse = (body: unknown, status = 200): Response =>
+  ({
+    ok: status >= 200 && status < 300,
+    status,
+    statusText: 'OK',
+    headers: new Headers(),
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  }) as unknown as Response
 
 const observation: GymObservation = {
   agent: { uuid: 'agent-1', position: { x: 0, y: 1, z: 0 }, velocity: { x: 0, y: 0, z: 0 } },
@@ -66,6 +77,8 @@ const mountPanel = () => {
 describe('WorkbenchExecutePanel 多 Agent 协同', () => {
   afterEach(() => {
     document.body.innerHTML = ''
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
   })
 
   it('多智能体观测：渲染协同块与逐智能体状态，不显示单智能体提议入口', async () => {
@@ -118,6 +131,42 @@ describe('WorkbenchExecutePanel 多 Agent 协同', () => {
     expect(wrapper.text()).toContain('已同步执行')
     expect(wrapper.text()).toContain('(5.0, 0.0) N')
     expect(wrapper.text()).toContain('(-4.0, 0.5) N')
+
+    wrapper.unmount()
+  })
+
+  it('预览上下文：只读展示观测、资料空缺与提示词，可关闭', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const path = new URL(String(input), 'http://localhost').pathname
+        if (path === '/api/knowledge/entries') return jsonResponse({ items: [] })
+        return jsonResponse(
+          { error: { code: 'http_error', message: `意外路径 ${path}`, detail: null } },
+          500,
+        )
+      }),
+    )
+    const { store, wrapper } = mountPanel()
+    store.lastObservation = { ...observation, agents: undefined }
+    await nextTick()
+
+    const previewButton = wrapper
+      .findAll('.wb-preset-btn')
+      .find((button) => button.text() === '预览上下文')
+    expect(previewButton).toBeDefined()
+    await previewButton!.trigger('click')
+    await flushPromises()
+
+    const dialog = wrapper.find('[aria-label="上下文预览"]')
+    expect(dialog.exists()).toBe(true)
+    expect(wrapper.text()).toContain('未检索到资料')
+    // system prompt 原文与观测快照都在弹窗里
+    expect(wrapper.text()).toContain('推力控制器')
+    expect(wrapper.text()).toContain('"distance": 3')
+
+    await wrapper.find('.cpd-close').trigger('click')
+    expect(wrapper.find('[aria-label="上下文预览"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
