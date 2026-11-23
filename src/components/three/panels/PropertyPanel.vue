@@ -157,6 +157,65 @@
           </label>
         </div>
       </div>
+
+      <!-- 物理参数：刚体类型 + 质量 / 摩擦 / 弹性。写回 Rapier，不只是界面数字 -->
+      <div class="transform-group">
+        <span class="group-title">物理</span>
+        <label class="physics-select">
+          <span class="axis-name">刚体</span>
+          <select :value="physicsType" @change="handlePhysicsTypeChange">
+            <option value="dynamic">动态</option>
+            <option value="static">静态</option>
+            <option v-if="physicsType === 'kinematic'" value="kinematic">运动学</option>
+          </select>
+        </label>
+        <div class="axis-grid">
+          <label class="axis-field">
+            <span class="axis-name">质量</span>
+            <input
+              type="number"
+              step="0.1"
+              min="0.01"
+              :value="physicsMass"
+              @input="handlePhysicsMassInput"
+              @change="commit(updatePhysics)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="质量"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">摩擦</span>
+            <input
+              type="number"
+              step="0.05"
+              min="0"
+              max="1"
+              :value="physicsFriction"
+              @input="handlePhysicsFrictionInput"
+              @change="commit(updatePhysics)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="摩擦"
+            />
+          </label>
+          <label class="axis-field">
+            <span class="axis-name">弹性</span>
+            <input
+              type="number"
+              step="0.05"
+              min="0"
+              max="1"
+              :value="physicsRestitution"
+              @input="handlePhysicsRestitutionInput"
+              @change="commit(updatePhysics)"
+              @focus="startEditing"
+              @blur="stopEditing"
+              placeholder="弹性"
+            />
+          </label>
+        </div>
+      </div>
     </template>
 
     <!-- 未选中物体时：空场景给引导，有物体时给「对象列表」，不重复工具栏的添加功能 -->
@@ -245,6 +304,11 @@ const rotationZ = ref(0)
 const scaleX = ref(1)
 const scaleY = ref(1)
 const scaleZ = ref(1)
+// 物理参数：刚体类型 / 质量 / 摩擦 / 弹性
+const physicsType = ref('dynamic')
+const physicsMass = ref(1)
+const physicsFriction = ref(0.5)
+const physicsRestitution = ref(0.2)
 
 // 输入处理函数
 
@@ -319,6 +383,26 @@ const handleScaleZInput = (event) => {
   scaleZ.value = Number(event.target.value)
 }
 
+const handlePhysicsTypeChange = (event) => {
+  physicsType.value = event.target.value
+  commit(updatePhysics)
+}
+
+const handlePhysicsMassInput = (event) => {
+  startEditing()
+  physicsMass.value = Number(event.target.value)
+}
+
+const handlePhysicsFrictionInput = (event) => {
+  startEditing()
+  physicsFriction.value = Number(event.target.value)
+}
+
+const handlePhysicsRestitutionInput = (event) => {
+  startEditing()
+  physicsRestitution.value = Number(event.target.value)
+}
+
 // 监听store中的selectedObjectUuid变化
 watch(
   () => store.selectedObjectUuid,
@@ -352,6 +436,10 @@ const syncFormFromObject = (force = false) => {
     scaleX.value = 1
     scaleY.value = 1
     scaleZ.value = 1
+    physicsType.value = 'dynamic'
+    physicsMass.value = 1
+    physicsFriction.value = 0.5
+    physicsRestitution.value = 0.2
     syncedUuid = null
     isEditing.value = false
     return
@@ -377,6 +465,12 @@ const syncFormFromObject = (force = false) => {
 
   // 同步名称
   objectName.value = newObj.name || ''
+
+  // 同步物理参数（读 store 的静态记录，不碰 mesh.userData：面板每帧的开销要可控）
+  physicsType.value = newObj.physics?.type ?? 'dynamic'
+  physicsMass.value = newObj.physics?.mass ?? 1
+  physicsFriction.value = newObj.physics?.friction ?? 0.5
+  physicsRestitution.value = newObj.physics?.restitution ?? 0.2
 
   syncedUuid = newObj.uuid
 }
@@ -463,6 +557,53 @@ const updateScale = () => {
       x: threeObject.scale.x,
       y: threeObject.scale.y,
       z: threeObject.scale.z,
+    },
+  })
+}
+
+/** 物理系数的显示口径：0~1；非法输入回落到默认值 */
+const clampUnitInterval = (value, fallback) => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return fallback
+  return Math.min(1, Math.max(0, num))
+}
+
+// 更新物理参数：写回 store，由 useSceneEditor 落到 Rapier 的碰撞体与刚体上
+const updatePhysics = () => {
+  if (!selectedObject.value) return
+
+  const { uuid, physics } = selectedObject.value
+  const rawMass = Number(physicsMass.value)
+  const mass = Number.isFinite(rawMass) && rawMass > 0 ? rawMass : 1
+  const friction = clampUnitInterval(physicsFriction.value, 0.5)
+  const restitution = clampUnitInterval(physicsRestitution.value, 0.2)
+  const type =
+    physicsType.value === 'static'
+      ? 'static'
+      : physicsType.value === 'kinematic'
+        ? 'kinematic'
+        : 'dynamic'
+  const shape =
+    physics?.shape ??
+    (selectedObject.value.type === 'cube'
+      ? 'box'
+      : selectedObject.value.type === 'sphere'
+        ? 'sphere'
+        : 'mesh')
+
+  // 界面立即回到规范化后的值，避免输入 3 后显示还是 3、实际存的是 1
+  physicsMass.value = mass
+  physicsFriction.value = friction
+  physicsRestitution.value = restitution
+
+  store.updateObject(uuid, {
+    physics: {
+      ...(physics ?? {}),
+      type,
+      shape,
+      mass,
+      friction,
+      restitution,
     },
   })
 }
@@ -556,6 +697,33 @@ h3 {
 }
 
 .axis-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+/* 物理组：刚体类型独占一行，质量/摩擦/弹性复用三列网格 */
+.physics-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.physics-select select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-1);
+  background-color: var(--bg-inset);
+  color-scheme: dark;
+  box-sizing: border-box;
+}
+
+.physics-select select:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-soft);

@@ -63,6 +63,30 @@ describe('场景文档的保存与索引', () => {
     expect(doc.objects[0].position).toEqual({ x: 3, y: 0.25, z: -4 })
   })
 
+  it('存进文档的物理参数带 friction / restitution（缺省补 0.5 / 0.2）', async () => {
+    const store = useSceneEditorStore()
+    store.addObject({ ...newObject('u-default') })
+    store.addObject({
+      ...newObject('u-custom'),
+      friction: 0.8,
+      restitution: 0.1,
+    })
+
+    const id = await store.saveScene('物理参数')
+    const doc = JSON.parse(localStorage.getItem(`scene-${id}`) as string)
+
+    expect(doc.objects[0].physics).toMatchObject({
+      mass: 1,
+      friction: 0.5,
+      restitution: 0.2,
+    })
+    expect(doc.objects[1].physics).toMatchObject({
+      mass: 1,
+      friction: 0.8,
+      restitution: 0.1,
+    })
+  })
+
   it('listScenes 按保存顺序倒序列出场景', async () => {
     const store = useSceneEditorStore()
 
@@ -207,6 +231,62 @@ describe('场景文档的加载', () => {
     expect(calls).toEqual(['cube'])
     expect(store.objects).toHaveLength(1)
     expect(store.objects[0].uuid).toBe('from-factory')
+  })
+
+  it('restorePrimitive 把 mass / friction / restitution 交给工厂', async () => {
+    const store = useSceneEditorStore()
+    store.initializeScene(
+      new THREE.Scene(),
+      new THREE.PerspectiveCamera(),
+      {} as unknown as THREE.WebGLRenderer,
+    )
+
+    const captured: Array<Record<string, unknown> | undefined> = []
+    store.registerPrimitiveFactory({
+      createCube: (options) => {
+        captured.push(options as Record<string, unknown> | undefined)
+        store.addObject({ ...newObject('restored') })
+        return true
+      },
+      createSphere: () => false,
+      createRamp: () => false,
+    })
+
+    const result = await store.loadSceneDocument({
+      id: 'physics-doc',
+      name: '物理参数',
+      createdAt: '2026-11-23T10:00:00.000Z',
+      updatedAt: '2026-11-23T10:00:00.000Z',
+      version: 1,
+      worldSize: 40,
+      objects: [
+        {
+          uuid: 'src',
+          type: 'cube',
+          name: '源立方体',
+          position: { x: 0, y: 1, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          visible: true,
+          physics: {
+            type: 'static',
+            shape: 'box',
+            mass: 2,
+            friction: 0.3,
+            restitution: 0.7,
+          },
+        },
+      ],
+    })
+
+    expect(result.ok).toBe(true)
+    expect(captured).toHaveLength(1)
+    expect(captured[0]).toMatchObject({
+      bodyType: 'static',
+      mass: 2,
+      friction: 0.3,
+      restitution: 0.7,
+    })
   })
 
   it('没有注册工厂时，加载场景仍能还原基本体的 mesh（只是没有物理）', async () => {

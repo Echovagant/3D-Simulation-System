@@ -24,6 +24,14 @@
       >
         <i class="fas fa-crosshairs"></i>
       </button>
+      <button
+        class="toolbar-btn"
+        @click="showSceneCheck = true"
+        :disabled="!isSceneInitialized"
+        title="检查场景（越界、缩放、穿透、悬空、重叠）"
+      >
+        <i class="fas fa-stethoscope"></i>
+      </button>
     </div>
 
     <!-- 物体添加按钮组 -->
@@ -180,6 +188,10 @@
     v-if="showAiSceneDialog"
     @close="showAiSceneDialog = false"
   />
+  <SceneCheckDialog
+    v-if="showSceneCheck"
+    @close="showSceneCheck = false"
+  />
 </template>
 
 <script setup>
@@ -192,6 +204,7 @@ import { parseSceneDocumentJson } from '@/utils/sceneDocument';
 import { SCENE_WORLD_SIZES } from '@/config/sceneEditor';
 import ImportModelDialog from './ImportModelDialog.vue';
 import AiSceneDialog from './AiSceneDialog.vue';
+import SceneCheckDialog from './SceneCheckDialog.vue';
 
 // 状态管理
 const store = useSceneEditorStore();
@@ -215,6 +228,7 @@ const statusMessage = ref('');
 const importingModel = ref(false);
 const showImportDialog = ref(false);
 const showAiSceneDialog = ref(false);
+const showSceneCheck = ref(false);
 const fileInput = ref(null);
 
 // 计算属性

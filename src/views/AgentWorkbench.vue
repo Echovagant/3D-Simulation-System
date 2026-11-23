@@ -6,6 +6,9 @@
       <span class="toolbar-hint">
         Gym 会话式环境：建会话 → 发动作 → 看审计流。会话是内存态，后端重启即清空；记忆按 owner 分区，可从审计提炼失败模式。
       </span>
+      <button type="button" class="toolbar-action" @click="batchDialogOpen = true">
+        批量评测
+      </button>
       <span v-if="backendOffline" class="toolbar-status offline">后端不在，功能暂不可用</span>
       <span v-else-if="sessionsLoaded" class="toolbar-status online">
         后端在线<template v-if="store.sessions.length > 0"> · {{ store.sessions.length }} 个会话</template>
@@ -58,6 +61,8 @@
         </div>
       </div>
     </div>
+
+    <BatchEvaluationDialog v-if="batchDialogOpen" @close="batchDialogOpen = false" />
   </div>
 </template>
 
@@ -69,9 +74,13 @@ import WorkbenchAuditPanel from '@/components/workbench/WorkbenchAuditPanel.vue'
 import WorkbenchViewport from '@/components/workbench/WorkbenchViewport.vue'
 import MemoryPanel from '@/components/workbench/MemoryPanel.vue'
 import KnowledgePanel from '@/components/workbench/KnowledgePanel.vue'
+import BatchEvaluationDialog from '@/components/workbench/BatchEvaluationDialog.vue'
 import { useGymWorkbenchStore } from '@/stores/gymWorkbenchStore'
 
 const store = useGymWorkbenchStore()
+
+/** 批量评测弹窗开关（弹窗内部自己管理套件/结果状态） */
+const batchDialogOpen = ref(false)
 
 /** 右栏下部页签：记忆 / 资料（两者都按 owner 隔离，互不依赖） */
 const sideTab = ref<'memory' | 'knowledge'>('memory')
@@ -128,6 +137,22 @@ onUnmounted(() => {
 .toolbar-status {
   font-size: 12px;
   white-space: nowrap;
+}
+
+.toolbar-action {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.4);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.toolbar-action:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 .toolbar-status.online {

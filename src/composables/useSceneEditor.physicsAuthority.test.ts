@@ -59,6 +59,9 @@ vi.mock('./loadRapier', () => {
 
   class MockCollider {
     shape: MockCuboid | MockBall
+    mass = 1
+    friction = 0.5
+    restitution = 0.2
     constructor(shape: MockCuboid | MockBall) {
       this.shape = shape
     }
@@ -71,21 +74,45 @@ vi.mock('./loadRapier', () => {
     setShape(shape: MockCuboid | MockBall) {
       this.shape = shape
     }
+    setMass(mass: number) {
+      this.mass = mass
+    }
+    setFriction(friction: number) {
+      this.friction = friction
+    }
+    setRestitution(restitution: number) {
+      this.restitution = restitution
+    }
   }
 
   /** 刚体替身：translation() / rotation() / linvel() 都跟真实 Rapier 一样是方法 */
   class MockBody {
     handle: number
     removed = false
+    kind: 'dynamic' | 'fixed' | 'kinematic' = 'dynamic'
     private currentTranslation: { x: number; y: number; z: number }
     private currentRotation = { x: 0, y: 0, z: 0, w: 1 }
     private currentLinvel = { x: 0, y: 0, z: 0 }
     private currentAngvel = { x: 0, y: 0, z: 0 }
     colliders: MockCollider[] = []
 
-    constructor(handle: number, translation: { x: number; y: number; z: number }) {
+    constructor(
+      handle: number,
+      translation: { x: number; y: number; z: number },
+      kind: 'dynamic' | 'fixed' | 'kinematic' = 'dynamic',
+    ) {
       this.handle = handle
+      this.kind = kind
       this.currentTranslation = { ...translation }
+    }
+
+    bodyType() {
+      if (this.kind === 'fixed') return 1
+      if (this.kind === 'kinematic') return 2
+      return 0
+    }
+    setBodyType(type: number) {
+      this.kind = type === 1 ? 'fixed' : type === 2 ? 'kinematic' : 'dynamic'
     }
 
     translation() {
@@ -137,7 +164,7 @@ vi.mock('./loadRapier', () => {
 
     createRigidBody(desc: RigidBodyDesc): MockBody {
       const handle = this.handles.size
-      const body = new MockBody(handle, desc.translation)
+      const body = new MockBody(handle, desc.translation, desc.kind)
       this.handles.set(handle, body)
       return body
     }
@@ -186,11 +213,18 @@ vi.mock('./loadRapier', () => {
     private tx = 0
     private ty = 0
     private tz = 0
+    readonly kind: 'dynamic' | 'fixed' | 'kinematic'
+    constructor(kind: 'dynamic' | 'fixed' | 'kinematic' = 'dynamic') {
+      this.kind = kind
+    }
     static dynamic() {
-      return new RigidBodyDesc()
+      return new RigidBodyDesc('dynamic')
     }
     static fixed() {
-      return new RigidBodyDesc()
+      return new RigidBodyDesc('fixed')
+    }
+    static kinematicPositionBased() {
+      return new RigidBodyDesc('kinematic')
     }
     setTranslation(x: number, y: number, z: number) {
       this.tx = x
@@ -225,6 +259,13 @@ vi.mock('./loadRapier', () => {
       ColliderDesc,
       Cuboid: MockCuboid,
       Ball: MockBall,
+      // 与真实 Rapier 的 RigidBodyType 枚举数值一致
+      RigidBodyType: {
+        Dynamic: 0,
+        Fixed: 1,
+        KinematicPositionBased: 2,
+        KinematicVelocityBased: 3,
+      },
     }),
   }
 })
@@ -450,5 +491,158 @@ describe('固定步长推进物理', () => {
 
     // mesh 是刚体的镜像：复位后立即对齐，不需要等下一帧
     expect(mesh.position.y).toBeCloseTo(initialY, 10)
+  })
+})
+
+describe('物理参数的建体与运行时写回', () => {
+  const wrappers: VueWrapper[] = []
+
+  const createEditor = (): Editor => {
+    let editor: Editor | undefined
+    const wrapper = mount(
+      defineComponent({
+        setup() {
+          editor = useSceneEditor(null)
+          return () => h('div')
+        },
+      }),
+    )
+    wrappers.push(wrapper)
+    return editor!
+  }
+
+  const initEditor = async (): Promise<Editor> => {
+    const editor = createEditor()
+    const ok = await editor.initEditor()
+    expect(ok).toBe(true)
+    return editor
+  }
+
+  const physicsOf = (store: ReturnType<typeof useSceneEditorStore>) =>
+    store.objects[0].threeObject?.userData?.physics
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    rapierMock.stepCount = 0
+    rapierMock.lastDt = -1
+    rapierMock.worldCount = 0
+  })
+
+  afterEach(() => {
+    while (wrappers.length) {
+      wrappers.pop()?.unmount()
+    }
+  })
+
+  it('建体时把 mass / friction / restitution 写进碰撞体与 userData', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+
+    editor.addCube({ mass: 3, friction: 0.2, restitution: 0.6 })
+
+    const collider = physicsOf(store).collider
+    expect(collider.mass).toBe(3)
+    expect(collider.friction).toBe(0.2)
+    expect(collider.restitution).toBe(0.6)
+    expect(physicsOf(store)).toMatchObject({
+      mass: 3,
+      friction: 0.2,
+      restitution: 0.6,
+    })
+    // store 里的静态记录同步保存，保存场景时不会丢
+    expect(store.objects[0].physics).toMatchObject({
+      mass: 3,
+      friction: 0.2,
+      restitution: 0.6,
+    })
+  })
+
+  it('默认建体参数是 mass=1、friction=0.5、restitution=0.2', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+
+    editor.addSphere()
+
+    const collider = physicsOf(store).collider
+    expect(collider.mass).toBe(1)
+    expect(collider.friction).toBe(0.5)
+    expect(collider.restitution).toBe(0.2)
+  })
+
+  it('update-physics 事件把新参数写进碰撞体、userData，并切换刚体类型', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+    editor.addCube()
+
+    const uuid = store.objects[0].uuid
+    const body = physicsOf(store).body
+    const collider = physicsOf(store).collider
+    expect(body.bodyType()).toBe(0)
+
+    window.dispatchEvent(
+      new CustomEvent('update-physics', {
+        detail: {
+          uuid,
+          physics: { type: 'static', mass: 4, friction: 0.1, restitution: 0.9 },
+        },
+      }),
+    )
+
+    expect(collider.mass).toBe(4)
+    expect(collider.friction).toBe(0.1)
+    expect(collider.restitution).toBe(0.9)
+    expect(body.bodyType()).toBe(1)
+    expect(physicsOf(store)).toMatchObject({
+      type: 'static',
+      mass: 4,
+      friction: 0.1,
+      restitution: 0.9,
+    })
+  })
+
+  it('动态 → 静态 → 动态的切换会同步刚体类型并清掉速度', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+    editor.addCube()
+    const uuid = store.objects[0].uuid
+    const body = physicsOf(store).body
+
+    body.setLinvel({ x: 3, y: 0, z: 0 })
+    window.dispatchEvent(
+      new CustomEvent('update-physics', {
+        detail: { uuid, physics: { type: 'static', mass: 1 } },
+      }),
+    )
+    expect(body.bodyType()).toBe(1)
+    expect(body.linvel().x).toBe(0)
+
+    window.dispatchEvent(
+      new CustomEvent('update-physics', {
+        detail: { uuid, physics: { type: 'dynamic', mass: 2, friction: 0.4 } },
+      }),
+    )
+    expect(body.bodyType()).toBe(0)
+    expect(physicsOf(store).mass).toBe(2)
+  })
+
+  it('非法数值被收敛：质量回落到 1，摩擦/弹性夹到 0~1', async () => {
+    const editor = await initEditor()
+    const store = useSceneEditorStore()
+    editor.addCube()
+    const uuid = store.objects[0].uuid
+
+    window.dispatchEvent(
+      new CustomEvent('update-physics', {
+        detail: {
+          uuid,
+          physics: { type: 'dynamic', mass: -3, friction: 8, restitution: -1 },
+        },
+      }),
+    )
+
+    const collider = physicsOf(store).collider
+    expect(collider.mass).toBe(1)
+    expect(collider.friction).toBe(1)
+    expect(collider.restitution).toBe(0)
   })
 })

@@ -130,6 +130,94 @@ describe('场景文档导入校验', () => {
     })
   })
 
+  it('物理参数 friction / restitution 随文档往返保留', () => {
+    const parsed = normalizeSceneDocument({
+      objects: [
+        {
+          type: 'cube',
+          position: { x: 0, y: 0.5, z: 0 },
+          physics: {
+            type: 'dynamic',
+            shape: 'box',
+            mass: 2,
+            friction: 0.35,
+            restitution: 0.75,
+          },
+        },
+      ],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    expect(parsed.document.objects[0].physics).toEqual({
+      type: 'dynamic',
+      shape: 'box',
+      mass: 2,
+      friction: 0.35,
+      restitution: 0.75,
+    })
+  })
+
+  it('旧文档缺少 friction / restitution 时补默认 0.5 / 0.2', () => {
+    const parsed = normalizeSceneDocument({
+      objects: [
+        {
+          type: 'sphere',
+          position: { x: 0, y: 1, z: 0 },
+          physics: { type: 'static', shape: 'sphere', mass: 1 },
+        },
+      ],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    expect(parsed.document.objects[0].physics).toMatchObject({
+      mass: 1,
+      friction: 0.5,
+      restitution: 0.2,
+    })
+  })
+
+  it('越界的 friction / restitution 被夹到 0~1，非数字回落默认值', () => {
+    const parsed = normalizeSceneDocument({
+      objects: [
+        {
+          type: 'cube',
+          position: { x: 0, y: 0.5, z: 0 },
+          physics: {
+            type: 'dynamic',
+            shape: 'box',
+            mass: 1,
+            friction: 5,
+            restitution: -2,
+          },
+        },
+        {
+          type: 'cube',
+          position: { x: 2, y: 0.5, z: 0 },
+          physics: {
+            type: 'dynamic',
+            shape: 'box',
+            mass: 1,
+            friction: '很滑',
+            restitution: Number.NaN,
+          },
+        },
+      ],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+
+    expect(parsed.document.objects[0].physics).toMatchObject({
+      friction: 1,
+      restitution: 0,
+    })
+    expect(parsed.document.objects[1].physics).toMatchObject({
+      friction: 0.5,
+      restitution: 0.2,
+    })
+  })
+
   it('物体数量超过上限时拒绝，避免一份文件把页面拖死', () => {
     const parsed = normalizeSceneDocument({
       objects: Array.from({ length: 501 }, () => ({

@@ -24,6 +24,12 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isFiniteNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value)
 
+/** 物理系数（摩擦 / 弹性）的取值范围是 0~1；缺省时用给定默认值 */
+const readUnitInterval = (value: unknown, fallback: number): number => {
+  if (!isFiniteNumber(value)) return fallback
+  return Math.min(1, Math.max(0, value))
+}
+
 const readVec3 = (
   raw: unknown,
   fallback: { x: number; y: number; z: number },
@@ -92,6 +98,8 @@ const normalizeObject = (raw: unknown, index: number): SceneDocumentObject => {
           type: physicsType as NonNullable<SceneDocumentObject['physics']>['type'],
           shape: shape as NonNullable<SceneDocumentObject['physics']>['shape'],
           mass: isFiniteNumber(raw.physics.mass) && raw.physics.mass > 0 ? raw.physics.mass : 1,
+          friction: readUnitInterval(raw.physics.friction, 0.5),
+          restitution: readUnitInterval(raw.physics.restitution, 0.2),
         }
       }
     }

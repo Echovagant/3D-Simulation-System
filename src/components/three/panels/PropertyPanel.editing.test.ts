@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { nextTick } from 'vue'
 import { mount, type VueWrapper, type DOMWrapper } from '@vue/test-utils'
@@ -202,6 +202,98 @@ describe('PropertyPanel 的实时同步与编辑保护', () => {
     await nextTick()
 
     expect(reads.total()).toBe(0)
+  })
+})
+
+describe('PropertyPanel 的物理参数', () => {
+  let wrapper: VueWrapper
+  let store: ReturnType<typeof useSceneEditorStore>
+  let events: CustomEvent[]
+  let handler: (e: Event) => void
+
+  const numberInputs = () => wrapper.findAll<HTMLInputElement>('input[type=number]')
+
+  beforeEach(async () => {
+    setActivePinia(createPinia())
+    store = useSceneEditorStore()
+    store.addObject({
+      uuid: 'u1',
+      name: 'Cube',
+      type: 'cube',
+      position: { x: 0, y: 0.5, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      threeObject: makeMesh(0.5),
+    })
+    store.setSelectedObject('u1')
+
+    events = []
+    handler = (e: Event) => events.push(e as CustomEvent)
+    window.addEventListener('update-physics', handler)
+
+    wrapper = mount(PropertyPanel)
+    await nextTick()
+  })
+
+  afterEach(() => {
+    window.removeEventListener('update-physics', handler)
+  })
+
+  it('默认显示质量 1、摩擦 0.5、弹性 0.2', () => {
+    const inputs = numberInputs()
+    expect(inputs[9].element.value).toBe('1')
+    expect(inputs[10].element.value).toBe('0.5')
+    expect(inputs[11].element.value).toBe('0.2')
+  })
+
+  it('修改质量并提交后写回 store，并派发 update-physics', async () => {
+    const input = numberInputs()[9]
+    input.element.value = '4'
+    await input.trigger('input')
+    await input.trigger('change')
+
+    expect(store.objects[0].physics?.mass).toBe(4)
+    expect(events).toHaveLength(1)
+    expect(events[0].detail.uuid).toBe('u1')
+    expect(events[0].detail.physics).toMatchObject({ mass: 4 })
+  })
+
+  it('摩擦 / 弹性越界时收敛到 0~1', async () => {
+    const friction = numberInputs()[10]
+    friction.element.value = '5'
+    await friction.trigger('input')
+    await friction.trigger('change')
+
+    const restitution = numberInputs()[11]
+    restitution.element.value = '-2'
+    await restitution.trigger('input')
+    await restitution.trigger('change')
+
+    expect(store.objects[0].physics?.friction).toBe(1)
+    expect(store.objects[0].physics?.restitution).toBe(0)
+
+    // 界面同步回到规范化后的值，而不是继续显示 5 / -2
+    expect(numberInputs()[10].element.value).toBe('1')
+    expect(numberInputs()[11].element.value).toBe('0')
+  })
+
+  it('质量非法（0）时回落到 1', async () => {
+    const input = numberInputs()[9]
+    input.element.value = '0'
+    await input.trigger('input')
+    await input.trigger('change')
+
+    expect(store.objects[0].physics?.mass).toBe(1)
+  })
+
+  it('切换刚体类型为静态', async () => {
+    const select = wrapper.find<HTMLSelectElement>('.physics-select select')
+    select.element.value = 'static'
+    await select.trigger('change')
+
+    expect(store.objects[0].physics?.type).toBe('static')
+    expect(events).toHaveLength(1)
+    expect(events[0].detail.physics).toMatchObject({ type: 'static' })
   })
 })
 

@@ -57,6 +57,9 @@ vi.mock('./loadRapier', () => {
 
   class MockCollider {
     shape: MockCuboid | MockBall
+    mass = 1
+    friction = 0.5
+    restitution = 0.2
     constructor(shape: MockCuboid | MockBall) {
       this.shape = shape
     }
@@ -68,6 +71,15 @@ vi.mock('./loadRapier', () => {
     }
     setShape(shape: MockCuboid | MockBall) {
       this.shape = shape
+    }
+    setMass(mass: number) {
+      this.mass = mass
+    }
+    setFriction(friction: number) {
+      this.friction = friction
+    }
+    setRestitution(restitution: number) {
+      this.restitution = restitution
     }
   }
 

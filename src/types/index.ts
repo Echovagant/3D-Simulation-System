@@ -84,6 +84,10 @@ export interface SceneDocumentObject {
     type: 'static' | 'dynamic' | 'kinematic'
     shape: 'box' | 'sphere' | 'cylinder' | 'capsule' | 'mesh'
     mass: number
+    /** 摩擦系数，0~1；旧文档缺省 0.5 */
+    friction?: number
+    /** 弹性（恢复系数），0~1；旧文档缺省 0.2 */
+    restitution?: number
   }
 }
 

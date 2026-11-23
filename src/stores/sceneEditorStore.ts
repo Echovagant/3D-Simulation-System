@@ -93,6 +93,23 @@ const sceneKey = (sceneId: string): string => `${SCENE_KEY_PREFIX}${sceneId}`
 export type PrimitiveCreateOptions = {
   color?: number
   bodyType?: 'dynamic' | 'static' | 'kinematic'
+  /** 质量；缺省 1 */
+  mass?: number
+  /** 摩擦系数 0~1；缺省 0.5 */
+  friction?: number
+  /** 弹性（恢复系数）0~1；缺省 0.2 */
+  restitution?: number
+}
+
+/** 物体物理参数的默认值：保存 / 导入 / 建体三条路径共用同一套口径 */
+export const DEFAULT_OBJECT_MASS = 1
+export const DEFAULT_OBJECT_FRICTION = 0.5
+export const DEFAULT_OBJECT_RESTITUTION = 0.2
+
+/** 把物理系数收敛到 0~1；非法值回落到默认值 */
+const normalizeUnitInterval = (value: unknown, fallback: number): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(1, Math.max(0, value))
 }
 
 export type PrimitiveFactory = {
@@ -537,6 +554,14 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
             type: obj.physics.type,
             shape: obj.physics.shape,
             mass: obj.physics.mass,
+            friction: normalizeUnitInterval(
+              obj.physics.friction,
+              DEFAULT_OBJECT_FRICTION,
+            ),
+            restitution: normalizeUnitInterval(
+              obj.physics.restitution,
+              DEFAULT_OBJECT_RESTITUTION,
+            ),
           }
         : undefined,
     }
@@ -742,14 +767,24 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     const factory = primitiveFactory.value
     if (factory) {
       const before = objects.value.length
+      const sourcePhysics = objData.physics
       const options: PrimitiveCreateOptions = {
         ...(objData.color !== undefined ? { color: objData.color } : {}),
         bodyType:
-          objData.physics?.type === 'static'
+          sourcePhysics?.type === 'static'
             ? 'static'
-            : objData.physics?.type === 'kinematic'
+            : sourcePhysics?.type === 'kinematic'
               ? 'kinematic'
               : 'dynamic',
+        mass:
+          sourcePhysics?.mass !== undefined && sourcePhysics.mass > 0
+            ? sourcePhysics.mass
+            : DEFAULT_OBJECT_MASS,
+        friction: normalizeUnitInterval(sourcePhysics?.friction, DEFAULT_OBJECT_FRICTION),
+        restitution: normalizeUnitInterval(
+          sourcePhysics?.restitution,
+          DEFAULT_OBJECT_RESTITUTION,
+        ),
       }
       const created =
         objData.type === 'sphere'
@@ -799,6 +834,9 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       threeObject: mesh,
       color: objData.color,
       physicsType: objData.physics?.type,
+      mass: objData.physics?.mass,
+      friction: objData.physics?.friction,
+      restitution: objData.physics?.restitution,
       position: objData.position,
       rotation: objData.rotation,
       scale: objData.scale,
@@ -988,10 +1026,16 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       visible?: boolean
       color?: number
       physicsType?: 'static' | 'dynamic' | 'kinematic'
+      /** 质量；缺省用第二个参数（默认 1） */
+      mass?: number
+      /** 摩擦系数 0~1；缺省 0.5 */
+      friction?: number
+      /** 弹性（恢复系数）0~1；缺省 0.2 */
+      restitution?: number
       threeObject?: THREE.Object3D
       modelId?: string
     },
-    mass: number = 1,
+    mass: number = DEFAULT_OBJECT_MASS,
   ) => {
     // 补全默认属性
     const object: SceneObject = {
@@ -1017,10 +1061,16 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     // 碰撞体的实际形状同样以 Rapier 里那个碰撞体为准。
     const shape: 'box' | 'sphere' | 'mesh' =
       objectData.type === 'cube' ? 'box' : objectData.type === 'sphere' ? 'sphere' : 'mesh'
+    const resolvedMass = objectData.mass ?? mass
     object.physics = {
       type: objectData.physicsType ?? 'dynamic',
       shape,
-      mass,
+      mass: Number.isFinite(resolvedMass) && resolvedMass > 0 ? resolvedMass : DEFAULT_OBJECT_MASS,
+      friction: normalizeUnitInterval(objectData.friction, DEFAULT_OBJECT_FRICTION),
+      restitution: normalizeUnitInterval(
+        objectData.restitution,
+        DEFAULT_OBJECT_RESTITUTION,
+      ),
     }
 
     // 记录创建时的初始变换：这是「重置模拟」的复位基准。
@@ -1141,6 +1191,16 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
           detail: { uuid, transform: { position, rotation, scale } },
         })
         window.dispatchEvent(transformEvent)
+      }
+
+      // 物理参数（质量 / 摩擦 / 弹性 / 刚体类型）同理：真值在 Rapier 的
+      // 刚体与碰撞体上，store 只负责把用户的修改转交给物理世界的所有者。
+      if (properties.physics) {
+        window.dispatchEvent(
+          new CustomEvent('update-physics', {
+            detail: { uuid, physics: updated.physics },
+          }),
+        )
       }
     }
   }

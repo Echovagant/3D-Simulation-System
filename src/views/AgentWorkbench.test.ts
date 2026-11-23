@@ -102,6 +102,28 @@ describe('AgentWorkbench 页面', () => {
     wrapper.unmount()
   })
 
+  it('工具栏「批量评测」打开弹窗，关闭后卸载', async () => {
+    localStorage.clear()
+    installFetch()
+    const wrapper = mount(AgentWorkbench, { attachTo: document.body })
+    await flushPromises()
+
+    const openButton = wrapper
+      .findAll('.toolbar-action')
+      .find((button) => button.text() === '批量评测')
+    expect(openButton).toBeDefined()
+    await openButton!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[aria-label="批量评测"]').exists()).toBe(true)
+
+    await wrapper.find('[aria-label="关闭"]').trigger('click')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[aria-label="批量评测"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it('卸载时收掉审计轮询：定时器不再打日志端点', async () => {
     vi.useFakeTimers()
     const fetchMock = installFetch()

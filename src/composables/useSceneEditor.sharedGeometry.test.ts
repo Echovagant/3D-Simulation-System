@@ -82,7 +82,24 @@ vi.mock('./loadRapier', () => {
       if (rapierMock.failOnCollider) {
         throw new Error('collider 创建失败（测试注入）')
       }
-      const collider = { shape: desc.shape }
+      const collider = {
+        shape: desc.shape,
+        mass: 1,
+        friction: 0.5,
+        restitution: 0.2,
+        setMass(mass: number) {
+          this.mass = mass
+        },
+        setFriction(friction: number) {
+          this.friction = friction
+        },
+        setRestitution(restitution: number) {
+          this.restitution = restitution
+        },
+        setShape(shape: unknown) {
+          this.shape = shape
+        },
+      }
       parent.colliders.push(collider)
       return collider
     }

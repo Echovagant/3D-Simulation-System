@@ -1,7 +1,12 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
 import { ref, watch, type Ref, onUnmounted } from 'vue'
-import { useSceneEditorStore } from '../stores/sceneEditorStore'
+import {
+  DEFAULT_OBJECT_FRICTION,
+  DEFAULT_OBJECT_MASS,
+  DEFAULT_OBJECT_RESTITUTION,
+  useSceneEditorStore,
+} from '../stores/sceneEditorStore'
 import { useModelStore } from '../stores/modelStore'
 import { loadRapier } from './loadRapier'
 import { createWedgeGeometry, WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
@@ -81,6 +86,20 @@ type ColliderShapeSpec =
   | { kind: 'cuboid'; halfExtents: { x: number; y: number; z: number } }
   | { kind: 'ball'; radius: number }
   | { kind: 'trimesh'; vertices: Float32Array; indices: Uint32Array }
+
+/** 物理系数（摩擦 / 弹性）收敛到 0~1；非法值回落到默认值 */
+const normalizeUnitInterval = (value: unknown, fallback: number): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.min(1, Math.max(0, value))
+}
+
+/** 质量必须为正；0 / 负数 / 非数字一律回落到默认值 */
+const normalizeMass = (value: unknown): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    return DEFAULT_OBJECT_MASS
+  }
+  return value
+}
 
 // 模型库条目在导入流程里用到的字段（modelStore.models 的元素还带缩略图等元数据，这里用不上）
 interface Item {
@@ -583,6 +602,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     window.addEventListener('remove-rigidbody', handleRemoveRigidBody)
     // 新增：监听属性面板的变换修改事件
     window.addEventListener('update-transform', handleUpdateTransform)
+    // 新增：监听属性面板的物理参数修改事件
+    window.addEventListener('update-physics', handleUpdatePhysics)
     // 加载带镜头的场景文档：由 store 在重建完成后派发
     window.addEventListener('apply-scene-camera', handleApplySceneCamera as EventListener)
   }
@@ -594,6 +615,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     window.removeEventListener('remove-rigidbody', handleRemoveRigidBody)
     // 新增：移除变换修改事件监听器
     window.removeEventListener('update-transform', handleUpdateTransform)
+    // 新增：移除物理参数修改事件监听器
+    window.removeEventListener('update-physics', handleUpdatePhysics)
     window.removeEventListener('apply-scene-camera', handleApplySceneCamera as EventListener)
   }
 
@@ -665,10 +688,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       collider.setShape(
         new rapier.Cuboid(halfExtents.x * sx, halfExtents.y * sy, halfExtents.z * sz),
       )
-      return
-    }
-
-    if (spec.kind === 'trimesh') {
+    } else if (spec.kind === 'trimesh') {
       // 楔形缩放：基准顶点逐轴乘缩放后重建 trimesh（Rapier 没有可缩放的 trimesh 形状）
       const scaled = new Float32Array(spec.vertices.length)
       for (let i = 0; i < spec.vertices.length; i += 3) {
@@ -677,13 +697,20 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         scaled[i + 2] = spec.vertices[i + 2] * sz
       }
       collider.setShape(new rapier.TriMesh(scaled, new Uint32Array(spec.indices)))
-      return
+    } else {
+      // Rapier 没有椭球碰撞体：球体的非等比缩放用三轴均值近似半径
+      // （等比缩放时与视觉完全一致）
+      const meanScale = (sx + sy + sz) / 3
+      collider.setShape(new rapier.Ball(spec.radius * meanScale))
     }
 
-    // Rapier 没有椭球碰撞体：球体的非等比缩放用三轴均值近似半径
-    // （等比缩放时与视觉完全一致）
-    const meanScale = (sx + sy + sz) / 3
-    collider.setShape(new rapier.Ball(spec.radius * meanScale))
+    // setShape 会按新形状重算质量属性：显式质量必须再写一次，
+    // 否则用户设的质量会在缩放的瞬间被「洗掉」。
+    const physicsData = store.objects.find((item) => item.uuid === uuid)?.threeObject?.userData
+      ?.physics
+    if (physicsData && typeof physicsData.mass === 'number' && physicsData.mass > 0) {
+      collider.setMass(physicsData.mass)
+    }
   }
 
   // 把用户改过的变换写回 Rapier 刚体与碰撞体。
@@ -750,6 +777,79 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     // 刚体是位置的唯一权威：变换写回后立刻把 mesh 对齐到刚体。
     // 「重置模拟」这类操作因此不需要等下一帧才看得出效果。
     syncPhysicsToObjects()
+  }
+
+  /**
+   * 把属性面板改的物理参数写进 Rapier 的碰撞体与刚体。
+   *
+   * 质量 / 摩擦 / 弹性是真值，不是界面数字：只改 store 而不落到 Rapier 上，
+   * 下一次碰撞仍然按旧参数算。刚体类型切换用 setBodyType，切换后清掉速度，
+   * 否则「动态 → 静态」的瞬间物体会带着旧动量继续滑。
+   */
+  const updateObjectPhysics = (uuid: string, raw: unknown): boolean => {
+    if (!physicsWorld || !rapier) return false
+    const rigidBody = rigidBodies.get(uuid)
+    if (!rigidBody) return false
+    if (typeof raw !== 'object' || raw === null) return false
+
+    const target = store.objects.find((item) => item.uuid === uuid)
+    const userDataPhysics = target?.threeObject?.userData?.physics
+    const collider =
+      (userDataPhysics?.collider as Collider | undefined) ?? findColliderOf(rigidBody)
+    if (!collider) return false
+
+    const params = raw as {
+      type?: unknown
+      mass?: unknown
+      friction?: unknown
+      restitution?: unknown
+    }
+
+    // 缺省字段沿用当前值：只改刚体类型时不该把质量 / 摩擦顺手冲回默认值
+    const mass =
+      params.mass === undefined ? normalizeMass(userDataPhysics?.mass) : normalizeMass(params.mass)
+    const friction =
+      params.friction === undefined
+        ? normalizeUnitInterval(userDataPhysics?.friction, DEFAULT_OBJECT_FRICTION)
+        : normalizeUnitInterval(params.friction, DEFAULT_OBJECT_FRICTION)
+    const restitution =
+      params.restitution === undefined
+        ? normalizeUnitInterval(userDataPhysics?.restitution, DEFAULT_OBJECT_RESTITUTION)
+        : normalizeUnitInterval(params.restitution, DEFAULT_OBJECT_RESTITUTION)
+    const bodyType: 'dynamic' | 'static' | 'kinematic' =
+      params.type === 'static' || params.type === 'kinematic' || params.type === 'dynamic'
+        ? params.type
+        : ((userDataPhysics?.type as 'dynamic' | 'static' | 'kinematic') ?? 'dynamic')
+
+    collider.setMass(mass)
+    collider.setFriction(friction)
+    collider.setRestitution(restitution)
+
+    const targetBodyType =
+      bodyType === 'static'
+        ? rapier.RigidBodyType.Fixed
+        : bodyType === 'kinematic'
+          ? rapier.RigidBodyType.KinematicPositionBased
+          : rapier.RigidBodyType.Dynamic
+    if (rigidBody.bodyType() !== targetBodyType) {
+      rigidBody.setBodyType(targetBodyType, true)
+      rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true)
+      rigidBody.setAngvel({ x: 0, y: 0, z: 0 }, true)
+    }
+
+    // mesh.userData.physics 与 store 的记录必须同步：它是「mesh → 刚体参数」的
+    // 唯一查询入口（usePhysics 与缩放路径都读它）。
+    if (userDataPhysics) {
+      Object.assign(userDataPhysics, { type: bodyType, mass, friction, restitution })
+    }
+    return true
+  }
+
+  const handleUpdatePhysics = (event: Event): void => {
+    const customEvent = event as CustomEvent
+    const { uuid, physics } = customEvent.detail ?? {}
+    if (!uuid || !physics) return
+    updateObjectPhysics(uuid, physics)
   }
 
   /**
@@ -837,6 +937,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     collider: Collider,
     shape: 'box' | 'sphere' | 'mesh',
     bodyType: 'dynamic' | 'static' | 'kinematic' = 'dynamic',
+    params: { mass?: number; friction?: number; restitution?: number } = {},
   ): void => {
     object.userData.physics = {
       ...(object.userData.physics ?? {}),
@@ -844,7 +945,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       collider,
       type: bodyType,
       shape,
-      mass: 1,
+      mass: normalizeMass(params.mass),
+      friction: normalizeUnitInterval(params.friction, DEFAULT_OBJECT_FRICTION),
+      restitution: normalizeUnitInterval(params.restitution, DEFAULT_OBJECT_RESTITUTION),
     }
   }
 
@@ -862,6 +965,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     options: {
       color?: number
       bodyType?: 'dynamic' | 'static' | 'kinematic'
+      mass?: number
+      friction?: number
+      restitution?: number
     } = {},
   ): THREE.Mesh | null => {
     if (!isSceneInitialized || !physicsWorld || !rapier) {
@@ -869,6 +975,12 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     }
 
     const bodyType = options.bodyType ?? 'dynamic'
+    const mass = normalizeMass(options.mass)
+    const friction = normalizeUnitInterval(options.friction, DEFAULT_OBJECT_FRICTION)
+    const restitution = normalizeUnitInterval(
+      options.restitution,
+      DEFAULT_OBJECT_RESTITUTION,
+    )
 
     // 材质每对象独立（高亮靠 material.emissive，共享会串色）
     const material = new THREE.MeshStandardMaterial({
@@ -977,6 +1089,12 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         applyScaleToCollider(mesh.uuid, transform.scale)
       }
 
+      // 质量 / 摩擦 / 弹性写进刚体与碰撞体：属性面板改了之后要能真的影响物理，
+      // 不是只改界面数字。放在 setShape 之后，避免质量被形状重建洗掉。
+      collider.setMass(mass)
+      collider.setFriction(friction)
+      collider.setRestitution(restitution)
+
       // 设置userData以便反向查找
       ;(rigidBody as RapierRigidBody).userData = { object: mesh }
       attachRigidBodyToUserData(
@@ -985,6 +1103,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         collider,
         type === 'cube' ? 'box' : type === 'ramp' ? 'mesh' : 'sphere',
         bodyType,
+        { mass, friction, restitution },
       )
 
       // 将物体添加到场景中
@@ -1000,6 +1119,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         threeObject: mesh,
         color: material.color.getHex(),
         physicsType: bodyType,
+        mass,
+        friction,
+        restitution,
         position: {
           x: mesh.position.x,
           y: mesh.position.y,
@@ -1036,6 +1158,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
   interface PrimitiveCreateOptions {
     color?: number
     bodyType?: 'dynamic' | 'static' | 'kinematic'
+    mass?: number
+    friction?: number
+    restitution?: number
   }
 
   // 添加立方体

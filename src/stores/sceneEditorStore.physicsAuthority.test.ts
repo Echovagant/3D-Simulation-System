@@ -82,6 +82,72 @@ describe('手写积分器已经不存在了', () => {
   })
 })
 
+describe('物理参数修改的事件桥', () => {
+  let store: ReturnType<typeof useSceneEditorStore>
+  let events: CustomEvent[]
+  let handler: (e: Event) => void
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    store = useSceneEditorStore()
+    events = []
+    handler = (e: Event) => events.push(e as CustomEvent)
+    window.addEventListener('update-physics', handler)
+  })
+
+  afterEach(() => {
+    window.removeEventListener('update-physics', handler)
+  })
+
+  it('updateObject 改 physics 时派发 update-physics（detail 带 uuid 与 physics）', () => {
+    store.addObject(newObject('u1'))
+
+    store.updateObject('u1', {
+      physics: {
+        type: 'static',
+        shape: 'box',
+        mass: 2,
+        friction: 0.3,
+        restitution: 0.6,
+      },
+    })
+
+    expect(events).toHaveLength(1)
+    expect(events[0].detail.uuid).toBe('u1')
+    expect(events[0].detail.physics).toMatchObject({
+      type: 'static',
+      mass: 2,
+      friction: 0.3,
+      restitution: 0.6,
+    })
+    // store 的记录同步更新，保存时会带走新参数
+    expect(store.objects[0].physics).toMatchObject({
+      type: 'static',
+      mass: 2,
+      friction: 0.3,
+      restitution: 0.6,
+    })
+  })
+
+  it('只改变换时不派发 update-physics', () => {
+    store.addObject(newObject('u1'))
+
+    store.updateObject('u1', { position: { x: 1, y: 2, z: 3 } })
+
+    expect(events).toHaveLength(0)
+  })
+
+  it('addObject 默认写入 mass=1、friction=0.5、restitution=0.2', () => {
+    store.addObject(newObject('u1'))
+
+    expect(store.objects[0].physics).toMatchObject({
+      mass: 1,
+      friction: 0.5,
+      restitution: 0.2,
+    })
+  })
+})
+
 describe('「重置模拟」的复位基准', () => {
   let store: ReturnType<typeof useSceneEditorStore>
   let events: CustomEvent[]
