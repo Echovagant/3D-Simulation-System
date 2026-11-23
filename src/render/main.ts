@@ -20,10 +20,17 @@ import { createModelLibrary } from '@/data/modelLibrary'
 import {
   createRenderController,
   normalizeRenderScene,
+  resolveRenderCamera,
   resolveRenderWorldSize,
   type RenderApi,
   type RenderObjectSpec,
 } from './renderPage'
+import {
+  applyCinematicRenderer,
+  applySceneAtmosphere,
+  createGrid,
+  SCENE_PRESENTATION,
+} from '@/config/scenePresentation'
 
 /**
  * 取注入的场景。
@@ -48,11 +55,17 @@ const buildStage = (worldSize: number): {
   renderer: THREE.WebGLRenderer
 } => {
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x222222)
+  applySceneAtmosphere(scene, worldSize)
 
-  const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 1000)
-  camera.position.set(5, 5, 5)
-  camera.lookAt(0, 0, 0)
+  const camera = new THREE.PerspectiveCamera(
+    SCENE_PRESENTATION.defaultFov,
+    16 / 9,
+    0.1,
+    2000,
+  )
+  const distance = worldSize * 0.42
+  camera.position.set(distance, distance * 0.78, distance)
+  camera.lookAt(0, 1, 0)
 
   const renderer = new THREE.WebGLRenderer({
     antialias: true,
@@ -61,15 +74,30 @@ const buildStage = (worldSize: number): {
     powerPreference: RENDER_POWER_PREFERENCE,
   })
   renderer.setPixelRatio(1)
+  // 与编辑器视口同一套色彩管线：ACES + sRGB + PCFSoft
+  applyCinematicRenderer(renderer)
   renderer.shadowMap.enabled = true
 
-  // 灯光（阴影范围跟着场地走，否则 40×40 场景只有中心一小块有阴影）
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5))
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 1)
-  directionalLight.position.set(worldSize * 0.25, worldSize * 0.55, worldSize * 0.35)
+  // 灯光与编辑器一致：环境只托底，半球光给方向，暖主光造型，冷补光提暗部
+  scene.add(new THREE.AmbientLight(0xffffff, SCENE_PRESENTATION.ambientIntensity))
+  scene.add(
+    new THREE.HemisphereLight(
+      SCENE_PRESENTATION.hemiSky,
+      SCENE_PRESENTATION.hemiGround,
+      SCENE_PRESENTATION.hemiIntensity,
+    ),
+  )
+
+  const directionalLight = new THREE.DirectionalLight(
+    SCENE_PRESENTATION.keyLight,
+    SCENE_PRESENTATION.keyIntensity,
+  )
+  directionalLight.position.set(worldSize * 0.28, worldSize * 0.62, worldSize * 0.32)
   directionalLight.castShadow = true
   directionalLight.shadow.mapSize.width = 2048
   directionalLight.shadow.mapSize.height = 2048
+  directionalLight.shadow.bias = -0.0004
+  directionalLight.shadow.normalBias = 0.02
   const shadowHalf = worldSize / 2 + 2
   directionalLight.shadow.camera.left = -shadowHalf
   directionalLight.shadow.camera.right = shadowHalf
@@ -79,20 +107,32 @@ const buildStage = (worldSize: number): {
   directionalLight.shadow.camera.updateProjectionMatrix()
   scene.add(directionalLight)
 
-  // 辅助线
-  const grid = new THREE.GridHelper(worldSize, worldSize)
-  grid.position.y = 0.001
-  scene.add(grid)
-  scene.add(new THREE.AxesHelper(5))
-  const secondaryAxes = new THREE.AxesHelper(Math.max(10, worldSize / 4))
-  secondaryAxes.material.opacity = 0.3
-  secondaryAxes.material.transparent = true
-  scene.add(secondaryAxes)
+  const fillLight = new THREE.DirectionalLight(
+    SCENE_PRESENTATION.fillLight,
+    SCENE_PRESENTATION.fillIntensity,
+  )
+  fillLight.position.set(-worldSize * 0.4, worldSize * 0.3, -worldSize * 0.35)
+  scene.add(fillLight)
+
+  // 轮廓光：与编辑器同一套三点布光，导出画面才不会比编辑器暗一档
+  const rimLight = new THREE.DirectionalLight(
+    SCENE_PRESENTATION.rimLight,
+    SCENE_PRESENTATION.rimIntensity,
+  )
+  rimLight.position.set(-worldSize * 0.15, worldSize * 0.5, -worldSize * 0.65)
+  scene.add(rimLight)
+
+  // 网格：不再画坐标轴（作品画面里不该出现调试 gizmo）
+  scene.add(createGrid(worldSize))
 
   // 地面网格：平面在 y=0，与物理地面的碰撞体顶面齐平
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(worldSize, worldSize),
-    new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.8, metalness: 0.2 }),
+    new THREE.MeshStandardMaterial({
+      color: SCENE_PRESENTATION.groundColor,
+      roughness: SCENE_PRESENTATION.groundRoughness,
+      metalness: 0,
+    }),
   )
   ground.rotation.x = -Math.PI / 2
   ground.receiveShadow = true
@@ -108,6 +148,20 @@ const bootstrap = async (): Promise<void> => {
   const sceneDocument = readInjectedScene()
   const worldSize = resolveRenderWorldSize(sceneDocument)
   const { scene, camera, renderer } = buildStage(worldSize)
+
+  // 文档带镜头时用它：与编辑器打开该场景看到的构图一致
+  const cameraSpec = resolveRenderCamera(sceneDocument)
+  if (cameraSpec) {
+    camera.position.set(
+      cameraSpec.position.x,
+      cameraSpec.position.y,
+      cameraSpec.position.z,
+    )
+    camera.fov = cameraSpec.fov ?? SCENE_PRESENTATION.defaultFov
+    camera.updateProjectionMatrix()
+    camera.lookAt(cameraSpec.target.x, cameraSpec.target.y, cameraSpec.target.z)
+  }
+
   container.appendChild(renderer.domElement)
 
   const resize = (): void => {

@@ -16,6 +16,9 @@
  */
 import * as THREE from 'three'
 import { WEDGE_INDICES, WEDGE_VERTICES } from '../utils/primitiveFactory'
+import { normalizeSceneCamera } from '@/utils/sceneCamera'
+import { SCENE_PRESENTATION } from '@/config/scenePresentation'
+import type { SceneCamera } from '@/types'
 import type * as RapierModule from '@dimforge/rapier3d'
 
 type Rapier = typeof RapierModule
@@ -126,6 +129,17 @@ export const resolveRenderWorldSize = (sceneDocument: unknown): number => {
   const raw = (sceneDocument as { worldSize?: unknown } | null | undefined)?.worldSize
   if (isFiniteNumber(raw) && raw >= 10 && raw <= 200) return raw
   return RENDER_GROUND.halfExtents.x * 2
+}
+
+/**
+ * 场景文档里的初始镜头。
+ *
+ * 渲染页与编辑器共用同一份解析（utils/sceneCamera）：同一份文档
+ * 「编辑器里怎么构图，导出视频就怎么构图」，不会一边平视一边俯拍。
+ */
+export const resolveRenderCamera = (sceneDocument: unknown): SceneCamera | null => {
+  const raw = (sceneDocument as { camera?: unknown } | null | undefined)?.camera
+  return normalizeSceneCamera(raw)
 }
 
 /** 把任意输入读成 {x,y,z}；缺字段或是非有限数字都直接报错，不做静默兜底 */
@@ -399,8 +413,8 @@ export const createRenderController = (options: RenderControllerOptions): Render
           : new THREE.SphereGeometry(0.5, 32, 32)
     const material = new THREE.MeshStandardMaterial({
       color: spec.color ?? OBJECT_COLORS[items.length % OBJECT_COLORS.length],
-      metalness: 0.3,
-      roughness: 0.4,
+      metalness: SCENE_PRESENTATION.materialMetalness,
+      roughness: SCENE_PRESENTATION.materialRoughness,
       // 楔形共享顶点会把棱角法线平均掉；逐面着色才能看出实体
       flatShading: spec.kind === 'ramp',
     })

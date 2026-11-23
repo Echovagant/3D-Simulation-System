@@ -106,6 +106,30 @@ describe('场景文档导入校验', () => {
     expect(parsed.error).toContain('JSON')
   })
 
+  it('非法镜头被丢弃，物体照常通过（镜头是可选增强，不该拖垮导入）', () => {
+    const parsed = normalizeSceneDocument({
+      camera: { position: { x: '左', y: 1, z: 0 }, target: { x: 0, y: 0, z: 0 } },
+      objects: [{ type: 'cube', position: { x: 0, y: 1, z: 0 } }],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.document.camera).toBeUndefined()
+  })
+
+  it('合法镜头原样通过，fov 缺省补 50', () => {
+    const parsed = normalizeSceneDocument({
+      camera: { position: { x: 10, y: 8, z: 12 }, target: { x: 0, y: 2, z: 0 } },
+      objects: [],
+    })
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.document.camera).toEqual({
+      position: { x: 10, y: 8, z: 12 },
+      target: { x: 0, y: 2, z: 0 },
+      fov: 50,
+    })
+  })
+
   it('物体数量超过上限时拒绝，避免一份文件把页面拖死', () => {
     const parsed = normalizeSceneDocument({
       objects: Array.from({ length: 501 }, () => ({

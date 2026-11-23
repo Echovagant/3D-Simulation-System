@@ -10,7 +10,7 @@ import { computed, ref, watch } from 'vue'
 import { llmConfig } from '@/config/llm'
 import { findProvider, llmProviders, type LlmProvider } from '@/config/llmProviders'
 import { ApiError, isApiUnavailable } from '@/services/api/client'
-import type { ScenePrimitiveSpec } from '@/types'
+import type { SceneCamera, ScenePrimitiveSpec } from '@/types'
 import {
   buildSceneGenerationMessages,
   parseGeneratedScene,
@@ -755,7 +755,7 @@ export const useLlmStore = defineStore('llm', () => {
   const requestSceneGeneration = async (
     userPrompt: string,
   ): Promise<
-    | { ok: true; objects: ScenePrimitiveSpec[]; skipped: string[] }
+    | { ok: true; objects: ScenePrimitiveSpec[]; skipped: string[]; camera?: SceneCamera }
     | { ok: false; error: string }
   > => {
     if (degraded.value) {
@@ -790,7 +790,12 @@ export const useLlmStore = defineStore('llm', () => {
     if (!parsed.ok) {
       return { ok: false, error: parsed.error }
     }
-    return { ok: true, objects: parsed.objects, skipped: parsed.skipped }
+    return {
+      ok: true,
+      objects: parsed.objects,
+      skipped: parsed.skipped,
+      ...(parsed.camera ? { camera: parsed.camera } : {}),
+    }
   }
 
   /** 标记降级（LLM 控制器用不了） */

@@ -8,8 +8,9 @@ describe('buildSceneGenerationMessages —— prompt 构造', () => {
     expect(messages[0].role).toBe('system')
     expect(messages[0].content).toContain('cube')
     expect(messages[0].content).toContain('ramp')
-    expect(messages[0].content).toContain('0.3~4')
+    expect(messages[0].content).toContain('0.05~12')
     expect(messages[0].content).toContain('不要 markdown')
+    expect(messages[0].content).toContain('camera')
     expect(messages[1].role).toBe('user')
     expect(messages[1].content).toBe('一个滑板场，有斜坡')
   })
@@ -54,15 +55,15 @@ describe('parseGeneratedScene —— 模型输出收敛', () => {
   })
 
   it('超过上限截断，并把截断原因写进 skipped', () => {
-    const objects = Array.from({ length: 20 }, (_, i) => ({
+    const objects = Array.from({ length: 40 }, (_, i) => ({
       name: `块${i}`,
       type: 'cube',
-      position: { x: i, y: 0.5, z: 0 },
+      position: { x: i % 20, y: 0.5, z: 0 },
     }))
     const result = parseGeneratedScene(JSON.stringify({ objects }))
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.objects).toHaveLength(12)
+    expect(result.objects).toHaveLength(28)
     expect(result.skipped[0]).toContain('上限')
   })
 
@@ -76,13 +77,59 @@ describe('parseGeneratedScene —— 模型输出收敛', () => {
     expect(result.objects[0].name).toBe('好块')
   })
 
-  it('scale 越界钳制回 0.2~3，非法回退默认 1', () => {
+  it('scale 越界钳制回 0.15~5，非法回退默认 1', () => {
     const result = parseGeneratedScene(
       '{"objects":[{"name":"巨块","type":"cube","position":{"x":0,"y":0.5,"z":0},"scale":{"x":50,"y":1,"z":"?"}}]}',
     )
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.objects[0].scale).toEqual({ x: 3, y: 1, z: 1 })
+    expect(result.objects[0].scale).toEqual({ x: 5, y: 1, z: 1 })
+  })
+
+  it('颜色支持 #RRGGBB 字符串与数字，刚体类型与镜头一并收敛', () => {
+    const result = parseGeneratedScene(
+      JSON.stringify({
+        objects: [
+          {
+            name: '石台',
+            type: 'cube',
+            position: { x: 0, y: 0.3, z: 0 },
+            scale: { x: 10, y: 0.6, z: 8 },
+            color: '#39424E',
+            physics: 'static',
+          },
+          {
+            name: '小球',
+            type: 'sphere',
+            position: { x: 3, y: 2, z: 1 },
+            color: 0xff8a5c,
+            physics: { type: 'dynamic' },
+          },
+        ],
+        camera: { position: { x: 14, y: 11, z: 16 }, target: { x: 0, y: 2, z: 0 }, fov: 45 },
+      }),
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.objects[0].color).toBe(0x39424e)
+    expect(result.objects[0].bodyType).toBe('static')
+    expect(result.objects[1].color).toBe(0xff8a5c)
+    expect(result.objects[1].bodyType).toBe('dynamic')
+    expect(result.camera).toEqual({
+      position: { x: 14, y: 11, z: 16 },
+      target: { x: 0, y: 2, z: 0 },
+      fov: 45,
+    })
+  })
+
+  it('缺 camera 或 camera 非法时不返回镜头，物体照常进结果', () => {
+    const result = parseGeneratedScene(
+      '{"objects":[{"name":"方块","type":"cube","position":{"x":1,"y":0.5,"z":1}}],"camera":{"position":{"x":"左"}}}',
+    )
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.objects).toHaveLength(1)
+    expect(result.camera).toBeUndefined()
   })
 
   it('全部非法才算失败，错误里带第一条原因', () => {

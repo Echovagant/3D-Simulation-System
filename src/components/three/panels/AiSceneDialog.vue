@@ -8,7 +8,7 @@
         </button>
       </div>
       <p class="ai-scene-dialog__hint">
-        用一句话描述想要的场景（最多 10 个物体，基础体组合，出生后落到地面）
+        用一句话描述想要的场景（最多 24 个基础体，支持配色与固定结构，自动生成镜头）
       </p>
       <div class="ai-scene-dialog__examples">
         <button
@@ -66,10 +66,10 @@ import { useLlmStore } from '@/stores/llmStore'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
 
 const EXAMPLES = [
-  '伽利略斜面：一个大斜坡，三个小球从不同高度滚下',
-  '滑板场：两个斜坡相对，中间放几个障碍块',
-  '障碍训练场：错位墙体和窄道，起点放三个球',
-  '城市广场：高低不同的方块楼群，中间一个喷泉球',
+  '禅意庭院：石台、枯山水、一座拱门与几棵球树',
+  '未来发射场：中央塔架、两侧推进器、环形平台与三个能量球',
+  '校园广场：教学楼、旗杆、长椅与喷泉，傍晚的暖光',
+  '展厅入口：对称门廊、两侧展台与中央悬浮球',
 ] as const
 
 const llmStore = useLlmStore()
@@ -83,6 +83,10 @@ const addPrimitive = inject<
     scale?: { x: number; y: number; z: number }
   }) => boolean
 >('addPrimitive', () => false)
+const applySceneCamera = inject<(camera: unknown) => boolean>(
+  'applySceneCamera',
+  () => false,
+)
 
 const prompt = ref('')
 const generating = ref(false)
@@ -119,8 +123,12 @@ const generate = async (): Promise<void> => {
       return
     }
     sceneStore.pushHistory('AI 生成场景', snapshot)
+    // 模型给了镜头就按它取景：AI 作品的构图有一半在机位上
+    const framed = res.camera ? applySceneCamera(res.camera) : false
     generated.value = true
-    resultText.value = `已添加 ${added} 个物体${skippedNote}——它们会落到地面`
+    resultText.value = `已添加 ${added} 个物体${skippedNote}——它们会落到地面${
+      framed ? '，已按生成镜头取景' : ''
+    }`
   } finally {
     generating.value = false
   }

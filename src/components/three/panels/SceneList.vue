@@ -47,7 +47,8 @@
           >
             <span class="showcase-head">
               <span class="scene-name">{{ scene.name }}</span>
-              <span class="scene-badge">{{ scene.audience }}</span>
+              <span class="scene-badge" v-if="scene.origin !== 'ai'">{{ scene.audience }}</span>
+              <span class="scene-badge scene-badge-ai" v-else>AI 作品</span>
             </span>
             <span class="showcase-desc">{{ scene.description }}</span>
             <span class="scene-meta">{{ scene.document.objects.length }} 个物体 · 精选示例</span>
@@ -440,6 +441,12 @@ watch(
   color: var(--accent);
   font-size: 10px;
   font-weight: 600;
+}
+
+/* AI 生成后人工筛选入库的作品：与「受众」徽标区分开 */
+.scene-badge-ai {
+  background-color: rgba(171, 123, 214, 0.16);
+  color: #c9a4e8;
 }
 
 .scene-remote {

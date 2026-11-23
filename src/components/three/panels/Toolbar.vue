@@ -16,6 +16,14 @@
       >
         <i class="fas fa-undo-alt"></i>
       </button>
+      <button
+        class="toolbar-btn"
+        @click="handleFocusScene"
+        :disabled="!isSceneInitialized"
+        title="聚焦场景（自动取景，把全部物体收进画面）"
+      >
+        <i class="fas fa-crosshairs"></i>
+      </button>
     </div>
 
     <!-- 物体添加按钮组 -->
@@ -187,6 +195,7 @@ const addSphere = inject('addSphere') ?? (() => false);
 const addRamp = inject('addRamp') ?? (() => false);
 const importModel = inject('importModel') ?? (async () => false);
 const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
+const focusScene = inject('focusScene') ?? (() => false);
 
 // 状态
 const statusMessage = ref('');
@@ -221,6 +230,13 @@ const handlePlayPause = () => {
 const handleResetSimulation = () => {
   store.resetSimulation();
   showTempMessage('重置物理模拟');
+};
+
+// 聚焦场景：自动取景，把全部物体收进画面
+const handleFocusScene = () => {
+  if (!isSceneInitialized.value) return;
+  const ok = focusScene();
+  showTempMessage(ok ? '已聚焦场景' : '取景失败', ok ? 1500 : 3000);
 };
 
 // 添加基本体：先拍快照，成功后才入历史栈（失败不留空撤销）

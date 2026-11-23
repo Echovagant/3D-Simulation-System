@@ -34,6 +34,8 @@ const emits = defineEmits<{
       getIsSceneInitialized: () => boolean
       updatePhysics: () => void
       setWorldSize: (size: number) => boolean
+      focusScene: () => boolean
+      applySceneCamera: (camera: unknown) => boolean
     },
   ): void
   (e: 'init-success'): void
@@ -53,6 +55,8 @@ const {
   getIsSceneInitialized,
   updatePhysics,
   setWorldSize,
+  focusScene,
+  applySceneCamera,
   onInitSuccess,
   onInitError,
 } = useSceneEditor(null)
@@ -86,6 +90,8 @@ onMounted(() => {
       getIsSceneInitialized,
       updatePhysics,
       setWorldSize,
+      focusScene,
+      applySceneCamera,
     })
   })
 })

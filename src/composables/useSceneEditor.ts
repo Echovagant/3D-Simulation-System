@@ -15,6 +15,13 @@ import {
 import { planSpawnPosition } from '../utils/spawnPlanner'
 import { RENDER_POWER_PREFERENCE } from '../config/rendering'
 import { createFixedStepAccumulator } from '../utils/fixedStepAccumulator'
+import {
+  applyCinematicRenderer,
+  applySceneAtmosphere,
+  createGrid,
+  SCENE_PRESENTATION,
+} from '../config/scenePresentation'
+import { normalizeSceneCamera } from '../utils/sceneCamera'
 import type {
   World,
   RigidBody,
@@ -175,18 +182,26 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
         throw new Error(initError || 'Rapier 未加载成功，无法初始化场景')
       }
 
+      // 场地大小先定：相机默认机位按它算距离，否则 40×40 的场景会被
+      // (5,5,5) 的老机位拍成「主体缩在画面一角」。
+      currentWorldSize = normalizeWorldSize(store.worldSize)
+
       // 创建场景核心对象
       scene = new THREE.Scene()
-      scene.background = new THREE.Color(0x222222)
+      applySceneAtmosphere(scene, currentWorldSize)
 
       // 使用默认尺寸，后续会通过Viewport组件更新
       const defaultWidth = 800
       const defaultHeight = 600
       const aspect = defaultWidth / defaultHeight
 
-      camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000)
-      camera.position.set(5, 5, 5)
-      camera.lookAt(0, 0, 0)
+      camera = new THREE.PerspectiveCamera(
+        SCENE_PRESENTATION.defaultFov,
+        aspect,
+        0.1,
+        1000,
+      )
+      resetCameraToDefault(currentWorldSize)
 
       renderer = new THREE.WebGLRenderer({
         antialias: true,
@@ -195,11 +210,10 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       })
       renderer.setSize(defaultWidth, defaultHeight, false)
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      // 与「成品画面」同一套色彩管线：ACES 色调映射 + sRGB + 柔和阴影
+      applyCinematicRenderer(renderer)
       renderer.shadowMap.enabled = true // 启用阴影
       // 不在这里添加renderer到DOM，让Viewport组件负责
-
-      // 场地大小由 store 持有：场景文档里带 worldSize 时，加载后跟着变
-      currentWorldSize = normalizeWorldSize(store.worldSize)
 
       // 添加光源
       addLights(currentWorldSize)
@@ -251,42 +265,83 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     light.shadow.camera.updateProjectionMatrix()
   }
 
+  /**
+   * 默认机位：按场地边长退到能看见整块场地的地方。
+   *
+   * 旧版固定 (5,5,5) 是给 10×10 小场地配的；场地扩到 40 后主体只剩画面
+   * 一角，这也是「场景看着像小学生作品」的第一层原因。
+   */
+  const resetCameraToDefault = (size: number): void => {
+    if (!camera) return
+    const distance = size * 0.42
+    camera.position.set(distance, distance * 0.78, distance)
+    camera.lookAt(0, 1, 0)
+    if (controls) {
+      controls.target.set(0, 1, 0)
+      controls.update()
+    }
+    store.setViewTarget({ x: 0, y: 1, z: 0 })
+  }
+
   // 添加光源
+  //
+  // 三点布光：暖主光负责造型与阴影，冷补光把背光面从死黑里捞回来，
+  // 半球光给天空/地面一个方向差。旧版只有环境光 + 单平行光，
+  // 物体背光面全黑、正面一片平，画面自然「像灰模」。
   const addLights = (size: number): void => {
     if (!scene) return
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55)
+    const ambientLight = new THREE.AmbientLight(
+      0xffffff,
+      SCENE_PRESENTATION.ambientIntensity,
+    )
     scene.add(ambientLight)
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.1)
-    directionalLight.position.set(size * 0.25, size * 0.55, size * 0.35)
+    const hemisphere = new THREE.HemisphereLight(
+      SCENE_PRESENTATION.hemiSky,
+      SCENE_PRESENTATION.hemiGround,
+      SCENE_PRESENTATION.hemiIntensity,
+    )
+    scene.add(hemisphere)
+
+    const directionalLight = new THREE.DirectionalLight(
+      SCENE_PRESENTATION.keyLight,
+      SCENE_PRESENTATION.keyIntensity,
+    )
+    directionalLight.position.set(size * 0.28, size * 0.62, size * 0.32)
     directionalLight.castShadow = true
     directionalLight.shadow.mapSize.width = 2048
     directionalLight.shadow.mapSize.height = 2048
+    // 阴影偏移：斜面上的自阴影（阴影痤疮）靠这两项压掉
+    directionalLight.shadow.bias = -0.0004
+    directionalLight.shadow.normalBias = 0.02
     fitShadowCamera(directionalLight, size)
     scene.add(directionalLight)
     scene.add(directionalLight.target)
     sunLight = directionalLight
+
+    // 补光不投影：它的职责是「让暗部有细节」，不是再造一套阴影
+    const fillLight = new THREE.DirectionalLight(
+      SCENE_PRESENTATION.fillLight,
+      SCENE_PRESENTATION.fillIntensity,
+    )
+    fillLight.position.set(-size * 0.4, size * 0.3, -size * 0.35)
+    scene.add(fillLight)
+
+    // 轮廓光：从主体背后打冷光，把深色结构的边缘从背景里「描」出来
+    const rimLight = new THREE.DirectionalLight(SCENE_PRESENTATION.rimLight, SCENE_PRESENTATION.rimIntensity)
+    rimLight.position.set(-size * 0.15, size * 0.5, -size * 0.65)
+    scene.add(rimLight)
   }
 
   // 添加辅助工具
+  //
+  // 只保留网格：坐标轴（AxesHelper）是调试用的，出现在作品画面里
+  // 就像「没做完的工程文件」，正式场景一律不显示。
   const addHelpers = (size: number): void => {
     if (!scene) return
-
-    // 网格与地面同高，抬高 1 毫米避免 z-fighting（否则网格会随机闪烁）
-    gridHelper = new THREE.GridHelper(size, size, 0x5f6b7a, 0x363b44)
-    gridHelper.position.y = 0.001
+    gridHelper = createGrid(size)
     scene.add(gridHelper)
-
-    // 添加主要坐标系（更明显的坐标轴）
-    const axesHelper = new THREE.AxesHelper(5)
-    scene.add(axesHelper)
-
-    // 添加次级坐标系（使用不同颜色和透明度的材质）
-    const secondaryAxesHelper = new THREE.AxesHelper(Math.max(10, size / 4))
-    secondaryAxesHelper.material.opacity = 0.3
-    secondaryAxesHelper.material.transparent = true
-    scene.add(secondaryAxesHelper)
   }
 
   // 初始化控制器
@@ -298,6 +353,20 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     controls.dampingFactor = 0.05
     controls.minDistance = 1
     controls.maxDistance = currentWorldSize * 2.5
+    // 默认机位与默认 target 必须是同一个点：OrbitControls 第一次 update()
+    // 会把相机改瞄到 target，两处不一致时画面会被整体压偏。
+    controls.target.set(0, 1, 0)
+    controls.update()
+
+    // 用户转完视角后把 target 记进 store：导出 / 保存场景时镜头才带得走
+    controls.addEventListener('end', () => {
+      if (!controls) return
+      store.setViewTarget({
+        x: controls.target.x,
+        y: controls.target.y,
+        z: controls.target.z,
+      })
+    })
   }
 
   // 初始化物理世界
@@ -329,9 +398,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     // 创建地面网格
     const groundGeometry = new THREE.PlaneGeometry(size, size)
     const groundMaterial = new THREE.MeshStandardMaterial({
-      color: 0x7d8590,
-      roughness: 0.9,
-      metalness: 0.05,
+      color: SCENE_PRESENTATION.groundColor,
+      roughness: SCENE_PRESENTATION.groundRoughness,
+      metalness: 0,
     })
 
     groundMesh = new THREE.Mesh(groundGeometry, groundMaterial)
@@ -365,6 +434,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
 
     if (!scene) return false
 
+    // 背景与雾跟着场地走：40 的雾挂在 60 的场地上会把远处结构提前吃掉
+    applySceneAtmosphere(scene, size)
+
     if (gridHelper) {
       scene.remove(gridHelper)
       gridHelper.geometry.dispose()
@@ -372,18 +444,133 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
       gridHelper = null
     }
     // 重建网格（同时保证网格与地面同尺寸）
-    gridHelper = new THREE.GridHelper(size, size, 0x5f6b7a, 0x363b44)
-    gridHelper.position.y = 0.001
+    gridHelper = createGrid(size)
     scene.add(gridHelper)
 
     if (sunLight) {
-      sunLight.position.set(size * 0.25, size * 0.55, size * 0.35)
+      sunLight.position.set(size * 0.28, size * 0.62, size * 0.32)
       fitShadowCamera(sunLight, size)
     }
 
     if (controls) controls.maxDistance = size * 2.5
 
     createGround(size)
+    return true
+  }
+
+  /**
+   * 应用场景文档里的初始镜头。
+   *
+   * 相机位置、fov 与轨道控制器的 target 必须一起改：只改相机不改 target，
+   * 控制器下一次 update() 会把镜头拉回旧目标点，画面看起来「没生效」。
+   */
+  const applySceneCamera = (raw: unknown): boolean => {
+    const cameraSpec = normalizeSceneCamera(raw)
+    if (!cameraSpec || !camera || !controls) return false
+
+    camera.position.set(
+      cameraSpec.position.x,
+      cameraSpec.position.y,
+      cameraSpec.position.z,
+    )
+    camera.fov = cameraSpec.fov ?? SCENE_PRESENTATION.defaultFov
+    camera.updateProjectionMatrix()
+
+    controls.target.set(cameraSpec.target.x, cameraSpec.target.y, cameraSpec.target.z)
+    controls.update()
+    store.setViewTarget(cameraSpec.target)
+    return true
+  }
+
+  const handleApplySceneCamera = (event: Event): void => {
+    const detail = (event as CustomEvent).detail
+    applySceneCamera(detail)
+  }
+
+  /**
+   * 聚焦场景：按所有可见物体的包围盒自动取景。
+   *
+   * 这是「打开场景就能看」的兜底：即使文档没带镜头，用户也不用先手动
+   * 转半天找主体。空场景回到默认机位。
+   *
+   * ⚠️ 不能用「包围球半径 / sin(fov/2)」算距离：包围球把扁平场景
+   * （长 24、高 5）当成一个球，相机要退到 45 米外，主体只剩一小块。
+   * 这里逐角点投影到相机空间，分别按水平/垂直视野求所需距离，迭代收敛。
+   */
+  const focusScene = (): boolean => {
+    if (!camera || !controls) return false
+
+    const box = new THREE.Box3()
+    let count = 0
+    store.objects.forEach((item) => {
+      if (!item.threeObject || item.visible === false) return
+      box.expandByObject(item.threeObject)
+      count += 1
+    })
+
+    if (count === 0) {
+      resetCameraToDefault(currentWorldSize)
+      return true
+    }
+
+    const center = box.getCenter(new THREE.Vector3())
+    const size = box.getSize(new THREE.Vector3())
+    const direction = new THREE.Vector3(1, 0.72, 1).normalize()
+    const forward = direction.clone().negate()
+    const worldUp = new THREE.Vector3(0, 1, 0)
+    const right = new THREE.Vector3().crossVectors(forward, worldUp)
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0)
+    right.normalize()
+    const up = new THREE.Vector3().crossVectors(right, forward).normalize()
+
+    const aspect = camera.aspect > 0 ? camera.aspect : 1.5
+    const tanV = Math.tan(((camera.fov * Math.PI) / 180) / 2)
+    const tanH = tanV * aspect
+
+    const corners: THREE.Vector3[] = []
+    for (const x of [box.min.x, box.max.x]) {
+      for (const y of [box.min.y, box.max.y]) {
+        for (const z of [box.min.z, box.max.z]) {
+          corners.push(new THREE.Vector3(x, y, z))
+        }
+      }
+    }
+
+    let distance = Math.max(size.length(), 4)
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const camPos = center.clone().addScaledVector(direction, distance)
+      let maxRatio = 0
+      for (const corner of corners) {
+        const offset = corner.clone().sub(camPos)
+        const depth = offset.dot(forward)
+        if (depth <= 0.1) {
+          maxRatio = Math.max(maxRatio, 2)
+          continue
+        }
+        maxRatio = Math.max(
+          maxRatio,
+          Math.abs(offset.dot(right)) / depth / tanH,
+          Math.abs(offset.dot(up)) / depth / tanV,
+        )
+      }
+
+      if (maxRatio > 1) {
+        distance *= maxRatio * 1.02
+      } else if (maxRatio < 0.75) {
+        // 主体只占画面一角：往近处收，但留 10% 余量
+        distance *= Math.max(0.55, maxRatio / 0.9)
+      } else {
+        break
+      }
+    }
+
+    camera.position.copy(center).addScaledVector(direction, distance)
+    controls.target.copy(center)
+    camera.near = Math.max(0.05, distance / 200)
+    camera.far = Math.max(1000, distance * 12)
+    camera.updateProjectionMatrix()
+    controls.update()
+    store.setViewTarget(center)
     return true
   }
 
@@ -396,6 +583,8 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     window.addEventListener('remove-rigidbody', handleRemoveRigidBody)
     // 新增：监听属性面板的变换修改事件
     window.addEventListener('update-transform', handleUpdateTransform)
+    // 加载带镜头的场景文档：由 store 在重建完成后派发
+    window.addEventListener('apply-scene-camera', handleApplySceneCamera as EventListener)
   }
 
   // 解绑事件
@@ -405,6 +594,7 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     window.removeEventListener('remove-rigidbody', handleRemoveRigidBody)
     // 新增：移除变换修改事件监听器
     window.removeEventListener('update-transform', handleUpdateTransform)
+    window.removeEventListener('apply-scene-camera', handleApplySceneCamera as EventListener)
   }
 
   // 移除指定 uuid 对应的刚体（若存在）。返回是否真的移除了。
@@ -684,8 +874,10 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     const material = new THREE.MeshStandardMaterial({
       // 不再用纯随机色：高饱和随机色放一起会脏，精选场景也没法配色
       color: options.color ?? PRIMITIVE_PALETTE[colorSeq++ % PRIMITIVE_PALETTE.length],
-      metalness: 0.3,
-      roughness: 0.4,
+      // 没有环境贴图时高金属度会把物体压成黑块：低金属 + 中粗糙度
+      // 才能让主光/补光把体积读出来。
+      metalness: SCENE_PRESENTATION.materialMetalness,
+      roughness: SCENE_PRESENTATION.materialRoughness,
       // 楔形共享顶点会把棱角法线平均掉，逐面着色才能看出实体
       flatShading: type === 'ramp',
     })
@@ -1151,6 +1343,9 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     importModel,
     updatePhysics,
     setWorldSize,
+    // 取景：聚焦当前场景 / 应用场景文档里的镜头
+    focusScene,
+    applySceneCamera,
     getIsSceneInitialized: () => isSceneInitialized,
     // 刚体账本：刚体生命周期的唯一所有者在这里，外部只能读、不能改
     removeRigidBodyByUuid,

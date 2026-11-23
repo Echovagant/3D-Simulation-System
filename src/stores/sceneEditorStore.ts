@@ -134,6 +134,17 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   /**
+   * 当前机位的目标点（OrbitControls 的 target）。
+   *
+   * 保存 / 导出时与相机位置一起写成文档的 `camera`：只存位置不存目标点，
+   * 重新打开时画面会瞄向别处（相机与控制器各瞄一个点的老坑）。
+   */
+  const viewTarget = ref<{ x: number; y: number; z: number }>({ x: 0, y: 1, z: 0 })
+  const setViewTarget = (target: { x: number; y: number; z: number }) => {
+    viewTarget.value = { x: target.x, y: target.y, z: target.z }
+  }
+
+  /**
    * 编辑历史。存的是**完整场景文档快照**，不是增量命令：
    * 恢复时走与「加载场景」完全相同的重建链路，不会出现「撤销之后物理还在」。
    */
@@ -533,9 +544,31 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
 
   /**
    * 构造场景文档（保存、导出、历史快照共用同一份构造逻辑）。
+   *
+   * `includeCamera` 默认 true：保存 / 导出要带走当前机位，让场景作品
+   * 在别的浏览器打开时还是同一个构图。编辑历史快照显式关掉——
+   * 撤销应该回到物体状态，不该把用户刚转好的视角也一起拽回去。
    */
-  const buildSceneDocument = (sceneName: string, sceneId?: string): SceneDocument => {
+  const buildSceneDocument = (
+    sceneName: string,
+    sceneId?: string,
+    options: { includeCamera?: boolean } = {},
+  ): SceneDocument => {
     const now = new Date().toISOString()
+    const activeCamera = camera.value
+    const cameraSpec =
+      options.includeCamera !== false && activeCamera instanceof THREE.PerspectiveCamera
+        ? {
+            position: {
+              x: activeCamera.position.x,
+              y: activeCamera.position.y,
+              z: activeCamera.position.z,
+            },
+            target: { ...viewTarget.value },
+            fov: activeCamera.fov,
+          }
+        : undefined
+
     return {
       id: sceneId ?? createSceneId(),
       name: sceneName,
@@ -543,6 +576,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       updatedAt: now,
       version: 1,
       worldSize: worldSize.value,
+      ...(cameraSpec ? { camera: cameraSpec } : {}),
       objects: objects.value.map((obj) => toDocumentObject(obj)),
     }
   }
@@ -556,7 +590,8 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   const pushHistory = (label = '编辑', snapshot?: SceneDocument) => {
     if (isRestoringHistory) return
     historyPast.value.push({
-      ...(snapshot ?? buildSceneDocument('编辑历史', '__history__')),
+      ...(snapshot ??
+        buildSceneDocument('编辑历史', '__history__', { includeCamera: false })),
       name: label,
     })
     if (historyPast.value.length > HISTORY_LIMIT) historyPast.value.shift()
@@ -569,7 +604,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   }
 
   const snapshotForHistory = (): SceneDocument =>
-    buildSceneDocument('编辑历史', '__history__')
+    buildSceneDocument('编辑历史', '__history__', { includeCamera: false })
 
   /**
    * 撤销 / 重做。
@@ -909,6 +944,12 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
       }
     }
 
+    // 文档带镜头时应用它：精选场景 / 后端作品的构图靠这一句落地。
+    // 没有这一步，作品打开后仍停在上一场景的机位，「构图」就只是个承诺。
+    if (doc.camera) {
+      window.dispatchEvent(new CustomEvent('apply-scene-camera', { detail: doc.camera }))
+    }
+
     if (wasPlaying) simulationState.isPlaying = true
     return { ok: true, restored, total }
   }
@@ -1231,6 +1272,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     currentScene,
     selectedObject,
     worldSize,
+    viewTarget,
 
     // 分离的状态对象
     simulationState,
@@ -1256,6 +1298,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
     buildSceneDocument,
     registerPrimitiveFactory,
     setWorldSize,
+    setViewTarget,
     recallFallenObjects,
     sceneIndexVersion,
     getCurrentScene,

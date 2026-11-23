@@ -7,6 +7,7 @@
  */
 import type { SceneDocument, SceneDocumentObject } from '@/types'
 import { DEFAULT_SCENE_WORLD_SIZE, normalizeWorldSize } from '@/config/sceneEditor'
+import { normalizeSceneCamera } from '@/utils/sceneCamera'
 
 const SUPPORTED_TYPES = new Set(['cube', 'sphere', 'ramp', 'model'])
 const PHYSICS_TYPES = new Set(['static', 'dynamic', 'kinematic'])
@@ -139,6 +140,8 @@ export const normalizeSceneDocument = (raw: unknown): SceneDocumentParseResult =
     const updatedAt =
       typeof raw.updatedAt === 'string' && raw.updatedAt.trim() ? raw.updatedAt : createdAt
 
+    const camera = normalizeSceneCamera(raw.camera)
+
     return {
       ok: true,
       document: {
@@ -148,6 +151,7 @@ export const normalizeSceneDocument = (raw: unknown): SceneDocumentParseResult =
         updatedAt,
         version: 1,
         worldSize: normalizeWorldSize(raw.worldSize ?? DEFAULT_SCENE_WORLD_SIZE),
+        ...(camera ? { camera } : {}),
         ...(isRecord(raw.gravity) &&
         isFiniteNumber(raw.gravity.x) &&
         isFiniteNumber(raw.gravity.y) &&

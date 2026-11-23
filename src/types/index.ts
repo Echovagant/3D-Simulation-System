@@ -87,6 +87,23 @@ export interface SceneDocumentObject {
   }
 }
 
+/**
+ * 场景的初始镜头。
+ *
+ * 作品级场景的构图有一半在镜头上：同一个场景，俯角、视距、目标点不同，
+ * 观感差一个档。文档带上镜头后，编辑器加载、后端场景打开、渲染页导出
+ * 都会落在同一个机位，截图不再「每次都要手动转半天」。
+ *
+ * `target` 必须与轨道控制器的 target 是同一个点，否则第一次 update()
+ * 会把画面整体压偏（仿真实验室踩过的坑，见 config/sceneFraming.ts）。
+ */
+export interface SceneCamera {
+  position: Vector3
+  target: Vector3
+  /** 垂直视野角（度）。缺省用 50，允许 25~90 */
+  fov?: number
+}
+
 /** 场景文档：可持久化、可分享的场景表示 */
 export interface SceneDocument {
   id: string
@@ -97,6 +114,8 @@ export interface SceneDocument {
   gravity?: { x: number; y: number; z: number }
   /** 场地边长（米）。旧文档没有这一项时按编辑器默认场地处理 */
   worldSize?: number
+  /** 初始镜头；旧文档没有这一项时保持编辑器当前机位 */
+  camera?: SceneCamera
   objects: SceneDocumentObject[]
 }
 

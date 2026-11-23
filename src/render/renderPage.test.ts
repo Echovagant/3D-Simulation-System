@@ -18,6 +18,7 @@ import {
   createRenderController,
   normalizeRenderScene,
   parseRenderAction,
+  resolveRenderCamera,
   RENDER_ACTION_TYPES,
   type RenderController,
 } from './renderPage'
@@ -201,6 +202,25 @@ describe('渲染页 · 场景文档', () => {
   it('位置缺失就是数据坏了，要报错', () => {
     expect(() => normalizeRenderScene({ objects: [{ type: 'cube' }] })).toThrow(/position/)
     expect(() => normalizeRenderScene({ objects: 'nope' })).toThrow(/objects/)
+  })
+})
+
+describe('渲染页 · 场景镜头', () => {
+  it('合法镜头原样读出，fov 缺省补 50', () => {
+    const camera = resolveRenderCamera({
+      camera: { position: { x: 10, y: 8, z: 12 }, target: { x: 0, y: 2, z: 0 } },
+    })
+    expect(camera).toEqual({
+      position: { x: 10, y: 8, z: 12 },
+      target: { x: 0, y: 2, z: 0 },
+      fov: 50,
+    })
+  })
+
+  it('没有镜头或镜头非法时返回 null（由页面保持默认机位）', () => {
+    expect(resolveRenderCamera({ objects: [] })).toBeNull()
+    expect(resolveRenderCamera({ camera: { position: { x: 1, y: 2, z: 3 } } })).toBeNull()
+    expect(resolveRenderCamera({ camera: { position: { x: 'a', y: 2, z: 3 }, target: { x: 0, y: 0, z: 0 } } })).toBeNull()
   })
 })
 
