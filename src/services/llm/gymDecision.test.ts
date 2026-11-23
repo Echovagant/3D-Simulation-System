@@ -6,9 +6,12 @@ import {
   buildGymDecisionSnapshot,
   GYM_DEFAULT_FORCE_LIMIT,
   GYM_FORCE_MARGIN,
+  KNOWLEDGE_REFERENCE_CONTENT_MAX_CHARS,
+  KNOWLEDGE_REFERENCE_MAX_ITEMS,
   parseForceProposal,
   proposeForceAction,
   type GymDecisionSnapshot,
+  type GymKnowledgeReference,
 } from './gymDecision'
 
 /**
@@ -92,6 +95,47 @@ describe('buildGymDecisionMessages', () => {
     expect(payload.safe_force_limit).toBe(24)
     expect(payload.last_step).toEqual({ reward: 0.1, terminated: false, truncated: false })
   })
+
+  it('没有参考资料时不带 references 字段，系统提示词也不加规则 5', () => {
+    const [system, user] = buildGymDecisionMessages(snapshot)
+    expect(system.content).not.toContain('references')
+    expect(JSON.parse(user.content)).not.toHaveProperty('references')
+  })
+
+  it('有参考资料时注入 references（截断超长正文）并追加规则 5', () => {
+    const references: GymKnowledgeReference[] = [
+      { id: 1, title: '力控经验', content: '接近目标时减小力度。' },
+      {
+        id: 2,
+        title: '长资料',
+        content: 'x'.repeat(KNOWLEDGE_REFERENCE_CONTENT_MAX_CHARS + 50),
+      },
+    ]
+
+    const [system, user] = buildGymDecisionMessages(snapshot, references)
+    expect(system.content).toContain('references')
+    expect(system.content).toContain('以观测数据为准')
+
+    const payload = JSON.parse(user.content) as {
+      references: Array<{ title: string; content: string }>
+    }
+    expect(payload.references).toHaveLength(2)
+    expect(payload.references[0]).toEqual({ title: '力控经验', content: '接近目标时减小力度。' })
+    expect(payload.references[1].content.length).toBeLessThanOrEqual(
+      KNOWLEDGE_REFERENCE_CONTENT_MAX_CHARS + 1,
+    )
+  })
+
+  it('参考资料超过条数上限时只带前几条', () => {
+    const references: GymKnowledgeReference[] = Array.from(
+      { length: KNOWLEDGE_REFERENCE_MAX_ITEMS + 2 },
+      (_, index) => ({ id: index + 1, title: `资料 ${index + 1}`, content: '内容' }),
+    )
+
+    const [, user] = buildGymDecisionMessages(snapshot, references)
+    const payload = JSON.parse(user.content) as { references: Array<{ title: string }> }
+    expect(payload.references).toHaveLength(KNOWLEDGE_REFERENCE_MAX_ITEMS)
+  })
 })
 
 describe('proposeForceAction（mock invoke）', () => {
@@ -111,6 +155,25 @@ describe('proposeForceAction（mock invoke）', () => {
     const [messages, maxTokens] = invoke.mock.calls[0]
     expect(messages).toHaveLength(2)
     expect(maxTokens).toBe(llmConfig.controllerMaxTokens)
+  })
+
+  it('参考资料经 options 传进来时确实进了提示词', async () => {
+    const invoke = invokeOk('{"forceX": 5, "forceZ": 0}')
+    await proposeForceAction(snapshot, {
+      invoke,
+      references: [{ id: 1, title: '力控经验', content: '接近目标时减小力度' }],
+    })
+
+    const [messages] = invoke.mock.calls[0] as [
+      Array<{ role: string; content: string }>,
+      number,
+    ]
+    const payload = JSON.parse(messages[1].content) as {
+      references: Array<{ title: string; content: string }>
+    }
+    expect(payload.references).toEqual([
+      { title: '力控经验', content: '接近目标时减小力度' },
+    ])
   })
 
   it('JSON 外裹说明文字与代码块：照样抠出来解析', async () => {

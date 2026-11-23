@@ -21,9 +21,36 @@
         <WorkbenchExecutePanel />
       </div>
       <div class="pane pane-right">
-        <!-- 右栏纵向分两块：审计流在上（轮询主视觉），记忆在下；各自内部滚动 -->
+        <!-- 右栏纵向分两块：审计流在上（轮询主视觉），记忆/资料在下；各自内部滚动 -->
         <WorkbenchAuditPanel class="pane-right-block audit" />
-        <MemoryPanel class="pane-right-block memory" />
+        <div class="pane-right-block side">
+          <div class="side-tabs" role="tablist" aria-label="记忆与资料">
+            <button
+              type="button"
+              class="side-tab"
+              role="tab"
+              :aria-selected="sideTab === 'memory'"
+              :class="{ active: sideTab === 'memory' }"
+              @click="sideTab = 'memory'"
+            >
+              记忆
+            </button>
+            <button
+              type="button"
+              class="side-tab"
+              role="tab"
+              :aria-selected="sideTab === 'knowledge'"
+              :class="{ active: sideTab === 'knowledge' }"
+              @click="sideTab = 'knowledge'"
+            >
+              资料
+            </button>
+          </div>
+          <div class="side-body">
+            <MemoryPanel v-if="sideTab === 'memory'" />
+            <KnowledgePanel v-else />
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -35,9 +62,13 @@ import WorkbenchSessionPanel from '@/components/workbench/WorkbenchSessionPanel.
 import WorkbenchExecutePanel from '@/components/workbench/WorkbenchExecutePanel.vue'
 import WorkbenchAuditPanel from '@/components/workbench/WorkbenchAuditPanel.vue'
 import MemoryPanel from '@/components/workbench/MemoryPanel.vue'
+import KnowledgePanel from '@/components/workbench/KnowledgePanel.vue'
 import { useGymWorkbenchStore } from '@/stores/gymWorkbenchStore'
 
 const store = useGymWorkbenchStore()
+
+/** 右栏下部页签：记忆 / 资料（两者都按 owner 隔离，互不依赖） */
+const sideTab = ref<'memory' | 'knowledge'>('memory')
 
 /** 进页面拉过一次会话列表且成功过 → 「后端在线」；一次都没成 → 「后端不在」 */
 const sessionsLoaded = ref(false)
@@ -145,8 +176,52 @@ onUnmounted(() => {
   flex: 1 1 52%;
 }
 
-.pane-right-block.memory {
+.pane-right-block.side {
   flex: 1 1 48%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 页签承担标题职责：面板内部的重复标题在嵌入时隐藏 */
+.side-tabs {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.side-tab {
+  padding: 3px 10px;
+  background: transparent;
+  color: var(--text-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.side-tab:hover {
+  color: var(--text-1);
+}
+
+.side-tab.active {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.12);
+  border-color: rgba(var(--accent-rgb), 0.3);
+}
+
+.side-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.side-body :deep(.wb-panel-title) {
+  display: none;
+}
+
+.side-body :deep(.wb-panel-head) {
+  justify-content: flex-end;
 }
 
 @media (max-width: 900px) {
@@ -168,8 +243,12 @@ onUnmounted(() => {
 
   /* 竖排流式布局里不再按比例切高度，交给页面滚动 */
   .pane-right-block.audit,
-  .pane-right-block.memory {
+  .pane-right-block.side {
     flex: none;
+    height: auto;
+  }
+
+  .side-body {
     height: auto;
   }
 }

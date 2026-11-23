@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useGymWorkbenchStore, AUDIT_POLL_INTERVAL_MS } from './gymWorkbenchStore'
 import { useLlmStore } from './llmStore'
 import type { GymStepLogItem } from '@/services/api/gymWorkbench'
+import type { KnowledgeItem } from '@/services/api/knowledge'
 
 /**
  * Agent 工作台 store 的回归网。
@@ -100,6 +101,10 @@ let sessionsNow: Array<{
   terminated: boolean
   truncated: boolean
 }> = []
+/** 决策注入的资料注册表（默认空；用例里按需塞） */
+let knowledgeNow: KnowledgeItem[] = []
+/** 资料检索是否失败（验证「检索失败不拦决策」） */
+let knowledgeFails = false
 
 const installFetch = (): ReturnType<typeof vi.fn> => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -139,6 +144,15 @@ const installFetch = (): ReturnType<typeof vi.fn> => {
       sessionsNow = []
       return jsonResponse(null, 204)
     }
+    if (path === '/api/knowledge/entries' && method === 'GET') {
+      if (knowledgeFails) {
+        return jsonResponse(
+          { error: { code: 'http_error', message: '资料库不可用', detail: null } },
+          500,
+        )
+      }
+      return jsonResponse({ items: knowledgeNow })
+    }
     return jsonResponse({ error: { code: 'http_error', message: `意外路径 ${method} ${path}`, detail: null } }, 500)
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -171,6 +185,8 @@ describe('gymWorkbenchStore', () => {
     setActivePinia(createPinia())
     stepMode = 'ok'
     sessionsNow = []
+    knowledgeNow = []
+    knowledgeFails = false
     vi.restoreAllMocks()
   })
 
@@ -369,9 +385,61 @@ describe('gymWorkbenchStore', () => {
       expect(store.lastProposal?.action).toEqual({ forceX: 5, forceZ: 0 })
       expect(store.lastProposal?.executed).toBe(true)
       expect(store.lastProposal?.clamped).toBe(false)
+      expect(store.lastProposal?.references).toEqual([])
       expect(store.lastActionSource).toBe('llm')
       expect(store.lastStep?.reward).toBe(0.1)
       expect(countStepCalls(fetchMock)).toBe(1)
+    })
+
+    it('决策注入：检索到的 gym 资料进提示词，引用标题留档', async () => {
+      installFetch()
+      knowledgeNow = [
+        {
+          id: 9,
+          title: '力控经验',
+          content: '接近目标时减小力度，避免冲过头。',
+          tags: 'gym, 力控',
+          importance: 0.8,
+          createdAt: '2026-11-23T10:00:00',
+          updatedAt: '2026-11-23T10:00:00',
+          lastAccessedAt: '2026-11-23T10:00:00',
+        },
+      ]
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      const invoke = stubInvokeOk('{"forceX": 5, "forceZ": 0}')
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(true)
+      expect(store.lastProposal?.references).toEqual([{ id: 9, title: '力控经验' }])
+
+      const [messages] = invoke.mock.calls[0] as [
+        Array<{ role: string; content: string }>,
+        number,
+      ]
+      const payload = JSON.parse(messages[1].content) as {
+        references: Array<{ title: string; content: string }>
+      }
+      expect(payload.references).toEqual([
+        { title: '力控经验', content: '接近目标时减小力度，避免冲过头。' },
+      ])
+      expect(messages[0].content).toContain('references')
+    })
+
+    it('资料检索失败不拦决策：照常出网，引用为空', async () => {
+      installFetch()
+      knowledgeFails = true
+      const store = useGymWorkbenchStore()
+      await store.createSession({ scene: { objects: [{}] } })
+      const invoke = stubInvokeOk('{"forceX": 5, "forceZ": 0}')
+
+      const ok = await store.autoDecide()
+
+      expect(ok).toBe(true)
+      expect(invoke).toHaveBeenCalledTimes(1)
+      expect(store.lastProposal?.references).toEqual([])
+      expect(store.decisionError).toBe('')
     })
 
     it('超安全上限的提议：等比缩回后执行，原始值留档', async () => {

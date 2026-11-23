@@ -38,11 +38,15 @@ import {
   type MemoryCreateInput,
   type MemoryItem,
 } from '@/services/api/memory'
+import { listKnowledge } from '@/services/api/knowledge'
 import {
   buildGymDecisionSnapshot,
   GYM_DEFAULT_FORCE_LIMIT,
+  KNOWLEDGE_DECISION_LIMIT,
+  KNOWLEDGE_DECISION_QUERY,
   proposeForceAction,
   type ForceProposalSource,
+  type GymKnowledgeReference,
 } from '@/services/llm/gymDecision'
 import { useLlmStore } from './llmStore'
 
@@ -64,6 +68,8 @@ export interface GymProposalRecord {
   clamped: boolean
   /** 收窄前的原始提议（clamped 为 true 时才有值） */
   original: { forceX: number; forceZ: number } | null
+  /** 本次决策注入的领域资料（id + 标题，面板展示用） */
+  references: Array<{ id: number; title: string }>
   /** 是否已经送进执行面（送了但 422/网络失败也算送过，executed 为 false） */
   executed: boolean
 }
@@ -302,12 +308,37 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
   }
 
   /**
+   * 检索用于决策注入的资料（带 gym 标签或正文含 gym）。
+   *
+   * 资料索引是增强，不是前置依赖：后端不在或检索失败都返回空数组，
+   * 决策照常出网——不能让「资料库没拉起来」变成「LLM 不能用」。
+   */
+  const fetchDecisionReferences = async (): Promise<GymKnowledgeReference[]> => {
+    try {
+      const result = await listKnowledge(llmStore.ownerToken, {
+        query: KNOWLEDGE_DECISION_QUERY,
+        limit: KNOWLEDGE_DECISION_LIMIT,
+      })
+      return result.items.map((item) => ({
+        id: item.id,
+        title: item.title,
+        content: item.content,
+      }))
+    } catch {
+      return []
+    }
+  }
+
+  /**
    * LLM 自动决策：把当前观测交给模型提议一个力动作，提议成功就自动发 step。
    *
    * 失败链路（未配 key / 冷却 / 次数上限 / 畸形输出）如实写进 decisionError，
    * **不静默降级执行**——没有提议就没有动作；step 环节的失败照旧走
    * stepError / repairHint（422 修复指令原样透传），两处错误互不覆盖。
    * 提议成功与否都留档在 lastProposal 里，执行面板据此展示预览与状态。
+   *
+   * 出网前先检索资料索引（gym 标签），把命中的领域资料作为 references
+   * 注入提示词；检索失败不拦决策，只是这次没有参考资料。
    */
   const autoDecide = async (): Promise<boolean> => {
     if (!currentSessionId.value) {
@@ -327,11 +358,13 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
         lastStep: lastStep.value,
         forceLimit: currentParams.value?.forceLimit ?? GYM_DEFAULT_FORCE_LIMIT,
       })
+      const references = await fetchDecisionReferences()
       const proposal = await proposeForceAction(snapshot, {
         invoke: llmStore.invoke,
         provider: llmStore.provider.name,
         model: llmStore.model,
         baseUrl: llmStore.baseUrl,
+        references,
       })
       if (!proposal.ok) {
         decisionError.value = proposal.error
@@ -343,6 +376,7 @@ export const useGymWorkbenchStore = defineStore('gymWorkbench', () => {
         raw: proposal.raw,
         clamped: proposal.clamped,
         original: proposal.original,
+        references: references.map(({ id, title }) => ({ id, title })),
         executed: false,
       }
       const ok = await stepCurrent(proposal.action.forceX, proposal.action.forceZ, 'llm')

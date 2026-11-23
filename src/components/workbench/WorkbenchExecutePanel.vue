@@ -99,6 +99,7 @@
             </span>
           </div>
           <pre class="wb-proposal-json">{{ proposalJson }}</pre>
+          <p class="wb-reference-line">{{ referenceLabel }}</p>
           <p v-if="store.lastProposal.clamped" class="wb-clamp-line">
             合力超出安全上限，已等比缩回（原值 {{ originalJson }}）
           </p>
@@ -286,6 +287,15 @@ const sourceLabel = computed(() => {
   if (store.lastActionSource === 'llm') return 'LLM 提议'
   if (store.lastActionSource === 'rule') return '手动输入'
   return '—'
+})
+
+/** 本次提议引用了哪些资料（没有命中时如实说，不假装注入了） */
+const referenceLabel = computed(() => {
+  const references = store.lastProposal?.references ?? []
+  if (references.length === 0) {
+    return '未引用资料（给资料打 gym 标签后会自动检索注入）'
+  }
+  return `引用资料 ${references.length} 条：${references.map((item) => item.title).join('、')}`
 })
 </script>
 
@@ -490,6 +500,14 @@ const sourceLabel = computed(() => {
   margin: 0;
   font-size: 12px;
   color: var(--accent-2);
+}
+
+.wb-reference-line {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-3);
+  overflow-wrap: anywhere;
 }
 
 .wb-result-block {

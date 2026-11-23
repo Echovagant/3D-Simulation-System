@@ -21,6 +21,23 @@ export const GYM_DEFAULT_FORCE_LIMIT = 30
 /** 提议的安全余量：合力模长最多用到力上限的 80%（越界 422 的修复成本高，留出余量） */
 export const GYM_FORCE_MARGIN = 0.8
 
+/** 决策注入：最多带几条领域资料（控制提示词体积） */
+export const KNOWLEDGE_REFERENCE_MAX_ITEMS = 4
+
+/** 决策注入：单条资料正文最多带多少字符（截断后仍能说明要点） */
+export const KNOWLEDGE_REFERENCE_CONTENT_MAX_CHARS = 400
+
+/** 决策注入：检索词与条数（资料条目打上 gym 标签即可被引用） */
+export const KNOWLEDGE_DECISION_QUERY = 'gym'
+export const KNOWLEDGE_DECISION_LIMIT = 3
+
+/** 一条可注入决策的领域资料（来自资料索引检索） */
+export interface GymKnowledgeReference {
+  id: number
+  title: string
+  content: string
+}
+
 /** 决策快照：喂给模型的全部输入（与 GymObservation 解耦，字段收敛到决策需要的） */
 export interface GymDecisionSnapshot {
   /** 智能体当前位置（还没有智能体时为 null） */
@@ -81,25 +98,55 @@ const FORCE_DECISION_SYSTEM_PROMPT = `你是 3D 仿真场地里的推力控制�
 3. 根据观测选择合适的推力：离目标越远可以用越大的力，接近目标时减小力度，避免冲过头。
 4. 上一步 reward 为正说明方向合适，可以延续当前方向；回合已结束（terminated 或 truncated 为 true）时输出 {"forceX": 0, "forceZ": 0}。`
 
-/** 快照 → 给模型看的 JSON（字段名英文下划线，语义在系统提示词里讲清楚） */
-const snapshotToPayload = (snapshot: GymDecisionSnapshot): Record<string, unknown> => ({
-  agent_position: snapshot.agentPosition,
-  agent_velocity: snapshot.agentVelocity,
-  target: snapshot.target,
-  distance: snapshot.distance,
-  force_limit: snapshot.forceLimit,
-  safe_force_limit: round4(snapshot.forceLimit * GYM_FORCE_MARGIN),
-  step: snapshot.step,
-  max_steps: snapshot.maxSteps,
-  last_step: snapshot.lastStep,
-})
+/** 有参考资料时的追加规则：资料只是参考，观测数据永远优先 */
+const REFERENCES_RULE = `
 
-/** 构造力决策的消息（纯函数，单测直接断言提示词带了感知数据） */
+5. 输入里的 references 是领域资料摘录，与当前决策相关时可以参考；如果资料与观测数据冲突，以观测数据为准。`
+
+/** 截断长文本，超出时补省略号（不把整篇资料塞进提示词） */
+const clipText = (value: string, maxChars: number): string =>
+  value.length > maxChars ? `${value.slice(0, maxChars)}…` : value
+
+/** 快照 → 给模型看的 JSON（字段名英文下划线，语义在系统提示词里讲清楚） */
+const snapshotToPayload = (
+  snapshot: GymDecisionSnapshot,
+  references: GymKnowledgeReference[],
+): Record<string, unknown> => {
+  const payload: Record<string, unknown> = {
+    agent_position: snapshot.agentPosition,
+    agent_velocity: snapshot.agentVelocity,
+    target: snapshot.target,
+    distance: snapshot.distance,
+    force_limit: snapshot.forceLimit,
+    safe_force_limit: round4(snapshot.forceLimit * GYM_FORCE_MARGIN),
+    step: snapshot.step,
+    max_steps: snapshot.maxSteps,
+    last_step: snapshot.lastStep,
+  }
+  if (references.length > 0) {
+    payload.references = references
+      .slice(0, KNOWLEDGE_REFERENCE_MAX_ITEMS)
+      .map((item) => ({
+        title: clipText(item.title, 80),
+        content: clipText(item.content, KNOWLEDGE_REFERENCE_CONTENT_MAX_CHARS),
+      }))
+  }
+  return payload
+}
+
+/** 构造力决策的消息（纯函数，单测直接断言提示词带了感知数据与参考资料） */
 export const buildGymDecisionMessages = (
   snapshot: GymDecisionSnapshot,
+  references: GymKnowledgeReference[] = [],
 ): Array<{ role: 'system' | 'user'; content: string }> => [
-  { role: 'system', content: FORCE_DECISION_SYSTEM_PROMPT },
-  { role: 'user', content: JSON.stringify(snapshotToPayload(snapshot)) },
+  {
+    role: 'system',
+    content:
+      references.length > 0
+        ? `${FORCE_DECISION_SYSTEM_PROMPT}${REFERENCES_RULE}`
+        : FORCE_DECISION_SYSTEM_PROMPT,
+  },
+  { role: 'user', content: JSON.stringify(snapshotToPayload(snapshot, references)) },
 ]
 
 /** 一条 LLM 消息的最小形状（与 llmStore.invoke 的入参对齐） */
@@ -240,6 +287,8 @@ export interface GymDecisionOptions {
   provider?: string
   model?: string
   baseUrl?: string
+  /** 领域资料摘录（调用方先检索再传进来；空数组 = 不注入） */
+  references?: GymKnowledgeReference[]
 }
 
 /**
@@ -262,7 +311,10 @@ export const proposeForceAction = async (
   let result: GymInvokeResult
   try {
     // 出网口按约定不抛异常；真抛了也不能把这层炸穿——兜成一句可读的失败
-    result = await invoke(buildGymDecisionMessages(snapshot), llmConfig.controllerMaxTokens)
+    result = await invoke(
+      buildGymDecisionMessages(snapshot, options.references ?? []),
+      llmConfig.controllerMaxTokens,
+    )
   } catch (error) {
     const message = error instanceof Error && error.message ? error.message : String(error)
     return { ok: false, error: `LLM 调用异常：${message}`, raw: '' }
