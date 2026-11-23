@@ -20,7 +20,7 @@
 
     <p v-if="statusMessage" class="scene-status">{{ statusMessage }}</p>
 
-    <!-- 精选场景：不依赖后端，随时可载入；云端在线时可一键同步到云端 -->
+    <!-- 精选场景：不依赖后端，随时可载入；后端在线时可一键同步到后端 -->
     <div class="scene-showcase">
       <div class="scene-remote-head">
         <h4>精选场景</h4>
@@ -28,10 +28,10 @@
           v-if="sync.state === 'online'"
           class="scene-refresh"
           :disabled="syncingShowcases"
-          title="把精选场景写入云端，换设备也能打开"
-          @click="syncShowcasesToCloud"
+          title="把精选场景写入本机后端数据库，换浏览器也能打开"
+          @click="syncShowcasesToBackend"
         >
-          {{ syncingShowcases ? '同步中…' : '同步到云端' }}
+          {{ syncingShowcases ? '同步中…' : '同步到后端' }}
         </button>
       </div>
       <p class="scene-hint">
@@ -56,15 +56,18 @@
       </ul>
     </div>
 
-    <!-- 云端场景：后端在场时才有。换一台设备保存的场景，从这里就能打开。 -->
+    <!-- 后端场景：后端在场时才有。换一台设备保存的场景，从这里就能打开。 -->
     <div v-if="sync.state === 'online'" class="scene-remote">
       <div class="scene-remote-head">
-        <h4>云端场景</h4>
+        <h4>后端场景</h4>
         <button class="scene-refresh" :disabled="isLoading" @click="refreshRemote">刷新</button>
       </div>
+      <p class="scene-hint">
+        保存在本机后端数据库，不同浏览器可见；不是云服务。
+      </p>
 
       <p v-if="sync.remoteScenes.length === 0" class="scene-hint">
-        云端还没有场景。在别的设备上保存后，刷新这里就能看到。
+        后端还没有场景。在别的浏览器保存后，刷新这里就能看到。
       </p>
 
       <ul v-else class="scene-items">
@@ -75,10 +78,10 @@
               <span v-if="scene.name.startsWith('精选 ·')" class="scene-badge">精选</span>
             </span>
             <span class="scene-meta">
-              {{ scene.objectCount }} 个物体 · {{ formatTime(scene.createdAt) }} · 云端
+              {{ scene.objectCount }} 个物体 · {{ formatTime(scene.createdAt) }} · 后端
             </span>
           </button>
-          <button class="scene-delete" title="从云端删除场景" @click="removeRemoteScene(scene)">
+          <button class="scene-delete" title="从后端删除场景" @click="removeRemoteScene(scene)">
             ✕
           </button>
         </li>
@@ -86,7 +89,7 @@
     </div>
 
     <p v-else-if="probeDone" class="scene-hint scene-hint-remote">
-      云端不可用：场景只保存在这台设备上。
+      后端不可用：场景只保存在这台浏览器上。
     </p>
   </div>
 </template>
@@ -100,7 +103,9 @@ import {
 } from '@/stores/sceneEditorStore'
 import { useSceneSyncStore } from '@/stores/sceneSyncStore'
 import { getScene, type SceneSummary } from '@/services/api/scenes'
+import { isApiUnavailable } from '@/services/api/client'
 import { reportError } from '@/services/api/telemetry'
+import { normalizeSceneDocument } from '@/utils/sceneDocument'
 import { SHOWCASE_SCENES, type ShowcaseScene } from '@/data/showcaseScenes'
 
 const store = useSceneEditorStore()
@@ -111,7 +116,7 @@ const isLoading = ref(false)
 const loadingShowcaseId = ref('')
 const syncingShowcases = ref(false)
 const statusMessage = ref('')
-/** 后端探测过没有——没探测过就别急着说「云端不可用」 */
+/** 后端探测过没有——没探测过就别急着说「后端不可用」 */
 const probeDone = ref(false)
 
 /**
@@ -191,8 +196,8 @@ const loadShowcase = async (scene: ShowcaseScene) => {
   }
 }
 
-/** 把精选场景推送（幂等覆盖）到云端 */
-const syncShowcasesToCloud = async () => {
+/** 把精选场景推送（幂等覆盖）到后端 */
+const syncShowcasesToBackend = async () => {
   if (syncingShowcases.value) return
   syncingShowcases.value = true
   statusMessage.value = ''
@@ -205,7 +210,7 @@ const syncShowcasesToCloud = async () => {
     await sync.refresh()
     statusMessage.value =
       pushed === SHOWCASE_SCENES.length
-        ? `已同步 ${pushed} 个精选场景到云端`
+        ? `已同步 ${pushed} 个精选场景到后端`
         : `已同步 ${pushed}/${SHOWCASE_SCENES.length} 个（其余失败，后端可能不可用）`
   } finally {
     syncingShowcases.value = false
@@ -220,7 +225,7 @@ const removeScene = (scene: SceneIndexEntry) => {
   refresh()
 }
 
-/** 拉一次云端场景列表。 */
+/** 拉一次后端场景列表。 */
 const refreshRemote = async () => {
   isLoading.value = true
   try {
@@ -231,7 +236,7 @@ const refreshRemote = async () => {
 }
 
 /**
- * 打开一个云端场景。
+ * 打开一个后端场景。
  *
  * 先把文档收进本地再打开：本地是缓存，之后后端不在了也照样打得开。
  */
@@ -241,28 +246,46 @@ const openRemoteScene = async (scene: SceneSummary) => {
 
   try {
     const detail = await getScene(scene.id)
-    store.importSceneDocument(detail.document)
-    const result = await store.loadScene(scene.id)
-    statusMessage.value = result.ok
-      ? result.restored < result.total
-        ? `已从云端加载场景：${detail.document.name}（恢复了 ${result.restored}/${result.total} 个物体）`
-        : `已从云端加载场景：${detail.document.name}`
-      : `云端场景加载失败：${result.reason ?? scene.id}`
+
+    // 后端存的是任意 JSON：先按当前场景格式校验，坏数据要说清坏在哪，
+    // 而不是先写进本地缓存、再在重建阶段报一个「恢复了 0/N」。
+    const parsed = normalizeSceneDocument(detail.document)
+    if (!parsed.ok) {
+      statusMessage.value = `后端场景无法解析：${parsed.error}`
+      return
+    }
+
+    // 收进本地作为缓存，但重建直接用**刚校验过的文档**，不再回读 localStorage：
+    // 少一次「写入 → 读取」链路，也不会被同 id 的旧缓存盖住。
+    store.importSceneDocument(parsed.document)
+    const result = await store.loadSceneDocument(parsed.document)
+    if (result.ok) {
+      // 打开后端场景 = 新基线，撤销不能跨场景回到上一个场景
+      store.clearHistory()
+      statusMessage.value =
+        result.restored < result.total
+          ? `已从后端加载：${parsed.document.name}（恢复了 ${result.restored}/${result.total} 个物体）`
+          : `已从后端加载：${parsed.document.name}`
+    } else {
+      statusMessage.value = `后端场景加载失败：${result.reason ?? '场景无法重建'}`
+    }
   } catch (error) {
-    console.warn('[SceneList] 云端场景加载失败', error)
+    console.warn('[SceneList] 后端场景加载失败', error)
     reportError(error, '/scene-editor')
-    statusMessage.value = '云端场景加载失败'
+    statusMessage.value = isApiUnavailable(error)
+      ? '后端不可达，请稍后点「刷新」重试'
+      : '后端场景加载失败'
   } finally {
     isLoading.value = false
   }
 }
 
-/** 从云端删掉一个场景。 */
+/** 从后端删掉一个场景。 */
 const removeRemoteScene = async (scene: SceneSummary) => {
-  if (!window.confirm(`确定要从云端删除场景「${scene.name}」吗？此操作不可撤销。`)) return
+  if (!window.confirm(`确定要从后端删除场景「${scene.name}」吗？此操作不可撤销。`)) return
 
   const removed = await sync.removeScene(scene.id)
-  statusMessage.value = removed ? `已从云端删除场景：${scene.name}` : '云端删除失败'
+  statusMessage.value = removed ? `已从后端删除场景：${scene.name}` : '后端删除失败'
 }
 
 onMounted(async () => {

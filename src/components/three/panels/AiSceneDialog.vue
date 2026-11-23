@@ -126,7 +126,7 @@ const generate = async (): Promise<void> => {
   }
 }
 
-/** 把刚生成的场景存进「我的场景」（同时会推一份到云端） */
+/** 把刚生成的场景存进「我的场景」（同时会推一份到后端） */
 const saveGeneratedScene = async (): Promise<void> => {
   if (saving.value || saved.value) return
   saving.value = true

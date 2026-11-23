@@ -3,7 +3,7 @@
  *
  * 分工：store 管数据与意图，**不碰刚体**——物理世界的唯一所有者是 useSceneEditor，
  * 两者通过 window 自定义事件（update-transform / remove-rigidbody）桥接。
- * 场景文档存 localStorage（键约定见 SCENE_KEY_PREFIX），云端同步走 sceneSyncStore。
+ * 场景文档存 localStorage（键约定见 SCENE_KEY_PREFIX），后端同步走 sceneSyncStore。
  */
 import { defineStore } from 'pinia'
 import { ref, computed, watch, reactive, shallowRef, markRaw } from 'vue'
@@ -612,7 +612,7 @@ export const useSceneEditorStore = defineStore('useSceneEditorStore', () => {
   /**
    * 把一份场景文档收进本地库。
    *
-   * 云端拉来的场景先落到本地再打开：这样它会出现在「我的场景」里，
+   * 后端拉来的场景先落到本地再打开：这样它会出现在「我的场景」里，
    * 之后后端不在了也照样打得开——本地是缓存，不是副本。
    */
   const importSceneDocument = (doc: SceneDocument): string => {

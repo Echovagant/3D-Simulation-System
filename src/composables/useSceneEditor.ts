@@ -387,23 +387,6 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     return true
   }
 
-  /**
-   * 暂停状态下单步推进一帧物理（教学演示用）。
-   *
-   * 与 updatePhysics 的区别：这里**不累加真实时间、不看播放状态**，
-   * 点一次就严格推进一步固定步长。
-   */
-  const stepOnce = (): boolean => {
-    if (!physicsWorld || !eventQueue || !isSceneInitialized) return false
-
-    physicsWorld.integrationParameters.dt = fixedTimeStep
-    physicsWorld.step(eventQueue)
-    store.simulationState.currentTime += fixedTimeStep
-    store.simulationState.frameCount += 1
-    syncPhysicsToObjects()
-    return true
-  }
-
   // 绑定事件
   const bindEvents = (): void => {
     if (!renderer) return
@@ -1168,7 +1151,6 @@ export function useSceneEditor(containerRef: Ref<HTMLDivElement | null> | null) 
     importModel,
     updatePhysics,
     setWorldSize,
-    stepOnce,
     getIsSceneInitialized: () => isSceneInitialized,
     // 刚体账本：刚体生命周期的唯一所有者在这里，外部只能读、不能改
     removeRigidBodyByUuid,

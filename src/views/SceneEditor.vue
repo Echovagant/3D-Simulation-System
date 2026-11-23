@@ -115,7 +115,6 @@ const sceneMethods = ref<{
   // 物理推进函数接收 rAF 的时间戳：固定步长累加器靠它算真实时间
   updatePhysics: (timestamp?: number) => void
   setWorldSize: (size: number) => boolean
-  stepOnce: () => boolean
 }>({
   addCube: () => false,
   addSphere: () => false,
@@ -125,7 +124,6 @@ const sceneMethods = ref<{
   getIsSceneInitialized: () => false,
   updatePhysics: () => {},
   setWorldSize: () => false,
-  stepOnce: () => false,
 })
 
 // 提供方法给Toolbar组件
@@ -139,7 +137,6 @@ provide(
 provide('importModel', (modelId: string) => sceneMethods.value.importModel(modelId))
 provide('getIsSceneInitialized', () => sceneMethods.value.getIsSceneInitialized())
 provide('setWorldSize', (size: number) => sceneMethods.value.setWorldSize(size))
-provide('stepOnce', () => sceneMethods.value.stepOnce())
 
 // 接收ThreeScene暴露的方法
 const exposeMethods = (methods: {
@@ -151,7 +148,6 @@ const exposeMethods = (methods: {
   getIsSceneInitialized: () => boolean
   updatePhysics: (timestamp?: number) => void
   setWorldSize: (size: number) => boolean
-  stepOnce: () => boolean
 }) => {
   sceneMethods.value = methods
   // 基本体工厂依赖这些方法（建体要真能建出来），到这里才具备条件：

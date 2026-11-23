@@ -204,3 +204,50 @@ describe('PropertyPanel 的实时同步与编辑保护', () => {
     expect(reads.total()).toBe(0)
   })
 })
+
+describe('PropertyPanel 未选中时的职责', () => {
+  it('空场景只给引导，不重复工具栏的「添加立方体」按钮，也不再有「?」', async () => {
+    setActivePinia(createPinia())
+    const wrapper = mount(PropertyPanel)
+    await nextTick()
+
+    expect(wrapper.text()).toContain('场景还是空的')
+    // 引导文案可以提「添加立方体」，但不能再放一个与工具栏重复的按钮
+    expect(wrapper.findAll('button')).toHaveLength(0)
+    expect(wrapper.find('.info-tip').exists()).toBe(false)
+  })
+
+  it('有物体但未选中时显示对象列表；点列表项会选中对应物体', async () => {
+    setActivePinia(createPinia())
+    const store = useSceneEditorStore()
+    store.addObject({
+      uuid: 'u1',
+      name: 'Cube',
+      type: 'cube',
+      position: { x: 0, y: 1, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
+    store.addObject({
+      uuid: 'u2',
+      name: 'Ramp',
+      type: 'ramp',
+      position: { x: 2, y: 1, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
+
+    const wrapper = mount(PropertyPanel)
+    await nextTick()
+
+    expect(wrapper.text()).toContain('对象列表')
+    expect(wrapper.text()).toContain('2 个')
+    expect(wrapper.findAll('.object-row')).toHaveLength(2)
+    expect(wrapper.text()).not.toContain('添加立方体')
+
+    await wrapper.findAll('.object-row')[1].trigger('click')
+    expect(store.selectedObjectUuid).toBe('u2')
+    await nextTick()
+    expect(wrapper.text()).toContain('属性编辑')
+  })
+})

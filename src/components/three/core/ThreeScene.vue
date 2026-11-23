@@ -34,7 +34,6 @@ const emits = defineEmits<{
       getIsSceneInitialized: () => boolean
       updatePhysics: () => void
       setWorldSize: (size: number) => boolean
-      stepOnce: () => boolean
     },
   ): void
   (e: 'init-success'): void
@@ -54,7 +53,6 @@ const {
   getIsSceneInitialized,
   updatePhysics,
   setWorldSize,
-  stepOnce,
   onInitSuccess,
   onInitError,
 } = useSceneEditor(null)
@@ -88,7 +86,6 @@ onMounted(() => {
       getIsSceneInitialized,
       updatePhysics,
       setWorldSize,
-      stepOnce,
     })
   })
 })

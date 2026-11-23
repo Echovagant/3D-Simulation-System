@@ -41,7 +41,6 @@ const mountToolbar = () =>
         addRamp: () => true,
         addPrimitive: () => true,
         importModel: async () => true,
-        stepOnce: () => true,
       },
     },
   })

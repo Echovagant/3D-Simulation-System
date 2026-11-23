@@ -159,26 +159,42 @@
       </div>
     </template>
 
-    <!-- 未选中物体时显示提示 -->
+    <!-- 未选中物体时：空场景给引导，有物体时给「对象列表」，不重复工具栏的添加功能 -->
     <template v-else>
       <EmptyState
-        icon="fa-solid fa-cube"
-        title="未选择任何对象"
-        description="点击3D视图中的物体进行编辑"
-      >
-        <template #cta>
-          <button class="empty-cta-btn" type="button" @click="handleAddCube">添加立方体</button>
-        </template>
-      </EmptyState>
-      <div class="empty-tips">
-        <InfoTip
-          label="关于属性编辑"
-          text="这里没有质量、摩擦系数与弹性系数——它们在仿真实验室按全局生效。"
-        />
-        <InfoTip
-          label="关于灯光与相机"
-          text="场景编辑器没有添加灯光/相机的入口：环境光、平行光、网格辅助线与轨道相机都在初始化时自动创建。"
-        />
+        v-if="store.objects.length === 0"
+        icon="fa-solid fa-cubes"
+        title="场景还是空的"
+        description="用顶部工具栏添加立方体 / 球体 / 斜面，或到「场景」tab 载入精选场景。"
+      />
+
+      <div v-else class="object-browser">
+        <div class="object-browser-head">
+          <h3>对象列表</h3>
+          <span class="object-count">{{ store.objects.length }} 个</span>
+        </div>
+        <p class="object-browser-hint">
+          点击对象即可选中，属性表单会显示完整变换；也可以直接点 3D 视图里的物体。
+        </p>
+
+        <ul class="object-list">
+          <li v-for="obj in store.objects" :key="obj.uuid">
+            <button class="object-row" type="button" @click="store.setSelectedObject(obj.uuid)">
+              <i class="fas" :class="iconFor(obj.type)" aria-hidden="true"></i>
+              <span class="object-row-name">{{ obj.name }}</span>
+              <span class="object-row-type">{{ typeLabel(obj.type) }}</span>
+              <span v-if="obj.visible === false" class="object-row-hidden">已隐藏</span>
+            </button>
+          </li>
+        </ul>
+
+        <div class="scene-summary">
+          <span>场地 {{ store.worldSize }} × {{ store.worldSize }}</span>
+          <span>物理 {{ simulationLabel }}</span>
+        </div>
+        <p class="object-browser-tip">
+          拖动时按住 Shift 吸附 0.5 米网格；Ctrl+Z 撤销，Ctrl+Y 重做。
+        </p>
       </div>
     </template>
   </div>
@@ -186,9 +202,8 @@
 
 <script setup>
 import * as THREE from 'three'
-import { computed, watch, ref, inject } from 'vue'
+import { computed, watch, ref } from 'vue'
 import { useSceneEditorStore } from '@/stores/sceneEditorStore'
-import InfoTip from '@/components/common/InfoTip.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 // 获取场景编辑器状态
@@ -197,16 +212,27 @@ const store = useSceneEditorStore()
 // 从store中获取当前选中的物体
 const selectedObject = computed(() => store.selectedObject)
 
-// 注入「添加立方体」（与 Toolbar 同一套 inject 协议）：空态 CTA 用。
-// 没有上游提供时兜底成「返回 false」的空实现，点了不炸。
-const addCube = inject('addCube') ?? (() => false)
-
-// 空态引导：添加一个立方体，选中后本面板自动切换到属性表单
-const handleAddCube = () => {
-  if (!addCube()) {
-    console.warn('[PropertyPanel] 立方体添加失败（场景可能尚未初始化）')
-  }
+/** 对象列表的图标：与工具栏的基本体图标保持一致 */
+const iconFor = (type) => {
+  if (type === 'cube') return 'fa-cube'
+  if (type === 'sphere') return 'fa-circle'
+  if (type === 'ramp') return 'fa-mountain'
+  return 'fa-box'
 }
+
+const typeLabel = (type) => {
+  if (type === 'cube') return '立方体'
+  if (type === 'sphere') return '球体'
+  if (type === 'ramp') return '斜面'
+  if (type === 'model') return '模型'
+  return type
+}
+
+const simulationLabel = computed(() => {
+  // 工具栏的播放/暂停切换的是 isPlaying：按钮叫「暂停模拟」，状态就写「已暂停」
+  if (!store.simulationState.isPlaying || store.simulationState.isPaused) return '已暂停'
+  return '运行中'
+})
 
 // 使用ref来存储属性值，避免计算属性的setter循环
 const objectName = ref('')
@@ -555,28 +581,110 @@ h3 {
   box-shadow: 0 0 0 2px var(--accent-soft);
 }
 
-/* 空态 CTA：引导用户先放一个物体进场景 */
-.empty-cta-btn {
-  padding: 7px 14px;
-  background-color: var(--accent-strong);
-  color: var(--accent-on);
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  transition: background-color 0.2s;
-}
-
-.empty-cta-btn:hover {
-  background-color: var(--accent-strong-hover);
-}
-
-/* 空态补充说明：两条 InfoTip 纵向居中排列，与 EmptyState 同轴 */
-.empty-tips {
+/* 未选中时：对象列表承担「选择对象」职责，而不是重复工具栏的添加按钮 */
+.object-browser {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+
+.object-browser-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.object-browser-head h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-1);
+}
+
+.object-count {
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.object-browser-hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.object-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.object-row {
+  width: 100%;
+  display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px 16px;
+  padding: 7px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--text-1);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.object-row:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.object-row i {
+  width: 14px;
+  color: var(--text-3);
+  text-align: center;
+}
+
+.object-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.object-row-type,
+.object-row-hidden {
+  flex: 0 0 auto;
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.object-row-hidden {
+  color: var(--danger);
+}
+
+.scene-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background-color: var(--bg-inset);
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+.object-browser-tip {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  line-height: 1.5;
 }
 </style>

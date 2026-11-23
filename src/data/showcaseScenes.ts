@@ -14,7 +14,7 @@ export type ShowcaseAudience = '教学' | '具身智能' | '企业办公' | '创
 
 export interface ShowcaseScene {
   id: string
-  /** 场景文档里的名字（带「精选 · 」前缀，云端列表据此打标） */
+  /** 场景文档里的名字（带「精选 · 」前缀，服务器列表据此打标） */
   name: string
   audience: ShowcaseAudience
   description: string
@@ -96,7 +96,7 @@ const galileo = makeScene({
   id: 'galileo',
   name: '伽利略斜面实验室',
   audience: '教学',
-  description: '大斜面 + 不同释放点的小球，配合暂停/单步讲解重力、加速度与摩擦。',
+  description: '大斜面 + 不同释放点的小球，配合暂停/播放讲解重力、加速度与摩擦。',
   primitives: [
     {
       key: 'ramp',

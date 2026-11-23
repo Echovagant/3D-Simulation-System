@@ -11,14 +11,6 @@
       </button>
       <button
         class="toolbar-btn"
-        :disabled="!isSceneInitialized"
-        title="单步推进（暂停状态下逐帧观察）"
-        @click="handleStepOnce"
-      >
-        <i class="fas fa-forward-step"></i>
-      </button>
-      <button
-        class="toolbar-btn"
         @click="handleResetSimulation"
         title="重置模拟（回到物体初始位置）"
       >
@@ -195,7 +187,6 @@ const addSphere = inject('addSphere') ?? (() => false);
 const addRamp = inject('addRamp') ?? (() => false);
 const importModel = inject('importModel') ?? (async () => false);
 const getIsSceneInitialized = inject('getIsSceneInitialized') ?? (() => false);
-const stepOnce = inject('stepOnce') ?? (() => false);
 
 // 状态
 const statusMessage = ref('');
@@ -256,12 +247,6 @@ const handleAddSphere = () => {
 const handleAddRamp = () => {
   const success = addWithHistory('添加斜面', () => addRamp());
   showTempMessage(success ? '斜面添加成功' : '斜面添加失败', success ? 2000 : 3000);
-};
-
-// 单步推进一帧物理
-const handleStepOnce = () => {
-  const ok = stepOnce();
-  showTempMessage(ok ? '已单步推进一帧' : '场景尚未就绪', ok ? 1500 : 3000);
 };
 
 // 撤销 / 重做
