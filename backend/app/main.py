@@ -9,6 +9,7 @@ from app.errors import register_error_handlers
 from app.routers import (
     gym,
     health,
+    knowledge,
     llm,
     memory,
     model3d,
@@ -66,6 +67,7 @@ def create_app() -> FastAPI:
     app.include_router(models.router, prefix="/api")
     app.include_router(gym.router, prefix="/api")
     app.include_router(memory.router, prefix="/api")
+    app.include_router(knowledge.router, prefix="/api")
     return app
 
 

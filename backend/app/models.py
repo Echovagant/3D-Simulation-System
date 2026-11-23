@@ -354,6 +354,41 @@ class AgentMemory(Base):
     )
 
 
+class KnowledgeEntry(Base):
+    """一条领域资料。
+
+    ``owner_hash`` 与记忆/模型上传同一口径（sha256 前 16 位，不存 token 原文）。
+    ``tags`` 用逗号分隔的短标签（服务层归一化），检索时与标题/正文一起做
+    关键词匹配；``importance`` 与时间衰减共同决定排序。
+    """
+
+    __tablename__ = "knowledge_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, nullable=False)
+    owner_hash: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # 归一化后的逗号分隔标签（如 "gym, 力控"），没有标签时为空串
+    tags: Mapped[str] = mapped_column(String(200), nullable=False, default="")
+    # 0~1，默认 0.5
+    importance: Mapped[float] = mapped_column(Float, nullable=False, default=0.5)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    # 检索命中时刷新；时间衰减打分按它算
+    last_accessed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("ix_knowledge_entries_owner_updated", "owner_hash", "updated_at"),
+        Index("ix_knowledge_entries_owner_importance", "owner_hash", "importance"),
+    )
+
+
 class GymStepLog(Base):
     """gym 的一步动作留档。
 

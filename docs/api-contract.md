@@ -4,7 +4,7 @@
 > 由 `npm run gen:api-contract` 从 FastAPI 应用生成；
 > CI 用 `npm run verify:api-contract` 校验它与代码一致。
 
-后端版本：0.1.0　端点总数：46
+后端版本：0.1.0　端点总数：49
 
 ## 端点
 
@@ -17,6 +17,9 @@
 | `POST` | `/api/gym/sessions/{sessionId}/reset` | `reset_gym_session_api_gym_sessions__sessionId__reset_post` | 重建世界回到初始状态 |
 | `POST` | `/api/gym/sessions/{sessionId}/step` | `step_gym_session_api_gym_sessions__sessionId__step_post` | 推进一步（施加水平冲量） |
 | `GET` | `/api/health` | `health_api_health_get` | 存活探针 |
+| `GET` | `/api/knowledge/entries` | `list_entries_api_knowledge_entries_get` | 列表或检索资料（多关键词 OR，命中按权重+时间衰减排序） |
+| `POST` | `/api/knowledge/entries` | `create_entry_api_knowledge_entries_post` | 写一条领域资料 |
+| `DELETE` | `/api/knowledge/entries/{entryId}` | `delete_entry_api_knowledge_entries__entryId__delete` | 删除一条资料 |
 | `POST` | `/api/llm/complete` | `complete_api_llm_complete_post` | 托管调用 |
 | `GET` | `/api/llm/keys` | `list_keys_api_llm_keys_get` | 查各厂商密钥配没配 |
 | `POST` | `/api/llm/keys` | `upsert_key_api_llm_keys_post` | 托管一把厂商密钥 |

@@ -711,3 +711,40 @@ class ConsolidateResult(ApiModel):
     created: int
     updated: int
     patterns: list[ConsolidatePattern] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------
+# 领域资料索引
+# --------------------------------------------------------------------------
+
+
+class KnowledgeCreateRequest(ApiModel):
+    """写一条资料。标签用逗号或空白分隔，服务层归一化。"""
+
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1, max_length=8000)
+    tags: str = Field(default="", max_length=200)
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+
+
+class KnowledgeItem(ApiModel):
+    """一条资料；``tags`` 是归一化后的逗号分隔字符串。"""
+
+    id: int
+    title: str
+    content: str
+    tags: str
+    importance: float
+    created_at: datetime
+    updated_at: datetime
+    last_accessed_at: datetime
+
+
+class KnowledgeCreated(KnowledgeItem):
+    """写入成功（201）的应答：与列表条目同一形状。"""
+
+
+class KnowledgeList(ApiModel):
+    """当前 owner 的资料列表（无 query 按权重+更新时间倒序，有 query 按相关度降序）。"""
+
+    items: list[KnowledgeItem]
