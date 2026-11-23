@@ -1,4 +1,4 @@
-"""knowledge entries (A2 slice 4)
+"""knowledge entries
 
 Revision ID: 0010_knowledge_entries
 Revises: 0009_agent_memories

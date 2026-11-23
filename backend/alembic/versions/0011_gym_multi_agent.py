@@ -1,4 +1,4 @@
-"""gym multi-agent (A2 slice 5)
+"""gym multi-agent
 
 Revision ID: 0011_gym_multi_agent
 Revises: 0010_knowledge_entries

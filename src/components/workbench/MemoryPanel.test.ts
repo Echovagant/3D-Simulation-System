@@ -7,7 +7,7 @@ import MemoryPanel from './MemoryPanel.vue'
 import type { MemoryItem } from '@/services/api/memory'
 
 /**
- * 记忆面板的冒烟网（）。
+ * 记忆面板的冒烟网。
  *
  * 盯用户能看见的行为：挂载拉列表、kind 徽标、手动写入、检索、
  * 删除的本地同步、审计提炼的行内结果、后端缺席时安静降级。

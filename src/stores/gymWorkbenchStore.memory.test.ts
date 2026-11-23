@@ -4,7 +4,7 @@ import { useGymWorkbenchStore } from './gymWorkbenchStore'
 import type { MemoryItem } from '@/services/api/memory'
 
 /**
- * 工作台 store 记忆侧的回归网（）。
+ * 工作台 store 记忆侧的回归网。
  *
  * 盯四件事：列表/检索、手动写入、审计提炼、删除（含 404 收尾）。
  * fetch 全部用替身——store 层不碰网络；记忆数据按路径+方法路由，

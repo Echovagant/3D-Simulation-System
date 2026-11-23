@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * SDD ledger CLI（Harness 产品化 H1）。
+ * SDD ledger CLI。
  *
  * ledger.json 是 SDD 流程的**机器可读正本**（人读正本仍是各 plan 目录的 progress.md），
  * 放在 `.superpowers/sdd/`（gitignored——流程产物不入公开仓库）。
