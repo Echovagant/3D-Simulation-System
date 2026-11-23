@@ -107,9 +107,7 @@ def test_owner_isolation(models_client, tmp_path):
     assert models_client.get(file_url).status_code == 200
 
     # 文件落在了 A 的目录里，而不是别人的
-    assert (
-        tmp_path / "models" / model_files.owner_hash_of(OWNER) / f"{public_id}.glb"
-    ).is_file()
+    assert (tmp_path / "models" / model_files.owner_hash_of(OWNER) / f"{public_id}.glb").is_file()
 
 
 def test_list_orders_newest_first(models_client):
@@ -147,7 +145,7 @@ def test_file_endpoint_serves_bytes_and_content_type(models_client):
     glb_response = models_client.get(f"/api/models/{glb_id}/file")
     assert glb_response.status_code == 200
     assert glb_response.headers["content-type"].startswith("model/gltf-binary")
-    assert glb_response.headers["content-disposition"].endswith(f"{glb_id}.glb\"")
+    assert glb_response.headers["content-disposition"].endswith(f'{glb_id}.glb"')
     assert glb_response.content == GLB_BYTES
 
     obj = _upload(models_client, filename="b.obj", content=OBJ_BYTES, name="OBJ")

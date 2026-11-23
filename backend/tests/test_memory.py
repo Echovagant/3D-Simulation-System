@@ -238,9 +238,7 @@ def test_owner_isolation(memory_client: TestClient):
     assert other_search["items"] == []
 
     # B 删 A 的：404（越权与不存在统一口径）；A 自己删得动
-    other_delete = memory_client.delete(
-        f"/api/memory/{mine['id']}", headers=HEADERS_OTHER
-    )
+    other_delete = memory_client.delete(f"/api/memory/{mine['id']}", headers=HEADERS_OTHER)
     assert other_delete.status_code == 404
     assert other_delete.json()["error"]["code"] == "memory_not_found"
 
@@ -266,9 +264,7 @@ def test_delete_rejects_unknown_id(memory_client: TestClient):
 
 def test_consolidate_distills_repeated_failures(memory_client: TestClient):
     for i in range(3):
-        _record_audit(
-            step_index=i, applied=False, error_code="gym_force_out_of_range"
-        )
+        _record_audit(step_index=i, applied=False, error_code="gym_force_out_of_range")
     # 单次失败不成模式；成功动作也不算失败
     _record_audit(step_index=10, applied=False, error_code="gym_step_failed")
     _record_audit(step_index=11, applied=True)

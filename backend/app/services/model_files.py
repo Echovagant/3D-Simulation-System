@@ -46,9 +46,7 @@ def model_file_path(owner_hash: str, public_id: str, fmt: str) -> Path:
     return models_root() / owner_hash / f"{public_id}.{fmt}"
 
 
-def save_model_file(
-    owner_hash: str, public_id: str, fmt: str, content: bytes
-) -> Path:
+def save_model_file(owner_hash: str, public_id: str, fmt: str, content: bytes) -> Path:
     """写文件并返回落盘路径。目录不存在就建（parents 一次到位）。"""
     path = model_file_path(owner_hash, public_id, fmt)
     path.parent.mkdir(parents=True, exist_ok=True)

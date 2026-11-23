@@ -32,9 +32,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_agent_memories_owner_hash", "agent_memories", ["owner_hash"])
-    op.create_index(
-        "ix_agent_memories_owner_kind", "agent_memories", ["owner_hash", "kind"]
-    )
+    op.create_index("ix_agent_memories_owner_kind", "agent_memories", ["owner_hash", "kind"])
     op.create_index(
         "ix_agent_memories_owner_importance",
         "agent_memories",

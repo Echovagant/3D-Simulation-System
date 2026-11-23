@@ -33,9 +33,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_model_uploads_public_id", "model_uploads", ["public_id"], unique=True
-    )
+    op.create_index("ix_model_uploads_public_id", "model_uploads", ["public_id"], unique=True)
     op.create_index("ix_model_uploads_owner_hash", "model_uploads", ["owner_hash"])
 
 

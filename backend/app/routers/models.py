@@ -126,9 +126,7 @@ def upload_model(
         raise ApiError(
             status_code=413,
             code=UPLOAD_TOO_LARGE,
-            message=(
-                f"模型文件太大：{len(payload)} 字节，上限 {MODEL_UPLOAD_MAX_BYTES} 字节。"
-            ),
+            message=(f"模型文件太大：{len(payload)} 字节，上限 {MODEL_UPLOAD_MAX_BYTES} 字节。"),
         )
 
     public_id = uuid.uuid4().hex

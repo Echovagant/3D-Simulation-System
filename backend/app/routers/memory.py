@@ -75,9 +75,7 @@ def list_memories(
         rows = memory_store.search(session, owner_token, keyword=keyword, limit=limit)
     else:
         rows = memory_store.list_recent(session, owner_token, limit=limit)
-    return MemoryList(
-        items=[MemoryItem.model_validate(row, from_attributes=True) for row in rows]
-    )
+    return MemoryList(items=[MemoryItem.model_validate(row, from_attributes=True) for row in rows])
 
 
 @router.delete(
